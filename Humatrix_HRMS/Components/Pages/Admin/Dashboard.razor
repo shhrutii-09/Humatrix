@@ -1,31 +1,205 @@
 ﻿@page "/admin/dashboard"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
 @attribute [Authorize(Roles = "SuperAdmin")]
 
-<PageTitle>SuperAdmin Dashboard</PageTitle>
+@inject ApplicationDbContext _context
+
+<PageTitle>Organizations</PageTitle>
 
 <div class="container mt-4">
+
+    <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>SuperAdmin Control Panel</h1>
-        <a href="/admin/create-organization" class="btn btn-primary">Create New Organization</a>
+        <h2>Organizations</h2>
+        <a href="/admin/create-organization" class="btn btn-primary">
+            + Add Organization
+        </a>
     </div>
 
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card bg-primary text-white mb-4">
-                <div class="card-body">
-                    <h5>Total Organizations</h5>
-                    <h2>2</h2>
-                </div>
-            </div>
-        </div>
-        @* <div class="col-md-4">
-            <div class="card bg-success text-white mb-4">
-                <div class="card-body">
-                    <h5>System Health</h5>
-                    <h2>Optimal</h2>
-                </div>
-            </div>
-        </div> *@
+    <!-- Total Count -->
+    <div class="mb-3">
+        <strong>Total Organizations:</strong> @organizations.Count
     </div>
+
+    <!-- Table -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body p-0">
+            <table class="table table-striped mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Status</th>
+                        <th style="width:220px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (organizations.Any())
+                    {
+                        @foreach (var org in organizations)
+                        {
+                            <tr>
+                                <td>@org.Name</td>
+                                <td>@org.Email</td>
+                                <td>@org.Phone</td>
+                                <td>
+                                    @if (org.IsActive)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">Inactive</span>
+                                    }
+                                </td>
+                                <td>
+                                    <!-- EDIT -->
+                                    <button class="btn btn-sm btn-warning me-2"
+                                            @onclick="async () => await StartEdit(org)">
+                                        Edit
+                                    </button>
+
+                                    <!-- TOGGLE -->
+                                    @if (org.IsActive)
+                                    {
+                                        <button class="btn btn-sm btn-danger"
+                                                @onclick="async () => await ToggleStatus(org)">
+                                            Deactivate
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-success"
+                                                @onclick="async () => await ToggleStatus(org)">
+                                            Activate
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center p-3">
+                                No organizations found.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 🔥 EDIT FORM -->
+    @if (editOrg != null)
+    {
+        <div class="card p-4 shadow-sm">
+            <h4>Edit Organization</h4>
+
+            <EditForm Model="editOrg" OnValidSubmit="UpdateOrganization">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                <div class="mb-3">
+                    <label>Name</label>
+                    <InputText @bind-Value="editOrg.Name" class="form-control" />
+                    <ValidationMessage For="() => editOrg.Name" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Email</label>
+                    <InputText @bind-Value="editOrg.Email" class="form-control" />
+                    <ValidationMessage For="() => editOrg.Email" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Phone</label>
+                    <InputText @bind-Value="editOrg.Phone" class="form-control" />
+                    <ValidationMessage For="() => editOrg.Phone" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Address</label>
+                    <InputTextArea @bind-Value="editOrg.Address" class="form-control" />
+                    <ValidationMessage For="() => editOrg.Address" />
+                </div>
+
+                <button class="btn btn-success">Update</button>
+                <button type="button" class="btn btn-secondary ms-2" @onclick="CancelEdit">
+                    Cancel
+                </button>
+            </EditForm>
+        </div>
+    }
+
 </div>
+
+@code {
+    private List<Organization> organizations = new();
+    private Organization? editOrg;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrganizations();
+    }
+
+    private async Task LoadOrganizations()
+    {
+        organizations = await _context.Organizations.ToListAsync();
+    }
+
+    // ✅ FIXED METHOD
+    private async Task StartEdit(Organization org)
+    {
+        editOrg = new Organization
+        {
+            OrganizationId = org.OrganizationId,
+            Name = org.Name,
+            Email = org.Email,
+            Phone = org.Phone,
+            Address = org.Address,
+            IsActive = org.IsActive
+        };
+
+        await Task.CompletedTask;
+    }
+
+    private async Task UpdateOrganization()
+    {
+        var dbOrg = await _context.Organizations.FindAsync(editOrg!.OrganizationId);
+
+        if (dbOrg != null)
+        {
+            dbOrg.Name = editOrg.Name;
+            dbOrg.Email = editOrg.Email;
+            dbOrg.Phone = editOrg.Phone;
+            dbOrg.Address = editOrg.Address;
+
+            await _context.SaveChangesAsync();
+        }
+
+        editOrg = null;
+        await LoadOrganizations();
+    }
+
+    private void CancelEdit()
+    {
+        editOrg = null;
+    }
+
+    private async Task ToggleStatus(Organization org)
+    {
+        org.IsActive = !org.IsActive;
+
+        await _context.SaveChangesAsync();
+        await LoadOrganizations();
+    }
+}
