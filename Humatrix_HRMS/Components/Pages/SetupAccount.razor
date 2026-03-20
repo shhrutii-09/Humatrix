@@ -1,0 +1,83 @@
+﻿@page "/setup-account"
+
+@using Humatrix_HRMS.Data
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Nav
+
+<h3>Set Your Password</h3>
+
+@* 1. Change OnSubmit to OnValidSubmit to ensure validation runs *@
+<EditForm Model="model" OnValidSubmit="SetPassword" FormName="setupForm">
+    @* 2. Add DataAnnotationsValidator so [Required] actually works *@
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div>
+        <label>Password</label>
+        @* 3. Use InputText for better integration with EditContext *@
+        <InputText type="password" @bind-Value="model.Password" class="form-control" />
+    </div>
+
+    <button type="submit">Submit</button>
+</EditForm>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string userId { get; set; }
+    
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string token { get; set; }
+    
+
+    // 4. Critical: Must have [SupplyParameterFromForm] for SSR to bind the data
+    [SupplyParameterFromForm]
+    public SetupModel model { get; set; } = new();
+
+    private async Task SetPassword()
+    {
+        // 5. userId and token are required for the Identity method
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+        {
+            Console.WriteLine("Missing route parameters.");
+            return;
+        }
+
+        var user = await UserManager.FindByIdAsync(userId); 
+
+        if (user == null)
+        {
+            Console.WriteLine("User not found.");
+            return;
+        }
+
+        var result = await UserManager.ResetPasswordAsync(user, token, model.Password);
+
+        if (result.Succeeded) 
+        {
+            Nav.NavigateTo("/Account/Login");
+        }
+        else
+        {
+            foreach (var error in result.Errors)
+            {
+                Console.WriteLine(error.Description);
+            }
+        }
+    }
+
+    public class SetupModel
+    {
+        [Required(ErrorMessage = "Password is required")]
+        [StringLength(100, MinimumLength = 6, ErrorMessage = "Password is too short")]
+        public string Password { get; set; }
+        
+    }
+}

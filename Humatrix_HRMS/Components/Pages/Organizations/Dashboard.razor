@@ -1,0 +1,28 @@
+﻿@page "/org/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+<PageTitle>Organization Dashboard</PageTitle>
+
+<div class="container mt-4">
+    <h1>Organization Management</h1>
+    <p class="text-muted">Manage your company settings and HR administrators.</p>
+
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">Company Overview</div>
+                <div class="card-body">
+                    <p><strong>Org ID:</strong> Manage your subscription and high-level settings here.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <ul class="list-group shadow-sm">
+                <li class="list-group-item active">Quick Actions</li>
+                <li class="list-group-item"><a href="#">Add HR User</a></li>
+                <li class="list-group-item"><a href="#">View Subscription</a></li>
+            </ul>
+        </div>
+    </div>
+</div>

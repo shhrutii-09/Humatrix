@@ -1,0 +1,31 @@
+﻿@page "/employee/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee")]
+
+<PageTitle>My Dashboard</PageTitle>
+
+<div class="container mt-4">
+    <div class="alert alert-light border-start border-primary border-5">
+        <h4>Welcome back, Employee!</h4>
+        <p>Current Time: @DateTime.Now.ToShortTimeString()</p>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Attendance</h5>
+                    <button class="btn btn-outline-success w-100">Clock In</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">My Documents</h5>
+                    <p>Access your payslips and contracts.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
