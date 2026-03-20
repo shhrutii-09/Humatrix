@@ -1,11 +1,15 @@
 ﻿@page "/admin/create-organization"
+@rendermode InteractiveServer
+
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
-@* Restrict this page to SuperAdmins only *@
 @attribute [Authorize(Roles = "SuperAdmin")]
+
 @inject OrganizationService OrgService
+
+<PageTitle>Create Organization</PageTitle>
 
 <h3>Create New Organization</h3>
 
@@ -14,32 +18,43 @@
         <DataAnnotationsValidator />
         <ValidationSummary class="text-danger" />
 
+        <!-- Organization Name -->
         <div class="mb-3">
             <label class="form-label">Organization Name</label>
-            <InputText @bind-Value="orgDto.Name" class="form-control" placeholder="e.g. Acme Corp" />
+            <InputText @bind-Value="orgDto.Name" class="form-control" placeholder="e.g. TechSoft Pvt Ltd" />
+            <ValidationMessage For="() => orgDto.Name" class="text-danger" />
         </div>
 
+        <!-- Email -->
         <div class="mb-3">
             <label class="form-label">Organization Email</label>
-            <InputText @bind-Value="orgDto.Email" class="form-control" />
+            <InputText @bind-Value="orgDto.Email" class="form-control" placeholder="info@company.com" />
+            <ValidationMessage For="() => orgDto.Email" class="text-danger" />
         </div>
 
+        <!-- Phone -->
         <div class="mb-3">
             <label class="form-label">Phone</label>
-            <InputText @bind-Value="orgDto.Phone" class="form-control" />
+            <InputText @bind-Value="orgDto.Phone" class="form-control" placeholder="10 digit mobile number" />
+            <ValidationMessage For="() => orgDto.Phone" class="text-danger" />
         </div>
 
+        <!-- Address -->
         <div class="mb-3">
             <label class="form-label">Address</label>
-            <InputTextArea @bind-Value="orgDto.Address" class="form-control" />
+            <InputTextArea @bind-Value="orgDto.Address" class="form-control" placeholder="Enter full address" />
+            <ValidationMessage For="() => orgDto.Address" class="text-danger" />
         </div>
 
+        <!-- Admin Email -->
         <div class="mb-3 border-top pt-3">
             <label class="form-label text-primary">Admin User Email</label>
-            <InputText @bind-Value="orgDto.AdminEmail" class="form-control" placeholder="admin@org.com" />
-            <small class="text-muted">A setup link will be generated for this email.</small>
+            <InputText @bind-Value="orgDto.AdminEmail" class="form-control" placeholder="admin@company.com" />
+            <ValidationMessage For="() => orgDto.AdminEmail" class="text-danger" />
+            <small class="text-muted">A setup link will be generated for this admin.</small>
         </div>
 
+        <!-- Button -->
         <button type="submit" class="btn btn-success" disabled="@isSubmitting">
             @if (isSubmitting)
             {
@@ -47,20 +62,30 @@
             }
             else
             {
-
                 <span>Create & Generate Link</span>
             }
         </button>
     </EditForm>
 </div>
 
+<!-- ERROR -->
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3">
+        @errorMessage
+    </div>
+}
+
+<!-- SUCCESS -->
 @if (!string.IsNullOrEmpty(generatedLink))
 {
-    <div class="alert alert-info mt-4">
-        <h5>Organization Created Successfully!</h5>
+    <div class="alert alert-success mt-4">
+        <h5>✅ Organization Created Successfully!</h5>
         <p>Copy the link below and send it to the Organization Admin:</p>
+
         <div class="input-group">
             <input type="text" class="form-control" value="@generatedLink" readonly />
+            <button class="btn btn-outline-secondary" @onclick="CopyLink">Copy</button>
         </div>
     </div>
 }
@@ -70,25 +95,36 @@
     public CreateOrganizationDto orgDto { get; set; } = new();
 
     private string? generatedLink;
+    private string? errorMessage;
     private bool isSubmitting = false;
 
     private async Task HandleCreateOrganization()
     {
         isSubmitting = true;
+        errorMessage = null;
+        generatedLink = null;
+
         try
         {
-            // Calls the service method you already created [cite: 2]
             generatedLink = await OrgService.CreateOrganizationAsync(orgDto);
-            // Optional: Reset form after success
+
+            // reset form
             orgDto = new();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            errorMessage = ex.Message;
         }
         finally
         {
             isSubmitting = false;
         }
     }
+
+    private async Task CopyLink()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", generatedLink);
+    }
+
+    [Inject] private IJSRuntime JS { get; set; }
 }
