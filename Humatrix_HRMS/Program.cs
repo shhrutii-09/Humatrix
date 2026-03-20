@@ -42,6 +42,13 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 
 builder.Services.AddScoped<OrganizationService>();
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<CurrentUserService>();
+
+builder.Services.AddScoped<DepartmentService>();
+
+builder.Services.AddScoped<EmployeeService>();
+
 var app = builder.Build();
 
 // 🔥 Seed Roles + SuperAdmin

@@ -10,6 +10,7 @@ namespace Humatrix_HRMS.Data
 
         public Guid? OrganizationId { get; set; }
 
+        public Guid? DepartmentId { get; set; }
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

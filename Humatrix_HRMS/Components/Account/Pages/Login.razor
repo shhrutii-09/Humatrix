@@ -136,19 +136,19 @@
 
                 if (roles.Contains("SuperAdmin"))
                 {
-                    RedirectManager.RedirectTo("Admin/Dashboard");
+                    RedirectManager.RedirectTo("/admin/dashboard");
                 }
                 else if (roles.Contains("OrgAdmin"))
                 {
-                    RedirectManager.RedirectTo("Organizations/Dashboard");
+                    RedirectManager.RedirectTo("/org/dashboard");
                 }
                 else if (roles.Contains("HR"))
                 {
-                    RedirectManager.RedirectTo("HR/Dashboard");
+                    RedirectManager.RedirectTo("/hr/dashboard");
                 }
                 else if (roles.Contains("Employee"))
                 {
-                    RedirectManager.RedirectTo("Employee/Dashboard");
+                    RedirectManager.RedirectTo("/employee/dashboard");
                 }
                 else
                 {

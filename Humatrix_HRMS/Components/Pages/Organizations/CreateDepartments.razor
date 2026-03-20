@@ -1,0 +1,63 @@
+﻿@page "/org/departments"
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject DepartmentService DeptService
+
+<h3>Departments</h3>
+
+<div class="card p-3 mb-3">
+    <EditForm Model="model" OnValidSubmit="CreateDepartment" FormName="deptForm">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <InputText @bind-Value="model.Name" placeholder="Department Name" class="form-control mb-2" />
+        <InputTextArea @bind-Value="model.Description" placeholder="Description" class="form-control mb-2" />
+
+        <button class="btn btn-primary">Add Department</button>
+    </EditForm>
+</div>
+
+@if (departments != null)
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var dept in departments)
+            {
+                <tr>
+                    <td>@dept.Name</td>
+                    <td>@dept.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [SupplyParameterFromForm]
+    public CreateDepartmentDto model { get; set; } = new();
+
+    private List<DepartmentDto> departments;
+
+    protected override async Task OnInitializedAsync()
+    {
+        departments = await DeptService.GetAllAsync();
+    }
+
+    private async Task CreateDepartment()
+    {
+        await DeptService.CreateAsync(model);
+
+        model = new();
+        departments = await DeptService.GetAllAsync();
+    }
+}

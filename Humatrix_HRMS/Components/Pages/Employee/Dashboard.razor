@@ -1,31 +1,36 @@
 ﻿@page "/employee/dashboard"
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+
 @attribute [Authorize(Roles = "Employee")]
+
+@inject CurrentUserService CurrentUserService
 
 <PageTitle>My Dashboard</PageTitle>
 
 <div class="container mt-4">
+
     <div class="alert alert-light border-start border-primary border-5">
-        <h4>Welcome back, Employee!</h4>
-        <p>Current Time: @DateTime.Now.ToShortTimeString()</p>
+        <h4>Welcome, @user?.FirstName!</h4>
+        <p>Email: @user?.Email</p>
+        <p>Department: @user?.DepartmentId</p>
     </div>
 
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Attendance</h5>
-                    <button class="btn btn-outline-success w-100">Clock In</button>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">My Documents</h5>
-                    <p>Access your payslips and contracts.</p>
-                </div>
-            </div>
-        </div>
+    <div class="card p-3">
+        <h5>Quick Actions</h5>
+        <button class="btn btn-outline-success w-100 mb-2">Clock In</button>
+        <button class="btn btn-outline-primary w-100">View Profile</button>
     </div>
+
 </div>
+
+@code {
+    private ApplicationUser? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await CurrentUserService.GetUserAsync();
+    }
+}

@@ -12,5 +12,10 @@ namespace Humatrix_HRMS.Data
             : base(options)
         { }
         public DbSet<Organization> Organizations { get; set; }
+        public DbSet<Department> Departments { get; set; }
+
+        public DbSet<UserInvite> UserInvites { get; set; }
+}
+
     }
-    }
+    

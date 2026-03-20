@@ -10,8 +10,7 @@ namespace Humatrix_HRMS.Services
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
 
-        public OrganizationService(ApplicationDbContext context,
-                                   UserManager<ApplicationUser> userManager)
+        public OrganizationService(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
         {
             _context = context;
             _userManager = userManager;
@@ -31,25 +30,43 @@ namespace Humatrix_HRMS.Services
             _context.Organizations.Add(org);
             await _context.SaveChangesAsync();
 
-            // 2. Create Org Admin (no password yet)
+            // 2. Create Org Admin
             var user = new ApplicationUser
             {
-                UserName = dto.AdminEmail,
+                UserName = dto.AdminEmail, // FIX: Sets username to stop the error
                 Email = dto.AdminEmail,
                 OrganizationId = org.OrganizationId,
                 EmailConfirmed = true
             };
 
-            await _userManager.CreateAsync(user);
+            var result = await _userManager.CreateAsync(user);
+            if (!result.Succeeded)
+            {
+                throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
 
             await _userManager.AddToRoleAsync(user, "OrgAdmin");
 
-            // 3. Generate token
+            // 3. Generate Token
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
-            //var link = $"https://localhost:5001/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-            var link = $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-            return link;
+            // 4. STORE INVITE (Matches your Employee logic exactly)
+            var invite = new UserInvite
+            {
+                Email = dto.AdminEmail,
+                UserId = user.Id,
+                Token = token,
+                Role = "OrgAdmin",
+                OrganizationId = org.OrganizationId,
+                CreatedAt = DateTime.UtcNow,
+                IsUsed = false
+            };
+
+            _context.UserInvites.Add(invite);
+            await _context.SaveChangesAsync();
+
+            // 5. Return Link
+            return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
         }
     }
 }
