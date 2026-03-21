@@ -1,52 +1,69 @@
 ﻿@page "/org/employees"
+@page "/hr/employees"
 
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-@inject ApplicationDbContext Db
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
 
-@attribute [Authorize(Roles = "OrgAdmin")]
+@attribute [Authorize(Roles = "OrgAdmin,HR")]
 
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
 
-<h3>Create Employee</h3>
+<h3>@(isHR ? "Create Employee (HR)" : "Create Employee / HR (Org Admin)")</h3>
 
-<EditForm Model="model" OnValidSubmit="CreateEmployee" FormName="empForm">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
+<div class="card p-4 shadow-sm">
 
-    <InputText @bind-Value="model.FirstName" placeholder="First Name" class="form-control mb-2" />
-    <InputText @bind-Value="model.LastName" placeholder="Last Name" class="form-control mb-2" />
+    <EditForm Model="model" OnValidSubmit="CreateEmployee" FormName="empForm">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
 
-    <InputText @bind-Value="model.Email" placeholder="Email" class="form-control mb-2" />
+        <InputText @bind-Value="model.FirstName" placeholder="First Name" class="form-control mb-2" />
+        <InputText @bind-Value="model.LastName" placeholder="Last Name" class="form-control mb-2" />
+        <InputText @bind-Value="model.Email" placeholder="Email" class="form-control mb-2" />
 
-   
+        <!-- Department -->
+        <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
+            <option value="">-- Select Department --</option>
+            @foreach (var dept in departments)
+            {
+                <option value="@dept.DepartmentId">@dept.Name</option>
+            }
+        </InputSelect>
 
-    <!-- Department -->
-    <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
-        <option value="">-- Select Department --</option>
-        @foreach (var dept in departments)
+        <!-- Role (Only for OrgAdmin) -->
+        @if (!isHR)
         {
-            <option value="@dept.DepartmentId">@dept.Name</option>
+            <InputSelect @bind-Value="model.Role" class="form-control mb-2">
+                <option value="Employee">Employee</option>
+                <option value="HR">HR</option>
+            </InputSelect>
         }
-    </InputSelect>
 
-    <!-- Role -->
-    <InputSelect @bind-Value="model.Role" class="form-control mb-2">
-        <option value="Employee">Employee</option>
-        <option value="HR">HR</option>
-    </InputSelect>
+        <button class="btn btn-success" disabled="@isSubmitting">
+            @(isSubmitting ? "Creating..." : "Create & Generate Link")
+        </button>
+    </EditForm>
 
-    <button class="btn btn-success">Create Employee</button>
-</EditForm>
+</div>
 
 @if (!string.IsNullOrEmpty(link))
 {
     <div class="alert alert-info mt-3">
-        <p>Send this link to employee:</p>
+        <p>Send this link:</p>
         <input class="form-control" value="@link" readonly />
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3">
+        @errorMessage
     </div>
 }
 
@@ -59,16 +76,44 @@
 
     private List<DepartmentDto> departments = new();
     private string? link;
+    private bool isHR = false;
+    private bool isSubmitting = false;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        var roles = await UserManager.GetRolesAsync(user);
+
+        isHR = roles.Contains("HR");
     }
 
     private async Task CreateEmployee()
     {
-        link = await EmployeeService.CreateEmployeeAsync(model);
+        isSubmitting = true;
+        errorMessage = null;
 
-        model = new();
+        try
+        {
+            if (isHR)
+            {
+                model.Role = "Employee"; // 🔥 Force for HR
+            }
+
+            link = await EmployeeService.CreateEmployeeAsync(model);
+
+            model = new() { Role = "Employee" };
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
     }
 }
