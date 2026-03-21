@@ -1,0 +1,291 @@
+﻿@page "/org/employees-list"
+@page "/hr/employees-list"
+@rendermode InteractiveServer
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+
+@attribute [Authorize(Roles = "OrgAdmin,HR")]
+
+@inject EmployeeService EmployeeService
+@inject DepartmentService DeptService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h3 class="mb-3">Employee Management</h3>
+<div class="card p-4 shadow-sm">
+
+    @if (!isHR)
+    {
+        <InputSelect TValue="Guid?"
+                     Value="selectedDepartmentId"
+                     ValueChanged="OnDepartmentChanged"
+                     ValueExpression="() => selectedDepartmentId"
+                     class="form-control mb-3">
+
+            <option value="">-- All Departments --</option>
+
+            @foreach (var dept in departments)
+            {
+                <option value="@dept.DepartmentId.ToString()">@dept.Name</option>
+            }
+        </InputSelect>
+        
+    }
+
+    @if (employees == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!employees.Any())
+    {
+        <p>No employees found.</p>
+    }
+    else
+    {
+        <table class="table table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Organization</th>
+                    <th>Department</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th style="width:250px;">Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var emp in employees)
+                {
+                    <tr>
+                        <td>@emp.Name</td>
+                        <td>@emp.Email</td>
+                        <td>@emp.Organization</td>
+                        <td>@emp.Department</td>
+
+                        <td>
+                            @if (emp.IsHR)
+                            {
+                                <span class="badge bg-primary">HR</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Employee</span>
+                            }
+                        </td>
+
+                        <td>
+                            @if (emp.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">Inactive</span>
+                            }
+                        </td>
+
+                        <td>
+                            <button class="btn btn-sm btn-warning me-1"
+                                    @onclick="() => OpenEdit(emp)">
+                                Edit
+                            </button>
+
+                            @if (emp.IsActive)
+                            {
+                                <button class="btn btn-sm btn-danger me-1"
+                                        @onclick="() => ToggleStatus(emp.Email, false)">
+                                    Deactivate
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-success me-1"
+                                        @onclick="() => ToggleStatus(emp.Email, true)">
+                                    Activate
+                                </button>
+                            }
+
+                            @* <button class="btn btn-sm btn-info"
+                                    @onclick="() => ResendInvite(emp.Email)">
+                                Resend Invite
+                            </button> *@
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@* @if (showEditModal)
+{
+    <div class="modal fade show d-block" style="background-color:rgba(0,0,0,0.5)">
+        <div class="modal-dialog">
+            <div class="modal-content p-3">
+
+                <h5>Edit Employee</h5>
+
+                <InputText @bind-Value="editModel.FirstName" class="form-control mb-2" placeholder="First Name" />
+                <InputText @bind-Value="editModel.LastName" class="form-control mb-2" placeholder="Last Name" />
+
+                <InputSelect @bind-Value="editModel.DepartmentId" class="form-control mb-2">
+                    @foreach (var dept in departments)
+                    {
+                        <option value="@dept.DepartmentId">@dept.Name</option>
+                    }
+                </InputSelect>
+
+                <div class="mt-2">
+                    <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
+                    <button class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+} *@
+
+@if (showEditModal)
+{
+    <div style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;">
+
+        <div class="card p-4" style="width:400px;">
+
+            <h5>Edit Employee</h5>
+
+            <InputText @bind-Value="editModel.FirstName" class="form-control mb-2" placeholder="First Name" />
+            <InputText @bind-Value="editModel.LastName" class="form-control mb-2" placeholder="Last Name" />
+
+            <InputSelect @bind-Value="editModel.DepartmentId" class="form-control mb-2">
+                @foreach (var dept in departments)
+                {
+                    <option value="@dept.DepartmentId">@dept.Name</option>
+                }
+            </InputSelect>
+
+            <div class="mt-2">
+                <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success mt-3">@successMessage</div>
+}
+
+@code {
+    private List<EmployeeListDto>? employees;
+    private List<DepartmentDto> departments = new();
+
+    private bool isHR = false;
+
+    private bool showEditModal = false;
+    private EditEmployeeDto editModel = new();
+    private string? editingEmail;
+
+    private string? successMessage;
+
+    private Guid? _selectedDepartmentId;
+    private Guid? selectedDepartmentId;
+  
+    protected override async Task OnInitializedAsync()
+    {
+        departments = await DeptService.GetAllAsync();
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(authState.User);
+        var roles = await UserManager.GetRolesAsync(user);
+
+        isHR = roles.Contains("HR");
+
+        await LoadEmployees();
+    }
+
+
+    private async Task LoadEmployees()
+    {
+        employees = await EmployeeService.GetEmployeesForListAsync(selectedDepartmentId);
+    }
+
+
+    private async Task ToggleStatus(string email, bool activate)
+    {
+        await EmployeeService.ToggleUserStatusAsync(email, activate);
+        successMessage = activate ? "User activated" : "User deactivated";
+        await LoadEmployees();
+    }
+
+    // private async Task ResendInvite(string email)
+    // {
+    //     var link = await EmployeeService.ResendInviteAsync(email);
+    //     successMessage = $"Invite resent: {link}";
+    // }
+
+    private void OpenEdit(EmployeeListDto emp)
+    {
+        editingEmail = emp.Email;
+
+        var names = emp.Name.Split(' ');
+        editModel.FirstName = names[0];
+        editModel.LastName = names.Length > 1 ? names[1] : "";
+
+        editModel.DepartmentId = departments
+            .FirstOrDefault(d => d.Name == emp.Department)?.DepartmentId;
+
+        showEditModal = true;
+    }
+
+    private void CloseEdit()
+    {
+        showEditModal = false;
+    }
+
+    private async Task SaveEdit()
+    {
+        await EmployeeService.UpdateEmployeeAsync(editingEmail, editModel);
+
+        showEditModal = false;
+        successMessage = "Employee updated successfully";
+
+        await LoadEmployees();
+    }
+
+
+    private async Task OnDepartmentChanged(Guid? value)
+    {
+        try
+        {
+            selectedDepartmentId = value;
+            Console.WriteLine($"Selected Dept ID: {(selectedDepartmentId?.ToString() ?? "All")}");
+
+            await LoadEmployees();
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error filtering employees: {ex.Message}");
+            successMessage = "Error filtering results. Please try again.";
+        }
+    }
+}

@@ -95,5 +95,114 @@ namespace Humatrix_HRMS.Services
                 .Where(u => u.OrganizationId == currentUser.OrganizationId)
                 .ToListAsync();
         }
+
+        public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
+        {
+            var currentUser = await _currentUser.GetUserAsync();
+
+            if (currentUser == null || currentUser.OrganizationId == null)
+                return new List<EmployeeListDto>();
+
+            var roles = await _userManager.GetRolesAsync(currentUser);
+
+            var usersQuery = _userManager.Users
+                .Where(u => u.OrganizationId == currentUser.OrganizationId);
+
+            // 🔥 HR logic
+            if (roles.Contains("HR"))
+            {
+                usersQuery = usersQuery
+                    .Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id); // ❌ exclude self
+            }
+            else
+            {
+                // 🔥 Org Admin filter
+                if (departmentId.HasValue)
+                {
+                    usersQuery = usersQuery
+.Where(u => u.DepartmentId.HasValue && u.DepartmentId.Value == departmentId.Value);
+                }
+            }
+
+            var users = await usersQuery.ToListAsync();
+
+            var departments = await _context.Departments.ToListAsync();
+            var organizations = await _context.Organizations.ToListAsync();
+
+            var result = new List<EmployeeListDto>();
+
+            foreach (var u in users)
+            {
+                var userRoles = await _userManager.GetRolesAsync(u);
+                var role = userRoles.FirstOrDefault();
+
+                result.Add(new EmployeeListDto
+                {
+                    Name = $"{u.FirstName} {u.LastName}",
+                    Email = u.Email,
+                    Role = role,
+                    IsHR = role == "HR",
+                    Department = departments.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name,
+                    Organization = organizations.FirstOrDefault(o => o.OrganizationId == u.OrganizationId)?.Name,
+                    IsActive = u.IsActive
+                });
+            }
+
+            // 🔥 SORT: HR FIRST
+            return result
+                .OrderByDescending(x => x.IsHR)
+                .ThenBy(x => x.Name)
+                .ToList();
+        }
+
+        public async Task ToggleUserStatusAsync(string email, bool isActive)
+        {
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null) throw new Exception("User not found");
+
+            user.IsActive = isActive;
+            await _userManager.UpdateAsync(user);
+        }
+
+        public async Task UpdateEmployeeAsync(string email, EditEmployeeDto dto)
+        {
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null) throw new Exception("User not found");
+
+            user.FirstName = dto.FirstName;
+            user.LastName = dto.LastName;
+            user.DepartmentId = dto.DepartmentId;
+
+            await _userManager.UpdateAsync(user);
+        }
+
+        public async Task<string> ResendInviteAsync(string email)
+        {
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null) throw new Exception("User not found");
+
+            var roles = await _userManager.GetRolesAsync(user);
+            var role = roles.FirstOrDefault();
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+            var invite = new UserInvite
+            {
+                Email = user.Email,
+                UserId = user.Id,
+                Token = token,
+                Role = role,
+                OrganizationId = user.OrganizationId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.UserInvites.Add(invite);
+            await _context.SaveChangesAsync();
+
+            return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+        }
     }
 }
