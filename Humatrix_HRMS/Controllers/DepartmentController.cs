@@ -16,10 +16,22 @@ public class DepartmentController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(CreateDepartmentDto dto)
+    public async Task<IActionResult> Create([FromBody] CreateDepartmentDto dto)
     {
-        await _service.CreateAsync(dto);
-        return Ok(new { message = "Department created" });
+        // Validate model before proceeding
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            await _service.CreateAsync(dto);
+            return Ok(new { message = "Department created" });
+        }
+        catch (Exception ex)
+        {
+            // Catch organization check failures or other errors
+            return Unauthorized(new { message = ex.Message });
+        }
     }
 
     [HttpGet]
