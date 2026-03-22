@@ -21,50 +21,75 @@
         <!-- Organization Name -->
         <div class="mb-3">
             <label class="form-label">Organization Name</label>
-            <InputText @bind-Value="orgDto.Name" class="form-control" placeholder="e.g. TechSoft Pvt Ltd" />
+            <InputText @bind-Value="orgDto.Name"
+                       class="form-control"
+                       placeholder="e.g. TechSoft Pvt Ltd"
+                       required />
             <ValidationMessage For="() => orgDto.Name" class="text-danger" />
         </div>
 
         <!-- Email -->
         <div class="mb-3">
             <label class="form-label">Organization Email</label>
-            <InputText @bind-Value="orgDto.Email" class="form-control" placeholder="info@company.com" />
+            <InputText @bind-Value="orgDto.Email"
+                       type="email"
+                       class="form-control"
+                       placeholder="info@company.com"
+                       required />
             <ValidationMessage For="() => orgDto.Email" class="text-danger" />
         </div>
 
         <!-- Phone -->
         <div class="mb-3">
             <label class="form-label">Phone</label>
-            <InputText @bind-Value="orgDto.Phone" class="form-control" placeholder="10 digit mobile number" />
+            <InputText @bind-Value="orgDto.Phone"
+                       class="form-control"
+                       placeholder="10 digit mobile number"
+                       pattern="[0-9]{10}"
+                       title="Phone must be exactly 10 digits"
+                       required />
             <ValidationMessage For="() => orgDto.Phone" class="text-danger" />
         </div>
 
         <!-- Address -->
         <div class="mb-3">
             <label class="form-label">Address</label>
-            <InputTextArea @bind-Value="orgDto.Address" class="form-control" placeholder="Enter full address" />
+            <InputTextArea @bind-Value="orgDto.Address"
+                           class="form-control"
+                           placeholder="Enter full address"
+                           required />
             <ValidationMessage For="() => orgDto.Address" class="text-danger" />
         </div>
 
         <!-- Admin Email -->
         <div class="mb-3 border-top pt-3">
             <label class="form-label text-primary">Admin User Email</label>
-            <InputText @bind-Value="orgDto.AdminEmail" class="form-control" placeholder="admin@company.com" />
+            <InputText @bind-Value="orgDto.AdminEmail"
+                       type="email"
+                       class="form-control"
+                       placeholder="admin@company.com"
+                       required />
             <ValidationMessage For="() => orgDto.AdminEmail" class="text-danger" />
             <small class="text-muted">A setup link will be generated for this admin.</small>
         </div>
 
-        <!-- Button -->
-        <button type="submit" class="btn btn-success" disabled="@isSubmitting">
-            @if (isSubmitting)
-            {
-                <span>Creating...</span>
-            }
-            else
-            {
-                <span>Create & Generate Link</span>
-            }
-        </button>
+        <!-- Buttons -->
+        <div class="mt-3">
+            <button type="submit" class="btn btn-success" disabled="@isSubmitting">
+                @if (isSubmitting)
+                {
+                    <span>Creating...</span>
+                }
+                else
+                {
+                    <span>Create & Generate Link</span>
+                }
+            </button>
+
+            <a href="/admin/dashboard" class="btn btn-secondary ms-2">
+                ← Back to Dashboard
+            </a>
+        </div>
     </EditForm>
 </div>
 
@@ -100,8 +125,20 @@
 
     private async Task HandleCreateOrganization()
     {
-        isSubmitting = true;
         errorMessage = null;
+
+        // 🔥 EXTRA SAFETY (prevents empty submit even if browser skips validation)
+        if (string.IsNullOrWhiteSpace(orgDto.Name) ||
+            string.IsNullOrWhiteSpace(orgDto.Email) ||
+            string.IsNullOrWhiteSpace(orgDto.Phone) ||
+            string.IsNullOrWhiteSpace(orgDto.Address) ||
+            string.IsNullOrWhiteSpace(orgDto.AdminEmail))
+        {
+            errorMessage = "All fields are required!";
+            return;
+        }
+
+        isSubmitting = true;
         generatedLink = null;
 
         try

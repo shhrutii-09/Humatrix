@@ -1,0 +1,88 @@
+﻿@page "/org/create-department"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject DepartmentService DeptService
+@inject NavigationManager Nav
+
+<PageTitle>Create Department</PageTitle>
+
+<h3>Create Department</h3>
+
+<div class="card p-4 shadow-sm">
+    <EditForm Model="model" OnValidSubmit="HandleCreateDepartment">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="mb-3">
+            <label class="form-label">Department Name</label>
+            <InputText @bind-Value="model.Name"
+                       class="form-control"
+                       placeholder="Enter department name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <InputTextArea @bind-Value="model.Description"
+                           class="form-control" />
+        </div>
+
+        <button type="submit"
+                class="btn btn-success me-2"
+                disabled="@isSubmitting">
+            @(isSubmitting ? "Creating..." : "Create Department")
+        </button>
+
+        <button type="button"
+                class="btn btn-secondary"
+                @onclick="GoBack">
+            Back to Departments
+        </button>
+    </EditForm>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+@code {
+    public CreateDepartmentDto model { get; set; } = new();
+
+    private string? error;
+    private bool isSubmitting;
+
+    async Task HandleCreateDepartment()
+    {
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            error = "Department name is required";
+            return;
+        }
+
+        isSubmitting = true;
+
+        try
+        {
+            await DeptService.CreateAsync(model);
+            Nav.NavigateTo("/org/departments");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    void GoBack() => Nav.NavigateTo("/org/departments");
+}

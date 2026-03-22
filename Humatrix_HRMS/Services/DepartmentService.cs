@@ -17,28 +17,25 @@ namespace Humatrix_HRMS.Services
             _currentUser = currentUser;
         }
 
-        // CREATE
-        //public async Task CreateAsync(CreateDepartmentDto dto)
-        //{
-        //    var user = await _currentUser.GetUserAsync();
-
-        //    var dept = new Department
-        //    {
-        //        Name = dto.Name,
-        //        Description = dto.Description,
-        //        OrganizationId = user.OrganizationId.Value
-        //    };
-
-        //    _context.Departments.Add(dept);
-        //    await _context.SaveChangesAsync();
-        //}
-
-        public async Task CreateAsync(CreateDepartmentDto dto)
+        // =========================
+        // GET CURRENT USER (COMMON METHOD)
+        // =========================
+        private async Task<ApplicationUser> GetCurrentUserAsync()
         {
             var user = await _currentUser.GetUserAsync();
 
             if (user == null || user.OrganizationId == null)
-                throw new Exception("User organization not found");
+                throw new Exception("Unauthorized access");
+
+            return user;
+        }
+
+        // =========================
+        // CREATE DEPARTMENT
+        // =========================
+        public async Task CreateAsync(CreateDepartmentDto dto)
+        {
+            var user = await GetCurrentUserAsync();
 
             var dept = new Department
             {
@@ -51,13 +48,16 @@ namespace Humatrix_HRMS.Services
             await _context.SaveChangesAsync();
         }
 
-        // GET ALL (ONLY SAME ORG)
+        // =========================
+        // GET ALL DEPARTMENTS (ORG BASED)
+        // =========================
         public async Task<List<DepartmentDto>> GetAllAsync()
         {
-            var user = await _currentUser.GetUserAsync();
+            var user = await GetCurrentUserAsync();
 
             return await _context.Departments
                 .Where(d => d.OrganizationId == user.OrganizationId && !d.IsDeleted)
+                .OrderBy(d => d.Name) // 🔥 better UI sorting
                 .Select(d => new DepartmentDto
                 {
                     DepartmentId = d.DepartmentId,
@@ -65,6 +65,51 @@ namespace Humatrix_HRMS.Services
                     Description = d.Description
                 })
                 .ToListAsync();
+        }
+
+        // =========================
+        // UPDATE DEPARTMENT
+        // =========================
+        public async Task UpdateAsync(Guid id, string name, string? description)
+        {
+            var user = await GetCurrentUserAsync();
+
+            var dept = await _context.Departments
+                .FirstOrDefaultAsync(d => d.DepartmentId == id && !d.IsDeleted);
+
+            if (dept == null)
+                throw new Exception("Department not found");
+
+            // 🔐 SECURITY CHECK
+            if (dept.OrganizationId != user.OrganizationId)
+                throw new Exception("Access denied");
+
+            dept.Name = name;
+            dept.Description = description;
+
+            await _context.SaveChangesAsync();
+        }
+
+        // =========================
+        // DELETE (SOFT DELETE)
+        // =========================
+        public async Task DeleteAsync(Guid id)
+        {
+            var user = await GetCurrentUserAsync();
+
+            var dept = await _context.Departments
+                .FirstOrDefaultAsync(d => d.DepartmentId == id && !d.IsDeleted);
+
+            if (dept == null)
+                throw new Exception("Department not found");
+
+            // 🔐 SECURITY CHECK
+            if (dept.OrganizationId != user.OrganizationId)
+                throw new Exception("Access denied");
+
+            dept.IsDeleted = true;
+
+            await _context.SaveChangesAsync();
         }
     }
 }

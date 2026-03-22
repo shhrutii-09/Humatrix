@@ -48,6 +48,7 @@ builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<DepartmentService>();
 
 builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<OrgDashboardService>();
 
 var app = builder.Build();
 

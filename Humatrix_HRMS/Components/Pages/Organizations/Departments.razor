@@ -1,0 +1,151 @@
+﻿@page "/org/departments"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject DepartmentService DeptService
+@inject NavigationManager Nav
+
+<PageTitle>Departments</PageTitle>
+
+<h3>Departments</h3>
+
+<button class="btn btn-success mb-3" @onclick="GoToCreate">
+    + Add Department
+</button>
+
+@if (departments == null)
+{
+    <p>Loading...</p>
+}
+else if (!departments.Any())
+{
+    <p>No departments found.</p>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th style="width:150px;">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var dept in departments)
+                    {
+                        <tr>
+                            <td>
+                                @if (editId == dept.DepartmentId)
+                                {
+                                    <InputText class="form-control"
+                                               @bind-Value="editName" />
+                                }
+                                else
+                                {
+                                    @dept.Name
+                                }
+                            </td>
+
+                            <td>
+                                @if (editId == dept.DepartmentId)
+                                {
+                                    <InputText class="form-control"
+                                               @bind-Value="editDesc" />
+                                }
+                                else
+                                {
+                                    @dept.Description
+                                }
+                            </td>
+
+                            <td>
+                                @if (editId == dept.DepartmentId)
+                                {
+                                    <button class="btn btn-success btn-sm me-2"
+                                            @onclick="() => SaveEdit(dept.DepartmentId)">
+                                        Save
+                                    </button>
+
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="CancelEdit">
+                                        Cancel
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-warning btn-sm me-2"
+                                            @onclick="() => StartEdit(dept)">
+                                        Edit
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => Delete(dept.DepartmentId)">
+                                        Delete
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+}
+
+<button class="btn btn-secondary mt-3" @onclick="GoBack">
+    Back to Dashboard
+</button>
+
+@code {
+    private List<DepartmentDto>? departments;
+
+    private Guid? editId;
+    private string? editName;
+    private string? editDesc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        departments = await DeptService.GetAllAsync();
+    }
+
+    void GoToCreate() => Nav.NavigateTo("/org/create-department");
+    void GoBack() => Nav.NavigateTo("/org/dashboard");
+
+    void StartEdit(DepartmentDto dept)
+    {
+        editId = dept.DepartmentId;
+        editName = dept.Name;
+        editDesc = dept.Description;
+    }
+
+    void CancelEdit()
+    {
+        editId = null;
+    }
+
+    async Task SaveEdit(Guid id)
+    {
+        if (string.IsNullOrWhiteSpace(editName))
+            return;
+
+        await DeptService.UpdateAsync(id, editName, editDesc);
+        editId = null;
+        departments = await DeptService.GetAllAsync();
+    }
+
+    async Task Delete(Guid id)
+    {
+        await DeptService.DeleteAsync(id);
+        departments = await DeptService.GetAllAsync();
+    }
+}

@@ -21,6 +21,7 @@ public static class SuperAdminSeeder
 
             await userManager.CreateAsync(user, password);
             await userManager.AddToRoleAsync(user, "SuperAdmin");
+
         }
     }
 }
