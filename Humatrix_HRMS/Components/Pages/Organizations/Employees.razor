@@ -28,14 +28,33 @@
         <InputText @bind-Value="model.Email" placeholder="Email" class="form-control mb-2" />
 
         <!-- Department -->
-        <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
+        @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
             <option value="">-- Select Department --</option>
             @foreach (var dept in departments)
             {
                 <option value="@dept.DepartmentId">@dept.Name</option>
             }
-        </InputSelect>
+        </InputSelect> *@
+        @if (!isHR)
+        {
+            <label class="form-label">Department</label>
+            <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
+                <option value="">-- Select Department --</option>
+                @foreach (var dept in departments)
+                {
+                    <option value="@dept.DepartmentId">@dept.Name</option>
+                }
+            </InputSelect>
+        }
 
+        else
+        {
+            <div class="mb-2">
+                <label class="form-label">Department</label>
+                <input class="form-control" value="@hrDepartmentName" readonly />
+                <small class="text-muted">You can only add employees to your own department.</small>
+            </div>
+        }
         <!-- Role (Only for OrgAdmin) -->
         @if (!isHR)
         {
@@ -89,6 +108,12 @@
         var roles = await UserManager.GetRolesAsync(user);
 
         isHR = roles.Contains("HR");
+
+        if (isHR && user != null)
+        {
+            model.DepartmentId = user.DepartmentId;
+            hrDepartmentName = departments.FirstOrDefault(d => d.DepartmentId == user.DepartmentId)?.Name;
+        }
     }
 
     private async Task CreateEmployee()
@@ -109,11 +134,28 @@
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
+            errorMessage = "Something went wrong. Please try again.";
         }
         finally
         {
             isSubmitting = false;
         }
     }
+
+
+    private string? hrDepartmentName;
+
+    // protected override async Task OnInitializedAsync()
+    // {
+    //     departments = await DeptService.GetAllAsync();
+
+    //     var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+    //     var user = await UserManager.GetUserAsync(authState.User);
+    //     var roles = await UserManager.GetRolesAsync(user);
+
+    //     isHR = roles.Contains("HR");
+
+    //     If HR, pre-set the department model and get the name for the UI
+        
+    // }
 }

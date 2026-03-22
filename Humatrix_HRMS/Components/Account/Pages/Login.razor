@@ -134,7 +134,8 @@
             {
                 if (!user.IsActive)
                 {
-                    throw new Exception("Your account is deactivated. Contact admin.");
+                    errorMessage = "Your account is deactivated.";
+                    return;
                 }
 
                 var roles = await UserManager.GetRolesAsync(user);

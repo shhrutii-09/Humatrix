@@ -29,6 +29,21 @@ namespace Humatrix_HRMS.Services
             if (currentUser == null || currentUser.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
+
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
+            if (currentUserRoles.Contains("HR"))
+            {
+                // 1. Force the role to Employee
+                dto.Role = "Employee";
+
+                // 2. Force the DepartmentId to be the same as the HR's department
+                dto.DepartmentId = currentUser.DepartmentId;
+
+                if (dto.DepartmentId == null)
+                    throw new Exception("HR user must be assigned to a department to create employees.");
+            }
+
+
             if (string.IsNullOrEmpty(dto.Role))
                 throw new Exception("Role is required");
 
