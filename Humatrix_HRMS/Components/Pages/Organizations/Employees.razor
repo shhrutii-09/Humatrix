@@ -1,9 +1,11 @@
 ﻿@page "/org/employees"
 @page "/hr/employees"
+@rendermode InteractiveServer
 
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Identity
@@ -12,28 +14,62 @@
 
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
+@inject DesignationService DesignationService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
 @* @inject DesignationService DesignationService *@
 
-<h3>@(isHR ? "Create Employee (HR)" : "Create Employee / HR (Org Admin)")</h3>
+<h3>@(isHR ? "Add Employee (HR)" : "Add Employee / HR")</h3>
 
 <div class="card p-4 shadow-sm">
-
-    <EditForm Model="model" OnValidSubmit="CreateEmployee" FormName="empForm">
+    <EditForm Model="model" OnValidSubmit="CreateEmployee" FormName="CreateEmployeeForm">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
-        <InputText @bind-Value="model.FirstName" placeholder="First Name" class="form-control mb-2" />
-        <InputText @bind-Value="model.LastName" placeholder="Last Name" class="form-control mb-2" />
-        <InputText @bind-Value="model.Email" placeholder="Email" class="form-control mb-2" />
+        <div class="mb-2">
+            <label>First Name</label>
+            <InputText @bind-Value="model.FirstName" class="form-control" placeholder="First Name" />
+        </div>
+        <div class="mb-2">
+            <label>Last Name</label>
+            <InputText @bind-Value="model.LastName" class="form-control" placeholder="Last Name" />
+        </div>
+        <div class="mb-2">
+            <label>Email</label>
+            <InputText @bind-Value="model.Email" class="form-control" placeholder="Email" />
+        </div>
 
+<<<<<<< HEAD
+        <div class="mb-2">
+            <label>Department</label>
+            @if (!isHR)
+=======
         @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
             <option value="">-- Select Department --</option>
             @foreach (var dept in departments)
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
             {
-                <option value="@dept.DepartmentId">@dept.Name</option>
+                <select class="form-control" @onchange="OnDepartmentChanged">
+                    <option value="">-- Select Department --</option>
+                    @foreach (var dept in departments)
+                    {
+                        <option value="@dept.DepartmentId">@dept.Name</option>
+                    }
+                </select>
             }
+<<<<<<< HEAD
+            else
+            {
+                <input class="form-control" value="@hrDepartmentName" readonly />
+            }
+        </div>
+
+        <div class="mb-2">
+            <label>Designation</label>
+            <InputSelect TValue="Guid?" @bind-Value="model.DesignationId" class="form-control">
+                <option value="">-- Select Designation --</option>
+                @if (designations != null)
+=======
         </InputSelect> *@
         @if (!isHR)
         {
@@ -41,8 +77,12 @@
             @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
                 <option value="">-- Select Department --</option>
                 @foreach (var dept in departments)
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
                 {
-                    <option value="@dept.DepartmentId">@dept.Name</option>
+                    @foreach (var d in designations)
+                    {
+                        <option value="@d.DesignationId">@d.Name</option>
+                    }
                 }
             </InputSelect> *@
             <InputSelect @bind-Value="model.DepartmentId"
@@ -56,17 +96,22 @@
                     <option value="@dept.DepartmentId">@dept.Name</option>
                 }
             </InputSelect>
-        }
+        </div>
 
-        else
+        @if (!isHR)
         {
-            <div class="mb-2">
-                <label class="form-label">Department</label>
-                <input class="form-control" value="@hrDepartmentName" readonly />
-                <small class="text-muted">You can only add employees to your own department.</small>
+            <div class="mb-3">
+                <label>Role</label>
+                <InputSelect @bind-Value="model.Role" class="form-control">
+                    <option value="Employee">Employee</option>
+                    <option value="HR">HR</option>
+                </InputSelect>
             </div>
         }
 
+<<<<<<< HEAD
+        <button type="submit" class="btn btn-success" disabled="@isSubmitting">
+=======
         <!-- Role (Only for OrgAdmin) -->
         @if (!isHR)
         {
@@ -85,39 +130,35 @@
             }
         </InputSelect> *@
         <button class="btn btn-success" disabled="@isSubmitting">
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
             @(isSubmitting ? "Creating..." : "Create & Generate Link")
         </button>
     </EditForm>
-
 </div>
 
 @if (!string.IsNullOrEmpty(link))
 {
     <div class="alert alert-info mt-3">
-        <p>Send this link:</p>
+        <strong>Invite Link:</strong>
         <input class="form-control" value="@link" readonly />
     </div>
 }
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
-    <div class="alert alert-danger mt-3">
-        @errorMessage
-    </div>
+    <div class="alert alert-danger mt-3">@errorMessage</div>
 }
 
 @code {
-    [SupplyParameterFromForm]
-    public CreateEmployeeDto model { get; set; } = new()
-    {
-        Role = "Employee"
-    };
-
+    private CreateEmployeeDto model = new() { Role = "Employee" };
     private List<DepartmentDto> departments = new();
-    private string? link;
+    private List<DesignationDto> designations = new();
+
     private bool isHR = false;
     private bool isSubmitting = false;
+    private string? link;
     private string? errorMessage;
+    private string? hrDepartmentName;
 
     private string? hrDepartmentName;
 
@@ -125,22 +166,56 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Load all departments for OrgAdmin
         departments = await DeptService.GetAllAsync();
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = await UserManager.GetUserAsync(authState.User);
-        var roles = await UserManager.GetRolesAsync(user);
 
+        if (user == null) return;
+
+        var roles = await UserManager.GetRolesAsync(user);
         isHR = roles.Contains("HR");
 
-        if (isHR && user != null)
+        // If user is HR, lock them to their own department and load those designations
+        if (isHR && user.DepartmentId.HasValue)
         {
             model.DepartmentId = user.DepartmentId;
+<<<<<<< HEAD
+            hrDepartmentName = departments.FirstOrDefault(d => d.DepartmentId == user.DepartmentId)?.Name;
+
+            designations = await DesignationService.GetByDepartmentAsync(user.DepartmentId.Value);
+        }
+    }
+
+    private async Task OnDepartmentChanged(ChangeEventArgs e)
+    {
+        var selectedValue = e.Value?.ToString();
+
+        if (Guid.TryParse(selectedValue, out var deptId))
+        {
+            model.DepartmentId = deptId;
+            model.DesignationId = null; // Reset designation selection
+
+            // Fetch designations for the newly selected department
+            designations = await DesignationService.GetByDepartmentAsync(deptId);
+
+            // Notify Blazor that the 'designations' list has changed
+            StateHasChanged();
+        }
+        else
+        {
+            designations.Clear();
+            model.DepartmentId = null;
+            model.DesignationId = null;
+            StateHasChanged();
+=======
             hrDepartmentName = departments
             .FirstOrDefault(d => d.DepartmentId == user.DepartmentId)?.Name;
 
             // designations = await DesignationService
             // .GetByDepartmentAsync(user.DepartmentId.Value);
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
         }
     }
 
@@ -151,24 +226,22 @@
 
         try
         {
-            if (isHR)
-            {
-                model.Role = "Employee"; // 🔥 Force for HR
-            }
-
+            // Create user and generate link [cite: 13]
             link = await EmployeeService.CreateEmployeeAsync(model);
 
+            // Reset form
             model = new() { Role = "Employee" };
+            designations.Clear();
         }
         catch (Exception ex)
         {
-            errorMessage = "Something went wrong. Please try again.";
+            errorMessage = ex.Message;
         }
-        finally
-        {
-            isSubmitting = false;
-        }
+
+        isSubmitting = false;
     }
+<<<<<<< HEAD
+=======
 
 
 
@@ -182,4 +255,5 @@
             //     .GetByDepartmentAsync(deptId);
         }
     }
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
 }

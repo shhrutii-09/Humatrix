@@ -1,6 +1,7 @@
 ﻿@page "/org/employees-list"
 @page "/hr/employees-list"
 @rendermode InteractiveServer
+
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
@@ -16,8 +17,10 @@
 @inject AuthenticationStateProvider AuthStateProvider
 
 <h3 class="mb-3">Employee Management</h3>
+
 <div class="card p-4 shadow-sm">
 
+    <!-- 🔥 Department Filter (Only OrgAdmin) -->
     @if (!isHR)
     {
         <InputSelect TValue="Guid?"
@@ -30,12 +33,12 @@
 
             @foreach (var dept in departments)
             {
-                <option value="@dept.DepartmentId.ToString()">@dept.Name</option>
+                <option value="@dept.DepartmentId">@dept.Name</option>
             }
         </InputSelect>
-        
     }
 
+    <!-- 🔥 DATA -->
     @if (employees == null)
     {
         <p>Loading...</p>
@@ -53,7 +56,11 @@
                     <th>Email</th>
                     <th>Organization</th>
                     <th>Department</th>
+<<<<<<< HEAD
+                    <th>Designation</th> <!-- ✅ NEW -->
+=======
                     @* <th>Designation</th> *@
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
                     <th>Role</th>
                     <th>Status</th>
                     <th style="width:250px;">Actions</th>
@@ -68,7 +75,12 @@
                         <td>@emp.Email</td>
                         <td>@emp.Organization</td>
                         <td>@emp.Department</td>
+<<<<<<< HEAD
+                        <td>@emp.Designation</td> <!-- ✅ NEW -->
+
+=======
                         @* <td>@emp.Designation</td> *@
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
                         <td>
                             @if (emp.IsHR)
                             {
@@ -111,7 +123,10 @@
                                     Activate
                                 </button>
                             }
+<<<<<<< HEAD
+=======
 
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
                         </td>
                     </tr>
                 }
@@ -120,47 +135,20 @@
     }
 </div>
 
-@* @if (showEditModal)
-{
-    <div class="modal fade show d-block" style="background-color:rgba(0,0,0,0.5)">
-        <div class="modal-dialog">
-            <div class="modal-content p-3">
-
-                <h5>Edit Employee</h5>
-
-                <InputText @bind-Value="editModel.FirstName" class="form-control mb-2" placeholder="First Name" />
-                <InputText @bind-Value="editModel.LastName" class="form-control mb-2" placeholder="Last Name" />
-
-                <InputSelect @bind-Value="editModel.DepartmentId" class="form-control mb-2">
-                    @foreach (var dept in departments)
-                    {
-                        <option value="@dept.DepartmentId">@dept.Name</option>
-                    }
-                </InputSelect>
-
-                <div class="mt-2">
-                    <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
-                    <button class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
-                </div>
-
-            </div>
-        </div>
-    </div>
-} *@
-
+<!-- 🔥 EDIT MODAL -->
 @if (showEditModal)
 {
     <div style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;">
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;">
 
         <div class="card p-4" style="width:400px;">
 
@@ -207,9 +195,8 @@
 
     private string? successMessage;
 
-    private Guid? _selectedDepartmentId;
     private Guid? selectedDepartmentId;
-  
+
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
@@ -223,12 +210,10 @@
         await LoadEmployees();
     }
 
-
     private async Task LoadEmployees()
     {
         employees = await EmployeeService.GetEmployeesForListAsync(selectedDepartmentId);
     }
-
 
     private async Task ToggleStatus(string email, bool activate)
     {
@@ -236,12 +221,6 @@
         successMessage = activate ? "User activated" : "User deactivated";
         await LoadEmployees();
     }
-
-    // private async Task ResendInvite(string email)
-    // {
-    //     var link = await EmployeeService.ResendInviteAsync(email);
-    //     successMessage = $"Invite resent: {link}";
-    // }
 
     private void OpenEdit(EmployeeListDto emp)
     {
@@ -272,22 +251,9 @@
         await LoadEmployees();
     }
 
-
     private async Task OnDepartmentChanged(Guid? value)
     {
-        try
-        {
-            selectedDepartmentId = value;
-            Console.WriteLine($"Selected Dept ID: {(selectedDepartmentId?.ToString() ?? "All")}");
-
-            await LoadEmployees();
-
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error filtering employees: {ex.Message}");
-            successMessage = "Error filtering results. Please try again.";
-        }
+        selectedDepartmentId = value;
+        await LoadEmployees();
     }
 }

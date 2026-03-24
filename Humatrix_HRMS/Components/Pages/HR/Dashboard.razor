@@ -1,7 +1,8 @@
 ﻿@page "/hr/dashboard"
 
-@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
 
 @attribute [Authorize(Roles = "HR")]
@@ -13,43 +14,57 @@
 <div class="container mt-4">
     <h1>HR Dashboard</h1>
 
-    <div class="card p-3 mb-4">
-        <h5>Total Employees: @employees.Count</h5>
-    </div>
+    @if (employees == null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="card p-3 mb-4">
+            <h5>Total Employees: @employees.Count</h5>
+        </div>
 
-    <table class="table table-hover shadow-sm border">
-        <thead class="table-light">
-            <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>DepartmentId</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            @foreach (var emp in employees)
-            {
+        <table class="table table-hover shadow-sm border">
+            <thead class="table-light">
                 <tr>
-                    <td>@emp.FirstName @emp.LastName  <p><strong>Role:</strong> HR</p></td>
-                   
-
-                    <td>@emp.Email</td>
-                    <td>@emp.DepartmentId</td>
-                    <td>
-                        <span class="badge bg-success">Active</span>
-                    </td>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Designation</th>
+                    <th>Status</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+
+            <tbody>
+                @foreach (var emp in employees)
+                {
+                    <tr>
+                        <td>@emp.Name</td>
+                        <td>@emp.Email</td>
+                        <td>@emp.Department</td>
+                        <td>@emp.Designation</td>
+                        <td>
+                            @if (emp.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">Inactive</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 </div>
 
 @code {
-    private List<ApplicationUser> employees = new();
+    private List<EmployeeListDto>? employees;
 
     protected override async Task OnInitializedAsync()
     {
-        employees = await EmployeeService.GetEmployeesAsync();
+        employees = await EmployeeService.GetEmployeesForListAsync();
     }
 }

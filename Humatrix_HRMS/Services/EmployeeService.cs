@@ -22,25 +22,25 @@ namespace Humatrix_HRMS.Services
             _context = context;
         }
 
+        // ✅ CREATE EMPLOYEE / HR
         public async Task<string> CreateEmployeeAsync(CreateEmployeeDto dto)
         {
             var currentUser = await _currentUser.GetUserAsync();
 
-
             if (currentUser == null || currentUser.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
+            var currentRoles = await _userManager.GetRolesAsync(currentUser);
 
-            var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
-            if (currentUserRoles.Contains("HR"))
+            // 🔥 HR restrictions
+            if (currentRoles.Contains("HR"))
             {
                 dto.Role = "Employee";
                 dto.DepartmentId = currentUser.DepartmentId;
-
-                if (dto.DepartmentId == null)
-                    throw new Exception("HR user must be assigned to a department to create employees.");
             }
 
+<<<<<<< HEAD
+=======
             if (dto.DesignationId == null)
                 throw new Exception("Designation is required");
             if (string.IsNullOrEmpty(dto.Role))
@@ -51,6 +51,7 @@ namespace Humatrix_HRMS.Services
             if (!validRoles.Contains(dto.Role))
                 throw new Exception("Invalid role");
 
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
             var user = new ApplicationUser
             {
                 UserName = dto.Email,
@@ -60,57 +61,39 @@ namespace Humatrix_HRMS.Services
                 OrganizationId = currentUser.OrganizationId,
                 DepartmentId = dto.DepartmentId,
                 DesignationId = dto.DesignationId,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                IsActive = true
             };
 
-            // 1. CREATE USER
             var result = await _userManager.CreateAsync(user);
 
             if (!result.Succeeded)
-            {
-                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                throw new Exception(errors);
-            }
+                throw new Exception(string.Join(",", result.Errors.Select(e => e.Description)));
 
-            // 2. ASSIGN ROLE (Uses the role selected in the UI: HR or Employee)
             await _userManager.AddToRoleAsync(user, dto.Role);
 
-            // 3. GENERATE TOKEN
+            // 🔥 Invite link
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
-            // 4. SAVE INVITE (FIXED: Added Email, Role, and OrganizationId)
             var invite = new UserInvite
             {
-                Email = dto.Email, // This fixes the SQL NULL error
+                Email = dto.Email,
                 UserId = user.Id,
                 Token = token,
-                Role = dto.Role, // Stores whether they are HR or Employee
+                Role = dto.Role,
                 OrganizationId = currentUser.OrganizationId,
-                CreatedAt = DateTime.UtcNow,
-                IsUsed = false
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.UserInvites.Add(invite);
             await _context.SaveChangesAsync();
 
-            // 5. RETURN LINK
-            var link = $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-
-            return link;
+            return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
         }
 
-        public async Task<List<ApplicationUser>> GetEmployeesAsync()
-        {
-            var currentUser = await _currentUser.GetUserAsync();
-
-            if (currentUser == null || currentUser.OrganizationId == null)
-                return new List<ApplicationUser>();
-
-            return await _userManager.Users
-                .Where(u => u.OrganizationId == currentUser.OrganizationId)
-                .ToListAsync();
-        }
-
+<<<<<<< HEAD
+        // ✅ LIST (WITH DESIGNATION)
+=======
         //        public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
         //        {
         //            var currentUser = await _currentUser.GetUserAsync();
@@ -170,6 +153,7 @@ namespace Humatrix_HRMS.Services
         //        }
 
 
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
         public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
         {
             var currentUser = await _currentUser.GetUserAsync();
@@ -182,6 +166,17 @@ namespace Humatrix_HRMS.Services
             var usersQuery = _userManager.Users
                 .Where(u => u.OrganizationId == currentUser.OrganizationId);
 
+<<<<<<< HEAD
+            if (roles.Contains("HR"))
+            {
+                usersQuery = usersQuery
+                    .Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id);
+            }
+            else if (departmentId.HasValue)
+            {
+                usersQuery = usersQuery
+                    .Where(u => u.DepartmentId == departmentId);
+=======
             // 2. Security/Role Filter:
             // If the viewer is HR, they can only see people in their own department (and not themselves)
             if (currentUserRoles.Contains("HR"))
@@ -192,17 +187,22 @@ namespace Humatrix_HRMS.Services
             else if (departmentId.HasValue)
             {
                 usersQuery = usersQuery.Where(u => u.DepartmentId == departmentId.Value);
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
             }
 
             var users = await usersQuery.ToListAsync();
             var departments = await _context.Departments.ToListAsync();
             var organizations = await _context.Organizations.ToListAsync();
+            var designations = await _context.Designations.ToListAsync();
 
             var result = new List<EmployeeListDto>();
 
             foreach (var u in users)
             {
                 var userRoles = await _userManager.GetRolesAsync(u);
+<<<<<<< HEAD
+                var role = userRoles.FirstOrDefault() ?? "Employee";
+=======
 
                 // 🔥 CRITICAL CHANGE: Only include if the user is HR or Employee
                 // This prevents OrgAdmins or other roles from appearing in the list
@@ -212,15 +212,17 @@ namespace Humatrix_HRMS.Services
                 }
 
                 var role = userRoles.FirstOrDefault();
+>>>>>>> ae07b0cd972eb059e35f6d866fb42c0d181ee94f
 
                 result.Add(new EmployeeListDto
                 {
                     Name = $"{u.FirstName} {u.LastName}",
-                    Email = u.Email,
+                    Email = u.Email ?? "",
                     Role = role,
                     IsHR = role == "HR",
-                    Department = departments.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name,
-                    Organization = organizations.FirstOrDefault(o => o.OrganizationId == u.OrganizationId)?.Name,
+                    Department = departments.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "",
+                    Organization = organizations.FirstOrDefault(o => o.OrganizationId == u.OrganizationId)?.Name ?? "",
+                    Designation = designations.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "",
                     IsActive = u.IsActive
                 });
             }
@@ -231,6 +233,7 @@ namespace Humatrix_HRMS.Services
                 .ToList();
         }
 
+        // ✅ ACTIVATE / DEACTIVATE
         public async Task ToggleUserStatusAsync(string email, bool isActive)
         {
             var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -241,44 +244,18 @@ namespace Humatrix_HRMS.Services
             await _userManager.UpdateAsync(user);
         }
 
+        // ✅ UPDATE
         public async Task UpdateEmployeeAsync(string email, EditEmployeeDto dto)
         {
             var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
-
             if (user == null) throw new Exception("User not found");
 
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.DepartmentId = dto.DepartmentId;
+            user.DesignationId = dto.DesignationId; // ✅ Add this line
 
             await _userManager.UpdateAsync(user);
-        }
-
-        public async Task<string> ResendInviteAsync(string email)
-        {
-            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
-
-            if (user == null) throw new Exception("User not found");
-
-            var roles = await _userManager.GetRolesAsync(user);
-            var role = roles.FirstOrDefault();
-
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-
-            var invite = new UserInvite
-            {
-                Email = user.Email,
-                UserId = user.Id,
-                Token = token,
-                Role = role,
-                OrganizationId = user.OrganizationId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.UserInvites.Add(invite);
-            await _context.SaveChangesAsync();
-
-            return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
         }
     }
 }
