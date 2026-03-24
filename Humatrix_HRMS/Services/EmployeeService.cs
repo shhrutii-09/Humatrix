@@ -111,35 +111,90 @@ namespace Humatrix_HRMS.Services
                 .ToListAsync();
         }
 
+        //        public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
+        //        {
+        //            var currentUser = await _currentUser.GetUserAsync();
+
+        //            if (currentUser == null || currentUser.OrganizationId == null)
+        //                return new List<EmployeeListDto>();
+
+        //            var roles = await _userManager.GetRolesAsync(currentUser);
+
+        //            var usersQuery = _userManager.Users
+        //                .Where(u => u.OrganizationId == currentUser.OrganizationId);
+
+        //            if (roles.Contains("HR"))
+        //            {
+        //                usersQuery = usersQuery
+        //                    .Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id); 
+        //            }
+        //            else
+        //            {
+        //                // 🔥 Org Admin filter
+        //                if (departmentId.HasValue)
+        //                {
+        //                    usersQuery = usersQuery
+        //.Where(u => u.DepartmentId.HasValue && u.DepartmentId.Value == departmentId.Value);
+        //                }
+        //            }
+
+        //            var users = await usersQuery.ToListAsync();
+
+        //            var departments = await _context.Departments.ToListAsync();
+        //            var organizations = await _context.Organizations.ToListAsync();
+
+        //            var result = new List<EmployeeListDto>();
+
+        //            foreach (var u in users)
+        //            {
+        //                var userRoles = await _userManager.GetRolesAsync(u);
+        //                var role = userRoles.FirstOrDefault();
+
+        //                result.Add(new EmployeeListDto
+        //                {
+        //                    Name = $"{u.FirstName} {u.LastName}",
+        //                    Email = u.Email,
+        //                    Role = role,
+        //                    IsHR = role == "HR",
+        //                    Department = departments.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name,
+        //                    Organization = organizations.FirstOrDefault(o => o.OrganizationId == u.OrganizationId)?.Name,
+        //                    IsActive = u.IsActive
+        //                });
+        //            }
+
+        //            // 🔥 SORT: HR FIRST
+        //            return result
+        //                .OrderByDescending(x => x.IsHR)
+        //                .ThenBy(x => x.Name)
+        //                .ToList();
+        //        }
+
+
         public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
         {
             var currentUser = await _currentUser.GetUserAsync();
-
             if (currentUser == null || currentUser.OrganizationId == null)
                 return new List<EmployeeListDto>();
 
-            var roles = await _userManager.GetRolesAsync(currentUser);
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
 
+            // 1. Start with users in the same Organization
             var usersQuery = _userManager.Users
                 .Where(u => u.OrganizationId == currentUser.OrganizationId);
 
-            if (roles.Contains("HR"))
+            // 2. Security/Role Filter:
+            // If the viewer is HR, they can only see people in their own department (and not themselves)
+            if (currentUserRoles.Contains("HR"))
             {
-                usersQuery = usersQuery
-                    .Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id); 
+                usersQuery = usersQuery.Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id);
             }
-            else
+            // If OrgAdmin, they see the whole org but we should still apply the department filter if selected
+            else if (departmentId.HasValue)
             {
-                // 🔥 Org Admin filter
-                if (departmentId.HasValue)
-                {
-                    usersQuery = usersQuery
-.Where(u => u.DepartmentId.HasValue && u.DepartmentId.Value == departmentId.Value);
-                }
+                usersQuery = usersQuery.Where(u => u.DepartmentId == departmentId.Value);
             }
 
             var users = await usersQuery.ToListAsync();
-
             var departments = await _context.Departments.ToListAsync();
             var organizations = await _context.Organizations.ToListAsync();
 
@@ -148,6 +203,14 @@ namespace Humatrix_HRMS.Services
             foreach (var u in users)
             {
                 var userRoles = await _userManager.GetRolesAsync(u);
+
+                // 🔥 CRITICAL CHANGE: Only include if the user is HR or Employee
+                // This prevents OrgAdmins or other roles from appearing in the list
+                if (!userRoles.Any(r => r == "HR" || r == "Employee"))
+                {
+                    continue;
+                }
+
                 var role = userRoles.FirstOrDefault();
 
                 result.Add(new EmployeeListDto
@@ -162,7 +225,6 @@ namespace Humatrix_HRMS.Services
                 });
             }
 
-            // 🔥 SORT: HR FIRST
             return result
                 .OrderByDescending(x => x.IsHR)
                 .ThenBy(x => x.Name)

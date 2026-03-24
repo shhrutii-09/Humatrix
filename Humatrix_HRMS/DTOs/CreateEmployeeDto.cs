@@ -7,9 +7,9 @@
         public string FirstName { get; set; }
         public string LastName { get; set; }
 
-        public Guid? DepartmentId { get; set; } // ✅ nullable
+        public Guid? DepartmentId { get; set; } 
 
-        public string Role { get; set; } = "Employee"; // ✅ default
+        public string Role { get; set; } = "Employee";
         public Guid? DesignationId { get; set; }
 
     }
