@@ -10,5 +10,6 @@
         public Guid? DepartmentId { get; set; } // ✅ nullable
 
         public string Role { get; set; } = "Employee"; // ✅ default
+        public Guid? DesignationId { get; set; }
     }
 }

@@ -76,9 +76,9 @@
 
             <div class="col-md-4">
                 <div class="card shadow-sm p-3 text-center">
-                    <h5>HR</h5>
-                    <button class="btn btn-warning w-100" @onclick="GoHR">
-                        Manage HR
+                    <h5>Designations</h5>
+                    <button class="btn btn-warning w-100" @onclick="GoDesignations">
+                        Manage Designation
                     </button>
                 </div>
             </div>
@@ -98,5 +98,5 @@
 
     void GoDepartments() => Nav.NavigateTo("/org/departments");
     void GoEmployees() => Nav.NavigateTo("/org/employees");
-    void GoHR() => Nav.NavigateTo("/org/hr");
+    void GoDesignations() => Nav.NavigateTo("/org/designations");
 }

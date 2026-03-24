@@ -2,6 +2,7 @@
 using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services
 {
@@ -33,7 +34,7 @@ namespace Humatrix_HRMS.Services
             // 2. Create Org Admin
             var user = new ApplicationUser
             {
-                UserName = dto.AdminEmail, // FIX: Sets username to stop the error
+                UserName = dto.AdminEmail, 
                 Email = dto.AdminEmail,
                 OrganizationId = org.OrganizationId,
                 EmailConfirmed = true
@@ -68,5 +69,9 @@ namespace Humatrix_HRMS.Services
             // 5. Return Link
             return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
         }
+
+        
     }
+
+
 }

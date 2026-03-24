@@ -26,6 +26,7 @@ namespace Humatrix_HRMS.Services
         {
             var currentUser = await _currentUser.GetUserAsync();
 
+
             if (currentUser == null || currentUser.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
@@ -60,6 +61,7 @@ namespace Humatrix_HRMS.Services
                 LastName = dto.LastName,
                 OrganizationId = currentUser.OrganizationId,
                 DepartmentId = dto.DepartmentId,
+                DesignationId = dto.DesignationId,
                 EmailConfirmed = true
             };
 

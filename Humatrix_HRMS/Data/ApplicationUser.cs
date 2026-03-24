@@ -14,6 +14,8 @@ namespace Humatrix_HRMS.Data
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public Guid? DesignationId { get; set; }
     }
 
 }

@@ -50,6 +50,8 @@ builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<OrgDashboardService>();
 
+builder.Services.AddScoped<DesignationService>();
+
 var app = builder.Build();
 
 // 🔥 Seed Roles + SuperAdmin
