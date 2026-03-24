@@ -66,8 +66,9 @@ else
 }
 
 @code {
-    private bool isCheckedIn = false;
-    private bool isCheckedOut = false;
+    private bool isCheckedIn;
+    private bool isCheckedOut;
+    private bool isLoading;
 
     private List<Attendance> attendanceList = new();
 
@@ -75,11 +76,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadTodayStatus();
-        await LoadHistory();
+        await RefreshUI();
     }
 
-    private async Task LoadTodayStatus()
+    private async Task RefreshUI()
     {
         var status = await AttendanceService.GetTodayStatusAsync();
 
@@ -91,21 +91,40 @@ else
             message = $"Check-In: {status.CheckIn?.ToLocalTime()} | " +
                       $"Check-Out: {status.CheckOut?.ToLocalTime()}";
         }
+        else
+        {
+            isCheckedIn = false;
+            isCheckedOut = false;
+            message = "No attendance for today";
+        }
+
+        attendanceList = await AttendanceService.GetMyAttendanceAsync();
+
+        StateHasChanged(); // 🔥 VERY IMPORTANT
     }
 
     private async Task CheckIn()
     {
-        message = "Button clicked"; // 👈 ADD THIS FIRST
-
         try
         {
+            isLoading = true;
+            message = "Checking in...";
+            StateHasChanged();
+
             await AttendanceService.CheckInAsync();
+
+            await RefreshUI(); // 🔥 refresh everything
+
             message = "Checked in successfully";
-            await LoadTodayStatus();
         }
         catch (Exception ex)
         {
             message = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
         }
     }
 
@@ -113,18 +132,24 @@ else
     {
         try
         {
+            isLoading = true;
+            message = "Checking out...";
+            StateHasChanged();
+
             await AttendanceService.CheckOutAsync();
+
+            await RefreshUI(); // 🔥 refresh everything
+
             message = "Checked out successfully";
-            await LoadTodayStatus();
         }
         catch (Exception ex)
         {
             message = ex.Message;
         }
-    }
-
-    private async Task LoadHistory()
-    {
-        attendanceList = await AttendanceService.GetMyAttendanceAsync();
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 }
