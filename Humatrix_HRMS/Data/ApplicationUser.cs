@@ -1,3 +1,4 @@
+using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 
 namespace Humatrix_HRMS.Data
@@ -16,6 +17,8 @@ namespace Humatrix_HRMS.Data
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public Guid? DesignationId { get; set; }
+        public Department? Department { get; set; }
+
     }
 
 }
