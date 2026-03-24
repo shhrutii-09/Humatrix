@@ -109,7 +109,6 @@ namespace Humatrix_HRMS.Services
             if (designation == null)
                 throw new Exception("Designation not found");
 
-            // 🔥 Check duplicate (excluding current one)
             var exists = await _context.Designations.AnyAsync(d =>
                 d.DesignationId != id &&
                 d.Name.ToLower() == dto.Name.ToLower() &&

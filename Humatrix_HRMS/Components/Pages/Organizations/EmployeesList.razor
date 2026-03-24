@@ -53,6 +53,7 @@
                     <th>Email</th>
                     <th>Organization</th>
                     <th>Department</th>
+                    @* <th>Designation</th> *@
                     <th>Role</th>
                     <th>Status</th>
                     <th style="width:250px;">Actions</th>
@@ -67,7 +68,7 @@
                         <td>@emp.Email</td>
                         <td>@emp.Organization</td>
                         <td>@emp.Department</td>
-
+                        @* <td>@emp.Designation</td> *@
                         <td>
                             @if (emp.IsHR)
                             {
@@ -111,10 +112,6 @@
                                 </button>
                             }
 
-                            @* <button class="btn btn-sm btn-info"
-                                    @onclick="() => ResendInvite(emp.Email)">
-                                Resend Invite
-                            </button> *@
                         </td>
                     </tr>
                 }
@@ -178,7 +175,12 @@
                     <option value="@dept.DepartmentId">@dept.Name</option>
                 }
             </InputSelect>
-
+            @* <InputSelect @bind-Value="editModel.DesignationId" class="form-control mb-2">
+                @foreach (var d in designations)
+                {
+                    <option value="@d.DesignationId">@d.Name</option>
+                }
+            </InputSelect> *@
             <div class="mt-2">
                 <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
                 <button class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>

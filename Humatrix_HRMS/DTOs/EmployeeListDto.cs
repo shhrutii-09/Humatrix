@@ -7,6 +7,7 @@
         public string Role { get; set; }
         public string? Department { get; set; }
         public string? Organization { get; set; }
+        public string? Designation { get; set; }
         public bool IsActive { get; set; }
 
         public bool IsHR { get; set; } // 🔥 NEW

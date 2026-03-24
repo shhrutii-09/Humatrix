@@ -34,17 +34,15 @@ namespace Humatrix_HRMS.Services
             var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
             if (currentUserRoles.Contains("HR"))
             {
-                // 1. Force the role to Employee
                 dto.Role = "Employee";
-
-                // 2. Force the DepartmentId to be the same as the HR's department
                 dto.DepartmentId = currentUser.DepartmentId;
 
                 if (dto.DepartmentId == null)
                     throw new Exception("HR user must be assigned to a department to create employees.");
             }
 
-
+            if (dto.DesignationId == null)
+                throw new Exception("Designation is required");
             if (string.IsNullOrEmpty(dto.Role))
                 throw new Exception("Role is required");
 
@@ -125,11 +123,10 @@ namespace Humatrix_HRMS.Services
             var usersQuery = _userManager.Users
                 .Where(u => u.OrganizationId == currentUser.OrganizationId);
 
-            // 🔥 HR logic
             if (roles.Contains("HR"))
             {
                 usersQuery = usersQuery
-                    .Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id); // ❌ exclude self
+                    .Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id); 
             }
             else
             {

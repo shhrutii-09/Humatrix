@@ -14,6 +14,7 @@
 @inject DepartmentService DeptService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
+@* @inject DesignationService DesignationService *@
 
 <h3>@(isHR ? "Create Employee (HR)" : "Create Employee / HR (Org Admin)")</h3>
 
@@ -27,7 +28,6 @@
         <InputText @bind-Value="model.LastName" placeholder="Last Name" class="form-control mb-2" />
         <InputText @bind-Value="model.Email" placeholder="Email" class="form-control mb-2" />
 
-        <!-- Department -->
         @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
             <option value="">-- Select Department --</option>
             @foreach (var dept in departments)
@@ -38,8 +38,19 @@
         @if (!isHR)
         {
             <label class="form-label">Department</label>
-            <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
+            @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2">
                 <option value="">-- Select Department --</option>
+                @foreach (var dept in departments)
+                {
+                    <option value="@dept.DepartmentId">@dept.Name</option>
+                }
+            </InputSelect> *@
+            <InputSelect @bind-Value="model.DepartmentId"
+                         class="form-control mb-2"
+                         @onchange="OnDepartmentChanged">
+
+                <option value="">-- Select Department --</option>
+
                 @foreach (var dept in departments)
                 {
                     <option value="@dept.DepartmentId">@dept.Name</option>
@@ -64,7 +75,15 @@
                 <option value="HR">HR</option>
             </InputSelect>
         }
+        @* <label class="form-label">Designation</label>
+        <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
+            <option value="">-- Select Designation --</option>
 
+            @foreach (var d in designations)
+            {
+                <option value="@d.DesignationId">@d.Name</option>
+            }
+        </InputSelect> *@
         <button class="btn btn-success" disabled="@isSubmitting">
             @(isSubmitting ? "Creating..." : "Create & Generate Link")
         </button>
@@ -100,6 +119,10 @@
     private bool isSubmitting = false;
     private string? errorMessage;
 
+    private string? hrDepartmentName;
+
+    // private List<DesignationDto> designations = new();
+
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
@@ -113,7 +136,11 @@
         if (isHR && user != null)
         {
             model.DepartmentId = user.DepartmentId;
-            hrDepartmentName = departments.FirstOrDefault(d => d.DepartmentId == user.DepartmentId)?.Name;
+            hrDepartmentName = departments
+            .FirstOrDefault(d => d.DepartmentId == user.DepartmentId)?.Name;
+
+            // designations = await DesignationService
+            // .GetByDepartmentAsync(user.DepartmentId.Value);
         }
     }
 
@@ -144,19 +171,15 @@
     }
 
 
-    private string? hrDepartmentName;
 
-    // protected override async Task OnInitializedAsync()
-    // {
-    //     departments = await DeptService.GetAllAsync();
+    private async Task OnDepartmentChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var deptId))
+        {
+            model.DepartmentId = deptId;
 
-    //     var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-    //     var user = await UserManager.GetUserAsync(authState.User);
-    //     var roles = await UserManager.GetRolesAsync(user);
-
-    //     isHR = roles.Contains("HR");
-
-    //     If HR, pre-set the department model and get the name for the UI
-        
-    // }
+            // designations = await DesignationService
+            //     .GetByDepartmentAsync(deptId);
+        }
+    }
 }
