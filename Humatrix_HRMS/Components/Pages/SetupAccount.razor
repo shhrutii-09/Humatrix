@@ -32,12 +32,12 @@
     [Parameter]
     [SupplyParameterFromQuery]
     public string userId { get; set; }
-    
+
 
     [Parameter]
     [SupplyParameterFromQuery]
     public string token { get; set; }
-    
+
 
     // 4. Critical: Must have [SupplyParameterFromForm] for SSR to bind the data
     [SupplyParameterFromForm]
@@ -77,6 +77,6 @@
         [Required(ErrorMessage = "Password is required")]
         [StringLength(100, MinimumLength = 6, ErrorMessage = "Password is too short")]
         public string Password { get; set; }
-        
+
     }
 }
