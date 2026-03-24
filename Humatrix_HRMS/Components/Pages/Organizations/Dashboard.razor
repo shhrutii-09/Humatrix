@@ -67,6 +67,15 @@
 
             <div class="col-md-4">
                 <div class="card shadow-sm p-3 text-center">
+                    <h5>Designations</h5>
+                    <button class="btn btn-warning w-100" @onclick="GoDesignations">
+                        Manage Designation
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm p-3 text-center">
                     <h5>Employees</h5>
                     <button class="btn btn-success w-100" @onclick="GoEmployees">
                         Manage Employees
@@ -74,14 +83,7 @@
                 </div>
             </div>
 
-            <div class="col-md-4">
-                <div class="card shadow-sm p-3 text-center">
-                    <h5>Designations</h5>
-                    <button class="btn btn-warning w-100" @onclick="GoDesignations">
-                        Manage Designation
-                    </button>
-                </div>
-            </div>
+           
 
         </div>
     }
@@ -97,6 +99,7 @@
     }
 
     void GoDepartments() => Nav.NavigateTo("/org/departments");
-    void GoEmployees() => Nav.NavigateTo("/org/employees");
     void GoDesignations() => Nav.NavigateTo("/org/designations");
+    void GoEmployees() => Nav.NavigateTo("/org/employees");
+    
 }
