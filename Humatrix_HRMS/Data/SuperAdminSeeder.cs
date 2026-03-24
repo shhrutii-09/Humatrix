@@ -7,6 +7,8 @@ public static class SuperAdminSeeder
     {
         var email = "superadmin@humatrix.com";
         var password = "Admin@123";
+        //var email = config["SuperAdmin:Email"];
+        //var password = config["SuperAdmin:Password"];
 
         var user = await userManager.FindByEmailAsync(email);
 

@@ -41,6 +41,7 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 
 
 builder.Services.AddScoped<OrganizationService>();
+builder.Services.AddScoped<AttendanceService>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUserService>();

@@ -17,6 +17,8 @@ namespace Humatrix_HRMS.Data
         public DbSet<UserInvite> UserInvites { get; set; }
 
         public DbSet<Designation> Designations { get; set; }
+
+        public DbSet<Attendance> Attendances { get; set; }
     }
 
     }

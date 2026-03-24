@@ -1,0 +1,130 @@
+﻿@page "/employee/attendance"
+@rendermode InteractiveServer
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Employee,HR")]
+
+@inject AttendanceService AttendanceService
+
+<h3 class="mb-3">Attendance</h3>
+
+<div class="card p-4 shadow-sm">
+
+    <h5>Today's Attendance</h5>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-info">@message</div>
+    }
+
+    <div class="mt-3">
+        <button class="btn btn-success me-2"
+                @onclick="CheckIn"
+                disabled="@isCheckedIn">
+            Check In
+        </button>
+
+        <button class="btn btn-danger"
+                @onclick="CheckOut"
+                disabled="@(!isCheckedIn || isCheckedOut)">
+            Check Out
+        </button>
+    </div>
+
+</div>
+
+<h5 class="mt-4">My Attendance History</h5>
+
+@if (attendanceList == null || !attendanceList.Any())
+{
+    <p>No records found.</p>
+}
+else
+{
+    <table class="table table-bordered mt-2">
+        <thead class="table-dark">
+            <tr>
+                <th>Date</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var item in attendanceList)
+            {
+                <tr>
+                    <td>@item.Date.ToShortDateString()</td>
+                    <td>@item.CheckIn?.ToLocalTime()</td>
+                    <td>@item.CheckOut?.ToLocalTime()</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool isCheckedIn = false;
+    private bool isCheckedOut = false;
+
+    private List<Attendance> attendanceList = new();
+
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTodayStatus();
+        await LoadHistory();
+    }
+
+    private async Task LoadTodayStatus()
+    {
+        var status = await AttendanceService.GetTodayStatusAsync();
+
+        if (status != null)
+        {
+            isCheckedIn = status.CheckIn != null;
+            isCheckedOut = status.CheckOut != null;
+
+            message = $"Check-In: {status.CheckIn?.ToLocalTime()} | " +
+                      $"Check-Out: {status.CheckOut?.ToLocalTime()}";
+        }
+    }
+
+    private async Task CheckIn()
+    {
+        message = "Button clicked"; // 👈 ADD THIS FIRST
+
+        try
+        {
+            await AttendanceService.CheckInAsync();
+            message = "Checked in successfully";
+            await LoadTodayStatus();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    private async Task CheckOut()
+    {
+        try
+        {
+            await AttendanceService.CheckOutAsync();
+            message = "Checked out successfully";
+            await LoadTodayStatus();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    private async Task LoadHistory()
+    {
+        attendanceList = await AttendanceService.GetMyAttendanceAsync();
+    }
+}
