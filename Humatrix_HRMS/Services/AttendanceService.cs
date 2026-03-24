@@ -1,4 +1,5 @@
 ﻿using Humatrix_HRMS.Data;
+using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -87,6 +88,58 @@ namespace Humatrix_HRMS.Services
                 .Where(a => a.UserId == user.Id)
                 .OrderByDescending(a => a.Date)
                 .ToListAsync();
+        }
+
+        public async Task<List<AttendanceListDto>> GetAllAttendanceAsync(DateTime? date = null)
+        {
+            var currentUser = await _currentUser.GetUserAsync();
+
+            var query = _context.Attendances
+                .Include(a => a.User)
+                .ThenInclude(u => u.Department)
+                .Where(a => a.OrganizationId == currentUser.OrganizationId);
+
+            if (date.HasValue)
+            {
+                var selectedDate = date.Value.Date;
+                query = query.Where(a => a.Date == selectedDate);
+            }
+
+            var data = await query.ToListAsync();
+
+            return data.Select(a => new AttendanceListDto
+            {
+                EmployeeName = a.User.FirstName + " " + a.User.LastName,
+                Email = a.User.Email,
+                Department = a.User.Department != null ? a.User.Department.Name : "",
+
+                Date = a.Date,
+                CheckIn = a.CheckIn,
+                CheckOut = a.CheckOut,
+
+                Status = GetStatus(a)
+            }).ToList();
+        }
+
+        private string GetStatus(Attendance a)
+        {
+            if (a.CheckIn == null)
+                return "Absent";
+
+            var checkInTime = a.CheckIn.Value.TimeOfDay;
+
+            if (checkInTime > new TimeSpan(10, 30, 0))
+                return "Late";
+
+            if (a.CheckOut != null)
+            {
+                var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
+
+                if (hours < 4)
+                    return "Half Day";
+            }
+
+            return "Present";
         }
     }
 }

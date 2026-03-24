@@ -60,7 +60,12 @@
                     <th>Email</th>
                     <th>Organization</th>
                     <th>Department</th>
+<<<<<<< HEAD
                     <th>Designation</th>
+=======
+                    <th>Designation</th> <!-- ✅ NEW -->
+                    @* <th>Designation</th> *@
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
                     <th>Role</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -75,16 +80,52 @@
                         <td>@emp.Email</td>
                         <td>@emp.Organization</td>
                         <td>@emp.Department</td>
+<<<<<<< HEAD
                         <td>@emp.Designation</td>
 
                         <td>@(emp.IsHR ? "HR" : "Employee")</td>
                         <td>@(emp.IsActive ? "Active" : "Inactive")</td>
+=======
+                        <td>@emp.Designation</td> <!-- ✅ NEW -->
+
+                        @* <td>@emp.Designation</td> *@
+                        <td>
+                            @if (emp.IsHR)
+                            {
+                                <span class="badge bg-primary">HR</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Employee</span>
+                            }
+                        </td>
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
 
                         <td>
                             <button class="btn btn-sm btn-danger"
                                     @onclick="() => DeleteUser(emp.Email!)">
                                 Delete
                             </button>
+<<<<<<< HEAD
+=======
+
+                            @if (emp.IsActive)
+                            {
+                                <button class="btn btn-sm btn-danger me-1"
+                                        @onclick="() => ToggleStatus(emp.Email, false)">
+                                    Deactivate
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-success me-1"
+                                        @onclick="() => ToggleStatus(emp.Email, true)">
+                                    Activate
+                                </button>
+                            }
+
+
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
                         </td>
                     </tr>
                 }

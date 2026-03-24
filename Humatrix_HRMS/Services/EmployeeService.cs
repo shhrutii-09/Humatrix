@@ -41,6 +41,14 @@ namespace Humatrix_HRMS.Services
             if (dto.DesignationId == null)
                 throw new Exception("Designation required");
 
+<<<<<<< HEAD
+=======
+            var validRoles = new[] { "HR", "Employee" };
+
+            if (!validRoles.Contains(dto.Role))
+                throw new Exception("Invalid role");
+
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
             var user = new ApplicationUser
             {
                 UserName = dto.Email,
@@ -66,7 +74,11 @@ namespace Humatrix_HRMS.Services
             return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
         }
 
+<<<<<<< HEAD
         // ✅ LIST
+=======
+        // ✅ LIST (WITH DESIGNATION)
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
         public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
         {
             var currentUser = await _currentUser.GetUserAsync();
@@ -79,6 +91,7 @@ namespace Humatrix_HRMS.Services
             var usersQuery = _userManager.Users
                 .Where(u => u.OrganizationId == currentUser.OrganizationId);
 
+<<<<<<< HEAD
             if (roles.Contains("HR"))
             {
                 usersQuery = usersQuery
@@ -88,6 +101,18 @@ namespace Humatrix_HRMS.Services
             {
                 usersQuery = usersQuery
                     .Where(u => u.DepartmentId == departmentId.Value);
+=======
+            // 2. Security/Role Filter
+            if (currentUserRoles.Contains("HR"))
+            {
+                // HR can only see their own department, excluding themselves
+                usersQuery = usersQuery.Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id);
+            }
+            else if (departmentId.HasValue)
+            {
+                // OrgAdmin can filter by department
+                usersQuery = usersQuery.Where(u => u.DepartmentId == departmentId.Value);
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
             }
 
             var users = await usersQuery.ToListAsync();
@@ -100,11 +125,19 @@ namespace Humatrix_HRMS.Services
             foreach (var u in users)
             {
                 var userRoles = await _userManager.GetRolesAsync(u);
+<<<<<<< HEAD
 
                 if (!userRoles.Any(r => r == "HR" || r == "Employee"))
                     continue;
 
                 var role = userRoles.FirstOrDefault() ?? "Employee";
+=======
+                var role = userRoles.FirstOrDefault() ?? "Employee";
+
+                // 🔥 Only include HR or Employee
+                if (!userRoles.Any(r => r == "HR" || r == "Employee"))
+                    continue;
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
 
                 result.Add(new EmployeeListDto
                 {
@@ -147,7 +180,11 @@ namespace Humatrix_HRMS.Services
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.DepartmentId = dto.DepartmentId;
+<<<<<<< HEAD
             user.DesignationId = dto.DesignationId;
+=======
+            user.DesignationId = dto.DesignationId; // ✅ Added
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
 
             await _userManager.UpdateAsync(user);
         }
