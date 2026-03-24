@@ -1,0 +1,105 @@
+﻿@page "/org/create-designation"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject DesignationService DesignationService
+@inject DepartmentService DeptService
+@inject NavigationManager Nav
+
+<PageTitle>Create Designation</PageTitle>
+
+<h3>Create Designation</h3>
+
+<div class="card p-4 shadow-sm">
+    <EditForm Model="model" OnValidSubmit="HandleCreate">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="mb-3">
+            <label>Name</label>
+            <InputText @bind-Value="model.Name"
+                       class="form-control"
+                       placeholder="Enter designation" />
+        </div>
+
+        <div class="mb-3">
+            <label>Department</label>
+            <InputSelect @bind-Value="model.DepartmentId"
+                         class="form-control">
+                <option value="">-- Select Department --</option>
+                @foreach (var d in departments)
+                {
+                    <option value="@d.DepartmentId">@d.Name</option>
+                }
+            </InputSelect>
+        </div>
+
+        <button class="btn btn-success me-2" disabled="@isSubmitting">
+            @(isSubmitting ? "Creating..." : "Create")
+        </button>
+
+        <button type="button"
+                class="btn btn-secondary"
+                @onclick="GoBack">
+            Back
+        </button>
+    </EditForm>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+@code {
+    private CreateDesignationDto model = new();
+    private List<DepartmentDto> departments = new();
+
+    private bool isSubmitting = false;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        departments = await DeptService.GetAllAsync();
+    }
+
+    async Task HandleCreate()
+    {
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            error = "Designation name required";
+            return;
+        }
+
+        if (model.DepartmentId == Guid.Empty)
+        {
+            error = "Select department";
+            return;
+        }
+
+        isSubmitting = true;
+
+        try
+        {
+            await DesignationService.CreateAsync(model);
+            Nav.NavigateTo("/org/designations");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    void GoBack() => Nav.NavigateTo("/org/designations");
+}

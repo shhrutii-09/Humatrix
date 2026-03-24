@@ -1,0 +1,146 @@
+﻿@page "/org/designations"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject DesignationService DesignationService
+@inject NavigationManager Nav
+
+<PageTitle>Designations</PageTitle>
+
+<h3>Designations</h3>
+
+<button class="btn btn-success mb-3" @onclick="GoToCreate">
+    + Add Designation
+</button>
+
+@if (designations == null)
+{
+    <p>Loading...</p>
+}
+else if (!designations.Any())
+{
+    <p>No designations found.</p>
+}
+else
+{
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Department</th>
+                        <th style="width:180px;">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var d in designations)
+                    {
+                        <tr>
+                            <td>
+                                @if (editId == d.DesignationId)
+                                {
+                                    <InputText class="form-control"
+                                               @bind-Value="editName" />
+                                }
+                                else
+                                {
+                                    @d.Name
+                                }
+                            </td>
+
+                            <td>
+                                @d.Department
+                            </td>
+
+                            <td>
+                                @if (editId == d.DesignationId)
+                                {
+                                    <button class="btn btn-success btn-sm me-2"
+                                            @onclick="() => SaveEdit(d.DesignationId)">
+                                        Save
+                                    </button>
+
+                                    <button class="btn btn-secondary btn-sm"
+                                            @onclick="CancelEdit">
+                                        Cancel
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-warning btn-sm me-2"
+                                            @onclick="() => StartEdit(d)">
+                                        Edit
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => Delete(d.DesignationId)">
+                                        Delete
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+}
+
+<button class="btn btn-secondary mt-3" @onclick="GoBack">
+    Back to Dashboard
+</button>
+
+@code {
+    private List<DesignationDto>? designations;
+
+    private Guid? editId;
+    private string? editName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        designations = await DesignationService.GetAllAsync();
+    }
+
+    void GoToCreate() => Nav.NavigateTo("/org/create-designation");
+    void GoBack() => Nav.NavigateTo("/org/dashboard");
+
+    void StartEdit(DesignationDto d)
+    {
+        editId = d.DesignationId;
+        editName = d.Name;
+    }
+
+    void CancelEdit()
+    {
+        editId = null;
+    }
+
+    async Task SaveEdit(Guid id)
+    {
+        if (string.IsNullOrWhiteSpace(editName))
+            return;
+
+        await DesignationService.UpdateAsync(id, new CreateDesignationDto
+        {
+            Name = editName,
+            DepartmentId = Guid.Empty // keep existing if needed later
+        });
+
+        editId = null;
+        designations = await DesignationService.GetAllAsync();
+    }
+
+    async Task Delete(Guid id)
+    {
+        await DesignationService.DeleteAsync(id);
+        designations = await DesignationService.GetAllAsync();
+    }
+}
