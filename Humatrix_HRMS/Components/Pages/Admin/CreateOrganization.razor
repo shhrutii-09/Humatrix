@@ -93,7 +93,6 @@
     </EditForm>
 </div>
 
-<!-- ERROR -->
 @if (!string.IsNullOrEmpty(errorMessage))
 {
     <div class="alert alert-danger mt-3">
@@ -101,7 +100,6 @@
     </div>
 }
 
-<!-- SUCCESS -->
 @if (!string.IsNullOrEmpty(generatedLink))
 {
     <div class="alert alert-success mt-4">
@@ -127,7 +125,6 @@
     {
         errorMessage = null;
 
-        // 🔥 EXTRA SAFETY (prevents empty submit even if browser skips validation)
         if (string.IsNullOrWhiteSpace(orgDto.Name) ||
             string.IsNullOrWhiteSpace(orgDto.Email) ||
             string.IsNullOrWhiteSpace(orgDto.Phone) ||

@@ -125,7 +125,6 @@ namespace Humatrix_HRMS.Services
                 var userRoles = await _userManager.GetRolesAsync(u);
                 var role = userRoles.FirstOrDefault() ?? "Employee";
 
-                // 🔥 Only include HR or Employee
                 if (!userRoles.Any(r => r == "HR" || r == "Employee"))
                     continue;
 
@@ -148,7 +147,6 @@ namespace Humatrix_HRMS.Services
                 .ToList();
         }
 
-        // ✅ ACTIVATE / DEACTIVATE
         public async Task ToggleUserStatusAsync(string email, bool isActive)
         {
             var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -159,7 +157,6 @@ namespace Humatrix_HRMS.Services
             await _userManager.UpdateAsync(user);
         }
 
-        // ✅ UPDATE
         public async Task UpdateEmployeeAsync(string email, EditEmployeeDto dto)
         {
             var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -168,7 +165,7 @@ namespace Humatrix_HRMS.Services
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.DepartmentId = dto.DepartmentId;
-            user.DesignationId = dto.DesignationId; // ✅ Added
+            user.DesignationId = dto.DesignationId; 
 
             await _userManager.UpdateAsync(user);
         }

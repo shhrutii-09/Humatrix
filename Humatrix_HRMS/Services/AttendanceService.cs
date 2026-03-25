@@ -90,35 +90,112 @@ namespace Humatrix_HRMS.Services
                 .ToListAsync();
         }
 
-        public async Task<List<AttendanceListDto>> GetAllAttendanceAsync(DateTime? date = null)
+        //public async Task<List<AttendanceListDto>> GetAllAttendanceAsync(DateTime? date = null)
+        //{
+        //    var currentUser = await _currentUser.GetUserAsync();
+
+        //    var query = _context.Attendances
+        //        .Include(a => a.User)
+        //        .ThenInclude(u => u.Department)
+        //        .Where(a => a.OrganizationId == currentUser.OrganizationId);
+
+        //    if (date.HasValue)
+        //    {
+        //        var selectedDate = date.Value.Date;
+        //        query = query.Where(a => a.Date == selectedDate);
+        //    }
+
+        //    var data = await query.ToListAsync();
+
+        //    return data.Select(a => new AttendanceListDto
+        //    {
+        //        EmployeeName = a.User.FirstName + " " + a.User.LastName,
+        //        Email = a.User.Email ?? "",
+        //        Department = a.User.Department?.Name ?? "",
+        //        Date = a.Date,
+        //        CheckIn = a.CheckIn,
+        //        CheckOut = a.CheckOut,
+
+        //        Status = GetStatus(a)
+        //    }).ToList();
+        //}
+
+        public async Task<List<AttendanceListDto>> GetAllAttendanceAsync(
+    DateTime? date = null,
+    Guid? departmentId = null,
+    string? role = null)
         {
             var currentUser = await _currentUser.GetUserAsync();
+
+            if (currentUser == null || currentUser.OrganizationId == null)
+                throw new Exception("Unauthorized");
+
+            // 🔥 Get roles of current user
+            var currentUserRoles = await _context.UserRoles
+                .Where(r => r.UserId == currentUser.Id)
+                .Join(_context.Roles,
+                      ur => ur.RoleId,
+                      r => r.Id,
+                      (ur, r) => r.Name)
+                .ToListAsync();
 
             var query = _context.Attendances
                 .Include(a => a.User)
                 .ThenInclude(u => u.Department)
                 .Where(a => a.OrganizationId == currentUser.OrganizationId);
 
+            // ✅ DATE FILTER
             if (date.HasValue)
             {
                 var selectedDate = date.Value.Date;
                 query = query.Where(a => a.Date == selectedDate);
             }
 
+            // ✅ HR restriction
+            if (currentUserRoles.Contains("HR"))
+            {
+                query = query.Where(a =>
+                    a.User.DepartmentId == currentUser.DepartmentId
+                    || a.UserId == currentUser.Id);
+            }
+
+            // ✅ Department filter (OrgAdmin use)
+            if (departmentId.HasValue)
+            {
+                query = query.Where(a => a.User.DepartmentId == departmentId);
+            }
+
             var data = await query.ToListAsync();
 
-            return data.Select(a => new AttendanceListDto
+            // 🔥 Get roles for each user
+            var userRolesMap = await _context.UserRoles
+                .Join(_context.Roles,
+                      ur => ur.RoleId,
+                      r => r.Id,
+                      (ur, r) => new { ur.UserId, r.Name })
+                .ToListAsync();
+
+            return data.Select(a =>
             {
-                EmployeeName = a.User.FirstName + " " + a.User.LastName,
-                Email = a.User.Email,
-                Department = a.User.Department != null ? a.User.Department.Name : "",
+                var userRole = userRolesMap
+                    .FirstOrDefault(x => x.UserId == a.UserId)?.Name ?? "Employee";
 
-                Date = a.Date,
-                CheckIn = a.CheckIn,
-                CheckOut = a.CheckOut,
+                return new AttendanceListDto
+                {
+                    EmployeeName = a.User.FirstName + " " + a.User.LastName,
+                    Email = a.User.Email ?? "",
+                    Department = a.User.Department?.Name ?? "",
+                    Role = userRole, 
 
-                Status = GetStatus(a)
-            }).ToList();
+                    Date = a.Date,
+                    CheckIn = a.CheckIn,
+                    CheckOut = a.CheckOut,
+
+                    Status = GetStatus(a)
+                };
+            })
+            .Where(x => string.IsNullOrEmpty(role) || x.Role == role)
+            .ToList();
         }
 
         private string GetStatus(Attendance a)
@@ -140,6 +217,23 @@ namespace Humatrix_HRMS.Services
             }
 
             return "Present";
+        }
+
+        
+        public async Task<ApplicationUser> GetCurrentUserAsync()
+        {
+            return await _currentUser.GetUserAsync();
+        }
+
+        public async Task<List<Department>> GetDepartmentsByOrgAsync()
+        {
+            var user = await _currentUser.GetUserAsync();
+            if (user == null || user.OrganizationId == null) return new List<Department>();
+
+            return await _context.Departments
+                .Where(d => d.OrganizationId == user.OrganizationId)
+                .OrderBy(d => d.Name)
+                .ToListAsync();
         }
     }
 }

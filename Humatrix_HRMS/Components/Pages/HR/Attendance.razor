@@ -1,0 +1,136 @@
+﻿@page "/hr/attendance"
+@page "/org/attendance"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@inject AttendanceService AttendanceService
+@inject ApplicationDbContext DbContext
+
+<h3 class="mb-3">Employee Attendance</h3>
+
+<div class="card p-4 shadow-sm">
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <InputDate @bind-Value="selectedDate" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <InputSelect @bind-Value="selectedDepartmentId" class="form-control">
+                <option value="">All Departments</option>
+                @foreach (var dept in departments)
+                {
+                    <option value="@dept.DepartmentId">@dept.Name</option>
+                }
+            </InputSelect>
+        </div>
+
+        <div class="col-md-3">
+            <InputSelect @bind-Value="selectedRole" class="form-control">
+                <option value="">All Roles</option>
+                <option value="Employee">Employee</option>
+                <option value="HR">HR</option>
+            </InputSelect>
+        </div>
+
+        <div class="col-md-2">
+            <button class="btn btn-primary" @onclick="LoadData">Filter</button>
+        </div>
+    </div>
+
+    @if (attendanceList == null || !attendanceList.Any())
+    {
+        <p>No records found.</p>
+    }
+    else
+    {
+        <table class="table table-bordered table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Department</th>
+                    <th>Role</th>
+                    <th>Date</th>
+                    <th>Check In</th>
+                    <th>Check Out</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in attendanceList)
+                {
+                    <tr>
+                        <td>@item.EmployeeName</td>
+                        <td>@item.Email</td>
+                        <td>@item.Department</td>
+                        <td>
+                            <span class="badge @(item.Role == "HR" ? "bg-primary" : "bg-secondary")">@item.Role</span>
+                        </td>
+                        <td>@item.Date.ToShortDateString()</td>
+                        <td>@item.CheckIn?.ToLocalTime().ToString("hh:mm tt")</td>
+                        <td>@item.CheckOut?.ToLocalTime().ToString("hh:mm tt")</td>
+                        <td>
+                            @switch (item.Status)
+                            {
+                                case "Late":
+                                    <span class="badge bg-warning text-dark">Late</span>
+                                    break;
+                                case "Half Day":
+
+                                    <span class="badge bg-danger">Half Day</span>
+                                    break;
+                                case "Absent":
+
+                                    <span class="badge bg-secondary">Absent</span>
+                                    break;
+                                default:
+
+                                    <span class="badge bg-success">Present</span>
+                                    break;
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<AttendanceListDto> attendanceList = new();
+    private List<Department> departments = new();
+
+    private DateTime? selectedDate = DateTime.Today;
+    private Guid? selectedDepartmentId;
+    private string? selectedRole;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var rawDepartments = await AttendanceService.GetDepartmentsByOrgAsync();
+
+        departments = rawDepartments
+            .GroupBy(d => d.Name)
+            .Select(g => g.First())
+            .ToList();
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        attendanceList = await AttendanceService.GetAllAttendanceAsync(
+            selectedDate,
+            selectedDepartmentId,
+            selectedRole);
+
+        StateHasChanged();
+    }
+}
