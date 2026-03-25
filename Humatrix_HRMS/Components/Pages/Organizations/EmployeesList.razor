@@ -13,68 +13,68 @@
 
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
+@inject DesignationService DesignationService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavManager
 
-<h3 class="mb-3">Employee Management</h3>
+<h3>Employee Management</h3>
+
+<div class="mb-3 d-flex justify-content-between">
+    <button class="btn btn-secondary" @onclick="GoBack">← Back</button>
+    <button class="btn btn-success" @onclick="GoToAdd">+ Add Employee</button>
+</div>
 
 <div class="card p-4 shadow-sm">
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <input class="form-control" placeholder="Search by name or email..." @oninput="OnSearchChanged" />
+        </div>
 
-    <!-- 🔥 Department Filter (Only OrgAdmin) -->
-    @if (!isHR)
-    {
-        <InputSelect TValue="Guid?"
-                     Value="selectedDepartmentId"
-                     ValueChanged="OnDepartmentChanged"
-                     ValueExpression="() => selectedDepartmentId"
-                     class="form-control mb-3">
+        @if (!isHR)
+        {
+            <div class="col-md-6">
+                <select class="form-control" @onchange="OnDepartmentFilterChanged">
+                    <option value="">All Departments</option>
+                    @foreach (var d in departments)
+                    {
+                        <option value="@d.DepartmentId">@d.Name</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
 
-            <option value="">-- All Departments --</option>
-
-            @foreach (var dept in departments)
-            {
-                <option value="@dept.DepartmentId">@dept.Name</option>
-            }
-        </InputSelect>
-    }
-
-    <!-- 🔥 DATA -->
-    @if (employees == null)
+    @if (filteredEmployees == null)
     {
         <p>Loading...</p>
     }
-    else if (!employees.Any())
+    else if (!filteredEmployees.Any())
     {
-        <p>No employees found.</p>
+        <p>No employees found</p>
     }
     else
     {
         <table class="table table-hover">
-            <thead class="table-dark">
+            <thead>
                 <tr>
                     <th>Name</th>
                     <th>Email</th>
-                    <th>Organization</th>
-                    <th>Department</th>
-                    <th>Designation</th> <!-- ✅ NEW -->
-                    @* <th>Designation</th> *@
+                    <th>Dept</th>
+                    <th>Designation</th>
                     <th>Role</th>
                     <th>Status</th>
-                    <th style="width:250px;">Actions</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
-
             <tbody>
-                @foreach (var emp in employees)
+                @foreach (var emp in filteredEmployees)
                 {
                     <tr>
                         <td>@emp.Name</td>
                         <td>@emp.Email</td>
-                        <td>@emp.Organization</td>
                         <td>@emp.Department</td>
-                        <td>@emp.Designation</td> <!-- ✅ NEW -->
-
-                        @* <td>@emp.Designation</td> *@
+                        <td>@emp.Designation</td>
                         <td>
                             @if (emp.IsHR)
                             {
@@ -85,40 +85,17 @@
                                 <span class="badge bg-secondary">Employee</span>
                             }
                         </td>
-
                         <td>
-                            @if (emp.IsActive)
-                            {
-                                <span class="badge bg-success">Active</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-danger">Inactive</span>
-                            }
+                            <span class="badge @(emp.IsActive ? "bg-success" : "bg-danger")">
+                                @(emp.IsActive ? "Active" : "Inactive")
+                            </span>
                         </td>
-
                         <td>
-                            <button class="btn btn-sm btn-warning me-1"
-                                    @onclick="() => OpenEdit(emp)">
-                                Edit
+                            <button class="btn btn-warning btn-sm" @onclick="() => OpenEdit(emp)">Edit</button>
+                            <button class="btn @(emp.IsActive ? "btn-danger" : "btn-success") btn-sm"
+                                    @onclick="() => ToggleStatus(emp.Email!, !emp.IsActive)">
+                                @(emp.IsActive ? "Deactivate" : "Activate")
                             </button>
-
-                            @if (emp.IsActive)
-                            {
-                                <button class="btn btn-sm btn-danger me-1"
-                                        @onclick="() => ToggleStatus(emp.Email, false)">
-                                    Deactivate
-                                </button>
-                            }
-                            else
-                            {
-                                <button class="btn btn-sm btn-success me-1"
-                                        @onclick="() => ToggleStatus(emp.Email, true)">
-                                    Activate
-                                </button>
-                            }
-
-
                         </td>
                     </tr>
                 }
@@ -127,124 +104,180 @@
     }
 </div>
 
-@if (showEditModal)
+@if (showEdit)
 {
-    <div style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 1000;">
-
-        <div class="card p-4" style="width:400px;">
-
+    <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;z-index:9999;">
+        <div class="card p-4 shadow" style="width:450px; background: white;">
             <h5>Edit Employee</h5>
 
-            <InputText @bind-Value="editModel.FirstName" class="form-control mb-2" placeholder="First Name" />
-            <InputText @bind-Value="editModel.LastName" class="form-control mb-2" placeholder="Last Name" />
+            <label>First Name</label>
+            <InputText @bind-Value="editModel.FirstName" class="form-control mb-2" />
 
-            <InputSelect @bind-Value="editModel.DepartmentId" class="form-control mb-2">
-                @foreach (var dept in departments)
+            <label>Last Name</label>
+            <InputText @bind-Value="editModel.LastName" class="form-control mb-2" />
+
+            <label>Department</label>
+            <InputSelect TValue="Guid?"
+                         Value="editModel.DepartmentId"
+                         ValueChanged="OnEditDepartmentChanged"
+                         ValueExpression="() => editModel.DepartmentId"
+                         class="form-control mb-2">
+                <option value="">-- Select Department --</option>
+                @foreach (var d in departments)
                 {
-                    <option value="@dept.DepartmentId">@dept.Name</option>
+                    <option value="@d.DepartmentId">@d.Name</option>
                 }
             </InputSelect>
-            @* <InputSelect @bind-Value="editModel.DesignationId" class="form-control mb-2">
-                @foreach (var d in designations)
+
+            <label>Designation</label>
+            <InputSelect TValue="Guid?"
+                         @bind-Value="editModel.DesignationId"
+                         class="form-control mb-3">
+                <option value="">-- Select Designation --</option>
+                @if (designations != null)
                 {
-                    <option value="@d.DesignationId">@d.Name</option>
+                    @foreach (var des in designations)
+                    {
+                        <option value="@des.DesignationId">@des.Name</option>
+                    }
                 }
-            </InputSelect> *@
-            <div class="mt-2">
-                <button class="btn btn-success me-2" @onclick="SaveEdit">Save</button>
+            </InputSelect>
+
+            <!-- ROLE -->
+            <InputSelect @bind-Value="editModel.Role" class="form-control mb-2">
+                <option value="Employee">Employee</option>
+                <option value="HR">HR</option>
+            </InputSelect>
+
+
+            <div class="d-flex justify-content-end">
+                <button class="btn btn-success me-2" @onclick="SaveEdit">Save Changes</button>
                 <button class="btn btn-secondary" @onclick="CloseEdit">Cancel</button>
             </div>
-
         </div>
     </div>
 }
 
-@if (!string.IsNullOrEmpty(successMessage))
-{
-    <div class="alert alert-success mt-3">@successMessage</div>
-}
-
 @code {
-    private List<EmployeeListDto>? employees;
+    private List<EmployeeListDto> employees = new();
+    private List<EmployeeListDto> filteredEmployees = new();
     private List<DepartmentDto> departments = new();
+    private List<DesignationDto> designations = new();
 
     private bool isHR = false;
-
-    private bool showEditModal = false;
+    private bool showEdit = false;
     private EditEmployeeDto editModel = new();
-    private string? editingEmail;
-
-    private string? successMessage;
-
-    private Guid? selectedDepartmentId;
+    private string editingEmail = "";
+    private string searchText = "";
+    private Guid? selectedDeptId = null;
 
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
-
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = await UserManager.GetUserAsync(authState.User);
-        var roles = await UserManager.GetRolesAsync(user);
-
-        isHR = roles.Contains("HR");
-
+        if (user != null)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            isHR = roles.Contains("HR");
+        }
         await LoadEmployees();
     }
 
     private async Task LoadEmployees()
     {
-        employees = await EmployeeService.GetEmployeesForListAsync(selectedDepartmentId);
+        // Yahan selectedDeptId pass ho raha hai takki table filter ho sake
+        employees = await EmployeeService.GetEmployeesForListAsync(selectedDeptId);
+        ApplyLocalFilter();
+    }
+
+    // Search aur UI filter ko apply karne ke liye
+    private void ApplyLocalFilter()
+    {
+        filteredEmployees = employees
+            .Where(x => string.IsNullOrWhiteSpace(searchText) ||
+                        (x.Name?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Email?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        ApplyLocalFilter();
+    }
+
+    // ✅ FIXED: Table Department Filter Logic
+    private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var deptId))
+            selectedDeptId = deptId;
+        else
+            selectedDeptId = null;
+
+        await LoadEmployees(); // Database se filtered data load karega
     }
 
     private async Task ToggleStatus(string email, bool activate)
     {
         await EmployeeService.ToggleUserStatusAsync(email, activate);
-        successMessage = activate ? "User activated" : "User deactivated";
         await LoadEmployees();
     }
 
-    private void OpenEdit(EmployeeListDto emp)
+    private async Task OpenEdit(EmployeeListDto emp)
     {
-        editingEmail = emp.Email;
+        editingEmail = emp.Email ?? "";
 
-        var names = emp.Name.Split(' ');
-        editModel.FirstName = names[0];
-        editModel.LastName = names.Length > 1 ? names[1] : "";
+        var user = await EmployeeService.GetEmployeeByEmailAsync(editingEmail);
 
-        editModel.DepartmentId = departments
-            .FirstOrDefault(d => d.Name == emp.Department)?.DepartmentId;
+        if (user != null)
+        {
+            editModel.FirstName = user.FirstName;
+            editModel.LastName = user.LastName;
+            editModel.DepartmentId = user.DepartmentId;
+            editModel.DesignationId = user.DesignationId;
 
-        showEditModal = true;
+            // 🔥 SET ROLE
+            var roles = await UserManager.GetRolesAsync(user);
+            editModel.Role = roles.FirstOrDefault() ?? "Employee";
+
+            if (user.DepartmentId != null)
+            {
+                designations = await DesignationService
+                    .GetByDepartmentAsync(user.DepartmentId.Value);
+            }
+        }
+
+        showEdit = true;
     }
 
-    private void CloseEdit()
+
+    // ✅ FIXED: Popup Department Change Logic
+    private async Task OnEditDepartmentChanged(Guid? deptId)
     {
-        showEditModal = false;
+        editModel.DepartmentId = deptId;
+        editModel.DesignationId = null;
+
+        if (deptId.HasValue)
+        {
+            designations = await DesignationService.GetByDepartmentAsync(deptId.Value);
+        }
+        else
+        {
+            designations.Clear();
+        }
+        StateHasChanged();
     }
 
     private async Task SaveEdit()
     {
         await EmployeeService.UpdateEmployeeAsync(editingEmail, editModel);
-
-        showEditModal = false;
-        successMessage = "Employee updated successfully";
-
+        showEdit = false;
         await LoadEmployees();
     }
 
-    private async Task OnDepartmentChanged(Guid? value)
-    {
-        selectedDepartmentId = value;
-        await LoadEmployees();
-    }
+    private void CloseEdit() => showEdit = false;
+    private void GoBack() => NavManager.NavigateTo("/org/dashboard");
+    private void GoToAdd() => NavManager.NavigateTo(isHR ? "/hr/employees" : "/org/employees");
 }

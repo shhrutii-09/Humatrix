@@ -5,6 +5,12 @@
         public string? Name { get; set; }
         public string? Email { get; set; }
         public string? Role { get; set; }
+<<<<<<< HEAD
+
+        public string? Department { get; set; }
+        public string? Designation { get; set; }   // ✅ NEW
+        public string? Organization { get; set; }
+=======
         //public string Name { get; set; }
         //public string Email { get; set; }
         //public string Role { get; set; }
@@ -17,6 +23,7 @@
         //public string? Designation { get; set; }   // ✅ NEW
 
         //public string? Organization { get; set; }
+>>>>>>> 78f416305aa7332ecb4231ce726efacb44858935
 
         //public bool IsActive { get; set; }
         public bool IsHR { get; set; }

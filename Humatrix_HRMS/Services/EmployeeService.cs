@@ -32,7 +32,7 @@ namespace Humatrix_HRMS.Services
 
             var currentRoles = await _userManager.GetRolesAsync(currentUser);
 
-            // 🔥 HR restrictions
+            // 🔥 HR restriction
             if (currentRoles.Contains("HR"))
             {
                 dto.Role = "Employee";
@@ -41,6 +41,7 @@ namespace Humatrix_HRMS.Services
 
             if (dto.DesignationId == null)
                 throw new Exception("Designation is required");
+
             if (string.IsNullOrEmpty(dto.Role))
                 throw new Exception("Role is required");
 
@@ -88,32 +89,35 @@ namespace Humatrix_HRMS.Services
             return $"https://localhost:7057/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
         }
 
-        // ✅ LIST (WITH DESIGNATION)
+        // ✅ GET EMPLOYEES LIST (🔥 FULL FIXED WITH IDs)
         public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(Guid? departmentId = null)
         {
             var currentUser = await _currentUser.GetUserAsync();
+
             if (currentUser == null || currentUser.OrganizationId == null)
                 return new List<EmployeeListDto>();
 
             var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
 
-            // 1. Start with users in the same Organization
             var usersQuery = _userManager.Users
                 .Where(u => u.OrganizationId == currentUser.OrganizationId);
 
-            // 2. Security/Role Filter
+            // 🔥 Role based filter
             if (currentUserRoles.Contains("HR"))
             {
-                // HR can only see their own department, excluding themselves
-                usersQuery = usersQuery.Where(u => u.DepartmentId == currentUser.DepartmentId && u.Id != currentUser.Id);
+                usersQuery = usersQuery.Where(u =>
+                    u.DepartmentId == currentUser.DepartmentId &&
+                    u.Id != currentUser.Id);
             }
             else if (departmentId.HasValue)
             {
-                // OrgAdmin can filter by department
-                usersQuery = usersQuery.Where(u => u.DepartmentId == departmentId.Value);
+                usersQuery = usersQuery.Where(u =>
+                    u.DepartmentId == departmentId.Value);
             }
 
             var users = await usersQuery.ToListAsync();
+
+            // 🔥 Load related data
             var departments = await _context.Departments.ToListAsync();
             var organizations = await _context.Organizations.ToListAsync();
             var designations = await _context.Designations.ToListAsync();
@@ -122,21 +126,32 @@ namespace Humatrix_HRMS.Services
 
             foreach (var u in users)
             {
-                var userRoles = await _userManager.GetRolesAsync(u);
-                var role = userRoles.FirstOrDefault() ?? "Employee";
+                var roles = await _userManager.GetRolesAsync(u);
+                var role = roles.FirstOrDefault() ?? "Employee";
 
-                if (!userRoles.Any(r => r == "HR" || r == "Employee"))
+                if (!roles.Any(r => r == "HR" || r == "Employee"))
                     continue;
 
                 result.Add(new EmployeeListDto
                 {
                     Name = $"{u.FirstName} {u.LastName}",
                     Email = u.Email ?? "",
+
                     Role = role,
                     IsHR = role == "HR",
-                    Department = departments.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "",
-                    Organization = organizations.FirstOrDefault(o => o.OrganizationId == u.OrganizationId)?.Name ?? "",
-                    Designation = designations.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "",
+
+                    // 🔥 IMPORTANT (ID + NAME BOTH)
+                    DepartmentId = u.DepartmentId,
+                    Department = departments
+                        .FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "",
+
+                    DesignationId = u.DesignationId,
+                    Designation = designations
+                        .FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "",
+
+                    Organization = organizations
+                        .FirstOrDefault(o => o.OrganizationId == u.OrganizationId)?.Name ?? "",
+
                     IsActive = u.IsActive
                 });
             }
@@ -147,27 +162,66 @@ namespace Humatrix_HRMS.Services
                 .ToList();
         }
 
+        // ✅ ACTIVATE / DEACTIVATE
         public async Task ToggleUserStatusAsync(string email, bool isActive)
         {
-            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.Email == email);
 
-            if (user == null) throw new Exception("User not found");
+            if (user == null)
+                throw new Exception("User not found");
 
             user.IsActive = isActive;
             await _userManager.UpdateAsync(user);
         }
 
+        // ✅ UPDATE EMPLOYEE (🔥 SAFE UPDATE)
         public async Task UpdateEmployeeAsync(string email, EditEmployeeDto dto)
         {
-            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if (user == null) throw new Exception("User not found");
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.Email == email);
 
+            if (user == null)
+                throw new Exception("User not found");
+
+            // BASIC UPDATE
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.DepartmentId = dto.DepartmentId;
-            user.DesignationId = dto.DesignationId; 
+            user.DesignationId = dto.DesignationId;
 
             await _userManager.UpdateAsync(user);
+
+            // 🔥 ROLE UPDATE
+            var currentRoles = await _userManager.GetRolesAsync(user);
+
+            // remove old roles
+            if (currentRoles.Any())
+                await _userManager.RemoveFromRolesAsync(user, currentRoles);
+
+            // add new role
+            if (!string.IsNullOrEmpty(dto.Role))
+                await _userManager.AddToRoleAsync(user, dto.Role);
+        }
+
+
+        // ✅ GET SINGLE USER
+        public async Task<ApplicationUser?> GetEmployeeByEmailAsync(string email)
+        {
+            return await _userManager.Users
+                .FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        // ✅ DELETE (optional)
+        public async Task DeleteUserAsync(string email)
+        {
+            var user = await _userManager.Users
+                .FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user != null)
+            {
+                await _userManager.DeleteAsync(user);
+            }
         }
     }
 }

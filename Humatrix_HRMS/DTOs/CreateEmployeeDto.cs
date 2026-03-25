@@ -14,15 +14,9 @@ namespace Humatrix_HRMS.DTOs
         [Required]
         public string LastName { get; set; }
 
-        public Guid? DepartmentId { get; set; }
+        public Guid? DepartmentId { get; set; } // ✅ nullable
 
+        public string Role { get; set; } = "Employee"; // ✅ default
         public Guid? DesignationId { get; set; }
-
-        public string Role { get; set; } = "Employee";
-        //public Guid? DepartmentId { get; set; } 
-
-        //public string Role { get; set; } = "Employee";
-        //public Guid? DesignationId { get; set; }
-
     }
 }
