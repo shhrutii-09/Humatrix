@@ -7,18 +7,15 @@ namespace Humatrix_HRMS.Services
 {
     public class OrgDashboardService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly CurrentUserService _currentUser;
         private readonly ApplicationDbContext _context;
+        private readonly CurrentUserService _currentUser;
 
         public OrgDashboardService(
-            UserManager<ApplicationUser> userManager,
-            CurrentUserService currentUser,
-            ApplicationDbContext context)
+            ApplicationDbContext context,
+            CurrentUserService currentUser)
         {
-            _userManager = userManager;
-            _currentUser = currentUser;
             _context = context;
+            _currentUser = currentUser;
         }
 
         public async Task<OrgDashboardDto> GetDashboardDataAsync()
@@ -28,28 +25,39 @@ namespace Humatrix_HRMS.Services
             if (user == null || user.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
-            var users = _userManager.Users
-                .Where(u => u.OrganizationId == user.OrganizationId);
+            var orgId = user.OrganizationId.Value;
 
-            var totalEmployees = await users.CountAsync();
-            var activeEmployees = await users.CountAsync(u => u.IsActive);
+            // ✅ Total Employees (from Employee table)
+            var totalEmployees = await _context.Employees
+                .CountAsync(e => e.OrganizationId == orgId);
 
-            int totalHR = 0;
-            foreach (var u in await users.ToListAsync())
-            {
-                var roles = await _userManager.GetRolesAsync(u);
-                if (roles.Contains("HR"))
-                    totalHR++;
-            }
+            // ✅ Active Users (Identity)
+            var activeEmployees = await _context.Users
+                .CountAsync(u => u.OrganizationId == orgId && u.IsActive);
 
+            // ✅ Total HR (from roles)
+            var totalHR = await _context.UserRoles
+                .Join(_context.Roles,
+                      ur => ur.RoleId,
+                      r => r.Id,
+                      (ur, r) => new { ur.UserId, r.Name })
+                .Join(_context.Users,
+                      x => x.UserId,
+                      u => u.Id,
+                      (x, u) => new { x.Name, u.OrganizationId })
+                .CountAsync(x =>
+                    x.Name == "HR" &&
+                    x.OrganizationId == orgId);
+
+            // ✅ Departments
             var totalDepartments = await _context.Departments
-                .CountAsync(d => d.OrganizationId == user.OrganizationId && !d.IsDeleted);
+                .CountAsync(d => d.OrganizationId == orgId && !d.IsDeleted);
 
             return new OrgDashboardDto
             {
                 TotalEmployees = totalEmployees,
-                TotalHR = totalHR,
                 ActiveEmployees = activeEmployees,
+                TotalHR = totalHR,
                 TotalDepartments = totalDepartments
             };
         }

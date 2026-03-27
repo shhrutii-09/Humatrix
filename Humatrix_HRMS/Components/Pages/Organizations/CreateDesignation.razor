@@ -31,7 +31,8 @@
             <label>Department</label>
             <InputSelect @bind-Value="model.DepartmentId"
                          class="form-control">
-                <option value="">-- Select Department --</option>
+                @* <option value="">-- Select Department --</option> *@
+                <option value="@Guid.Empty">-- Select Department --</option>
                 @foreach (var d in departments)
                 {
                     <option value="@d.DepartmentId">@d.Name</option>

@@ -1,0 +1,155 @@
+﻿@page "/org/add-employee"
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject EmployeeService EmployeeService
+@inject DepartmentService DeptService
+@inject DesignationService DesignationService
+
+<h3>Add Employee</h3>
+
+<EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="addEmployeeForm">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" />
+
+    <InputText @bind-Value="model.FirstName" class="form-control mb-2" placeholder="First Name" />
+    <InputText @bind-Value="model.LastName" class="form-control mb-2" placeholder="Last Name" />
+    <InputText @bind-Value="model.Email" type="email" class="form-control mb-2" placeholder="Email" />
+
+    @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2" @onchange="OnDepartmentChanged">
+        <option value="">Select Department</option>
+        @foreach (var d in departments)
+        {
+            <option value="@d.DepartmentId">@d.Name</option>
+        }
+    </InputSelect>
+
+    <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
+        <option value="">Select Designation</option>
+        @foreach (var d in designations)
+        {
+            <option value="@d.DesignationId">@d.Name</option>
+        }
+    </InputSelect> *@
+
+    <select class="form-control mb-2" @onchange="OnDepartmentChanged">
+        <option value="">Select Department</option>
+        @foreach (var d in departments)
+        {
+            <option value="@d.DepartmentId">@d.Name</option>
+        }
+    </select>
+
+    <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
+        <option value="">Select Designation</option>
+        @foreach (var d in designations)
+        {
+            <option value="@d.DesignationId">@d.Name</option>
+        }
+    </InputSelect>
+
+    <button class="btn btn-primary" disabled="@isSubmitting">
+        @(isSubmitting ? "Creating..." : "Create Employee")
+    </button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(link))
+{
+    <div class="alert alert-success mt-3">
+        <input class="form-control" value="@link" readonly />
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+@code {
+    CreateEmployeeDto model = new();
+    List<DepartmentDto> departments = new();
+    List<DesignationDto> designations = new();
+
+    string? link;
+    string? error;
+    bool isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        departments = await DeptService.GetAllAsync();
+    }
+
+    private async Task OnDepartmentChanged(ChangeEventArgs e)
+    {
+        var selectedValue = e.Value?.ToString();
+
+        if (Guid.TryParse(selectedValue, out var deptId))
+        {
+            model.DepartmentId = deptId;
+            // Fetch designations based on the selected Department
+            designations = await DesignationService.GetByDepartmentAsync(deptId);
+        }
+        else
+        {
+            model.DepartmentId = null;
+            designations.Clear();
+        }
+
+        // Sometimes StateHasChanged is needed if the async call returns quickly
+        StateHasChanged();
+    }
+
+    // private async Task HandleSubmit()
+    // {
+    //     try
+    //     {
+    //         isSubmitting = true;
+    //         model.Role = "Employee";
+
+    //         link = await EmployeeService.CreateEmployeeAsync(model);
+
+    //         model = new();
+    //         designations.Clear();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         error = ex.Message;
+    //     }
+    //     finally
+    //     {
+    //         isSubmitting = false;
+    //     }
+    // }
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            // 1. CLEAR OLD STATE IMMEDIATELY
+            error = null;
+            link = null;
+            isSubmitting = true;
+
+            model.Role = "Employee";
+
+            // 2. RUN THE SERVICE
+            link = await EmployeeService.CreateEmployeeAsync(model);
+
+            // 3. RESET FORM ON SUCCESS
+            model = new();
+            designations.Clear();
+        }
+        catch (Exception ex)
+        {
+            // On error, the link is already null from step 1,
+            // and we only set the error message here.
+            error = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

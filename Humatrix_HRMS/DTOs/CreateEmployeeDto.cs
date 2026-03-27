@@ -4,19 +4,22 @@ namespace Humatrix_HRMS.DTOs
 {
     public class CreateEmployeeDto
     {
-        [Required]
-        [EmailAddress]
-        public string Email { get; set; }
+        [Required(ErrorMessage = "First Name is required")]
+        public string FirstName { get; set; } = "";
 
-        [Required]
-        public string FirstName { get; set; }
+        [Required(ErrorMessage = "Last Name is required")]
+        public string LastName { get; set; } = "";
 
-        [Required]
-        public string LastName { get; set; }
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email format")]
+        public string Email { get; set; } = "";
 
-        public Guid? DepartmentId { get; set; } // ✅ nullable
+        [Required(ErrorMessage = "Please select a department")]
+        public Guid? DepartmentId { get; set; }
 
-        public string Role { get; set; } = "Employee"; // ✅ default
+        [Required(ErrorMessage = "Please select a designation")]
         public Guid? DesignationId { get; set; }
+
+        public string Role { get; set; } = "Employee";
     }
 }

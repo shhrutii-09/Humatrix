@@ -1,0 +1,113 @@
+﻿@page "/hr/add-employee"
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "HR")]
+
+@inject EmployeeService EmployeeService
+@inject DesignationService DesignationService
+@inject DepartmentService DeptService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthState
+
+<h3>Add Employee (HR)</h3>
+
+<EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="hrAddEmployeeForm">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger" />
+
+    <InputText @bind-Value="model.FirstName" class="form-control mb-2" placeholder="First Name" />
+    <InputText @bind-Value="model.LastName" class="form-control mb-2" placeholder="Last Name" />
+    <InputText @bind-Value="model.Email" type="email" class="form-control mb-2" placeholder="Email" />
+
+    <label>Department</label>
+    <input class="form-control mb-2" value="@departmentName" readonly />
+
+    <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
+        <option value="">Select Designation</option>
+        @foreach (var d in designations)
+        {
+            <option value="@d.DesignationId">@d.Name</option>
+        }
+    </InputSelect>
+
+    <button class="btn btn-success" disabled="@isSubmitting">
+        @(isSubmitting ? "Creating..." : "Create Employee")
+    </button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(link))
+{
+    <div class="alert alert-success mt-3">
+        <input class="form-control" value="@link" readonly />
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger mt-3">@error</div>
+}
+
+@code {
+    CreateEmployeeDto model = new();
+    List<DesignationDto> designations = new();
+
+    string? departmentName;
+    string? link;
+    string? error;
+    bool isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {   
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+
+        if (user?.DepartmentId != null)
+        {
+            model.DepartmentId = user.DepartmentId;
+
+            var dept = await DeptService.GetByIdAsync(user.DepartmentId.Value);
+            departmentName = dept?.Name;
+
+            designations = await DesignationService.GetByDepartmentAsync(user.DepartmentId.Value);
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            isSubmitting = true;
+            error = null;
+
+            model.Role = "Employee";
+
+            link = await EmployeeService.CreateEmployeeAsync(model);
+
+            var auth = await AuthState.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+
+            if (model.DepartmentId == null)
+            {
+                error = "Department not assigned properly.";
+                return;
+            }
+
+            model = new CreateEmployeeDto
+            {
+                DepartmentId = user?.DepartmentId
+            };
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

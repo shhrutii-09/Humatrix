@@ -125,15 +125,15 @@
     {
         errorMessage = null;
 
-        if (string.IsNullOrWhiteSpace(orgDto.Name) ||
-            string.IsNullOrWhiteSpace(orgDto.Email) ||
-            string.IsNullOrWhiteSpace(orgDto.Phone) ||
-            string.IsNullOrWhiteSpace(orgDto.Address) ||
-            string.IsNullOrWhiteSpace(orgDto.AdminEmail))
-        {
-            errorMessage = "All fields are required!";
-            return;
-        }
+        // if (string.IsNullOrWhiteSpace(orgDto.Name) ||
+        //     string.IsNullOrWhiteSpace(orgDto.Email) ||
+        //     string.IsNullOrWhiteSpace(orgDto.Phone) ||
+        //     string.IsNullOrWhiteSpace(orgDto.Address) ||
+        //     string.IsNullOrWhiteSpace(orgDto.AdminEmail))
+        // {
+        //     errorMessage = "All fields are required!";
+        //     return;
+        // }
 
         isSubmitting = true;
         generatedLink = null;
@@ -145,9 +145,13 @@
             // reset form
             orgDto = new();
         }
+        // catch (Exception ex)
+        // {
+        //     errorMessage = "Something went wrong. Please try again.";
+        // }
         catch (Exception ex)
         {
-            errorMessage = "Something went wrong. Please try again.";
+            errorMessage = ex.Message;
         }
         finally
         {
@@ -155,9 +159,21 @@
         }
     }
 
+    // private async Task CopyLink()
+    // {
+    //     await JS.InvokeVoidAsync("navigator.clipboard.writeText", generatedLink);
+    //     if (!string.IsNullOrEmpty(generatedLink))
+    //     {
+    //         await JS.InvokeVoidAsync("navigator.clipboard.writeText", generatedLink);
+    //     }
+    // }
+
     private async Task CopyLink()
     {
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", generatedLink);
+        if (!string.IsNullOrEmpty(generatedLink))
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", generatedLink);
+        }
     }
 
     [Inject] private IJSRuntime JS { get; set; }

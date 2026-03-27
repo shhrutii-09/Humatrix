@@ -39,19 +39,21 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
+// ✅ Correct HttpContextAccessor registration
+builder.Services.AddHttpContextAccessor();
 
+// Custom Services
 builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<AttendanceService>();
-
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUserService>();
-
 builder.Services.AddScoped<DepartmentService>();
-
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<OrgDashboardService>();
-
 builder.Services.AddScoped<DesignationService>();
+
+
+builder.Services.AddCascadingAuthenticationState();
+
 
 var app = builder.Build();
 
@@ -76,7 +78,7 @@ else
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
-}
+}   
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

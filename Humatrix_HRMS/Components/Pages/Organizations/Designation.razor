@@ -102,6 +102,7 @@ else
     private List<DesignationDto>? designations;
 
     private Guid? editId;
+    private Guid? editDepartmentId;
     private string? editName;
 
     protected override async Task OnInitializedAsync()
@@ -116,6 +117,7 @@ else
     {
         editId = d.DesignationId;
         editName = d.Name;
+        editDepartmentId = d.DepartmentId;
     }
 
     void CancelEdit()
@@ -131,7 +133,8 @@ else
         await DesignationService.UpdateAsync(id, new CreateDesignationDto
         {
             Name = editName,
-            DepartmentId = Guid.Empty // keep existing if needed later
+            // DepartmentId = Guid.Empty
+            DepartmentId = editDepartmentId.Value
         });
 
         editId = null;

@@ -4,12 +4,16 @@
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
-@attribute [Authorize(Roles = "Employee,HR")]
+@* @attribute [Authorize(Roles = "Employee,HR")] *@
+@attribute [Authorize(Roles = "Employee")]
 
 @inject AttendanceService AttendanceService
 
 <h3 class="mb-3">Attendance</h3>
-
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
 <div class="card p-4 shadow-sm">
 
     <h5>Today's Attendance</h5>
@@ -70,6 +74,8 @@ else
     private bool isCheckedOut;
     private bool isLoading;
 
+    private string? error;
+
     private List<Attendance> attendanceList = new();
 
     private string? message;
@@ -119,7 +125,8 @@ else
         }
         catch (Exception ex)
         {
-            message = ex.Message;
+            // message = ex.Message;
+            error = ex.Message;
         }
         finally
         {

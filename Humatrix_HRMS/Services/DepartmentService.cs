@@ -37,9 +37,20 @@ namespace Humatrix_HRMS.Services
         {
             var user = await GetCurrentUserAsync();
 
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                throw new Exception("Department name is required");
+
+            var exists = await _context.Departments.AnyAsync(d =>
+                d.OrganizationId == user.OrganizationId &&
+                d.Name.ToLower().Trim() == dto.Name.ToLower().Trim() &&
+                !d.IsDeleted);
+
+            if (exists)
+                throw new Exception("Department already exists");
+
             var dept = new Department
             {
-                Name = dto.Name,
+                Name = dto.Name.Trim(),
                 Description = dto.Description,
                 OrganizationId = user.OrganizationId.Value
             };
@@ -47,7 +58,6 @@ namespace Humatrix_HRMS.Services
             _context.Departments.Add(dept);
             await _context.SaveChangesAsync();
         }
-
         // =========================
         // GET ALL DEPARTMENTS (ORG BASED)
         // =========================
@@ -111,5 +121,33 @@ namespace Humatrix_HRMS.Services
 
             await _context.SaveChangesAsync();
         }
+
+
+        // =========================
+        // GET BY ID (FOR HR / UI)
+        // =========================
+        public async Task<DepartmentDto?> GetByIdAsync(Guid id)
+        {
+            var user = await GetCurrentUserAsync();
+
+            var dept = await _context.Departments
+                .Where(d => d.DepartmentId == id && !d.IsDeleted)
+                .FirstOrDefaultAsync();
+
+            if (dept == null)
+                return null;
+
+            // 🔐 SECURITY CHECK (MULTI-TENANT SAFE)
+            if (dept.OrganizationId != user.OrganizationId)
+                throw new Exception("Access denied");
+
+            return new DepartmentDto
+            {
+                DepartmentId = dept.DepartmentId,
+                Name = dept.Name,
+                Description = dept.Description
+            };
+        }
+
     }
 }

@@ -19,9 +19,11 @@ namespace Humatrix_HRMS.Data
         public DbSet<Designation> Designations { get; set; }
 
         public DbSet<Attendance> Attendances { get; set; }
+        public DbSet<Employee> Employees { get; set; }
 
-        public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
-        public DbSet<IdentityRole> Roles { get; set; }
+
+        //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
+        //public DbSet<IdentityRole> Roles { get; set; }
     }
 
     }

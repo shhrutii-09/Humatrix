@@ -12,7 +12,10 @@
 @inject ApplicationDbContext Db
 
 <h3>Set Your Password</h3>
-
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
 @* 1. Change OnSubmit to OnValidSubmit to ensure validation runs *@
 <EditForm Model="model" OnValidSubmit="SetPassword" FormName="setupForm">
     @* 2. Add DataAnnotationsValidator so [Required] actually works *@
@@ -38,6 +41,7 @@
     [SupplyParameterFromQuery]
     public string token { get; set; }
 
+    private string? error;
 
     // 4. Critical: Must have [SupplyParameterFromForm] for SSR to bind the data
     [SupplyParameterFromForm]
@@ -45,6 +49,7 @@
 
     private async Task SetPassword()
     {
+
         if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
             return;
 
@@ -57,8 +62,10 @@
 
         if (invite == null || invite.IsUsed)
         {
-            Console.WriteLine("Invalid or expired link.");
+            error = "Invalid or expired or already used link.";
             return;
+            // Console.WriteLine("Invalid or expired link.");
+            // return;
         }
 
         var result = await UserManager.ResetPasswordAsync(user, token, model.Password);

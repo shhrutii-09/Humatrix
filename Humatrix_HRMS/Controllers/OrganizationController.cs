@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "SuperAdmin")]
 public class OrganizationController : ControllerBase
 {
     private readonly OrganizationService _service;

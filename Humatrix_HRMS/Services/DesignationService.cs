@@ -81,6 +81,7 @@ namespace Humatrix_HRMS.Services
                 select new DesignationDto
                 {
                     DesignationId = d.DesignationId,
+                    DepartmentId = d.DepartmentId, //added
                     Name = d.Name,
                     Department = dep.Name
                 }
