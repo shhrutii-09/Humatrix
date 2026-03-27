@@ -1,4 +1,6 @@
-﻿namespace Humatrix_HRMS.Models
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace Humatrix_HRMS.Models
 {
     public class Employee
     {
@@ -27,6 +29,10 @@
         public DateTime JoiningDate { get; set; } = DateTime.UtcNow;
 
         public Guid? ReportingManagerId { get; set; }
+
+        public Guid? ShiftId { get; set; }
+        [ForeignKey("ShiftId")]
+        public Shift? Shift { get; set; }
 
         public string Status { get; set; } = "Active";
 

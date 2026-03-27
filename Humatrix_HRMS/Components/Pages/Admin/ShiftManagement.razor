@@ -1,0 +1,151 @@
+﻿@page "/admin/shifts"
+@rendermode InteractiveServer
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "OrgAdmin")]
+@inject ShiftService ShiftService
+
+<h3 class="mb-4">Shift Management</h3>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
+        @message
+        <button type="button" class="btn-close" @onclick="() => message = null"></button>
+    </div>
+}
+
+<div class="card p-4 shadow-sm mb-4">
+    <h5 class="card-title">Create New Shift</h5>
+    <EditForm Model="newShift" OnValidSubmit="HandleCreate" FormName="AddShiftForm">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="text-danger" />
+
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Shift Name</label>
+                <InputText @bind-Value="newShift.Name" class="form-control" placeholder="e.g. Day Shift" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Start Time</label>
+                <input type="time" @bind="startTime" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">End Time</label>
+                <input type="time" @bind="endTime" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Grace (Mins)</label>
+                <InputNumber @bind-Value="newShift.LateAllowanceMinutes" class="form-control" />
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-plus-circle"></i> Add Shift
+                </button>
+            </div>
+        </div>
+    </EditForm>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Name</th>
+                    <th>Timing</th>
+                    <th>Grace Period</th>
+                    <th>Full Day Req.</th>
+                    <th>Half Day Req.</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (shifts == null || !shifts.Any())
+                {
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">No shifts defined yet.</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var shift in shifts)
+                    {
+                        <tr>
+                            <td class="ps-4 fw-bold">@shift.Name</td>
+                            <td>
+                                <span class="badge bg-info text-dark">
+                                    @DateTime.Today.Add(shift.StartTime).ToString("hh:mm tt")
+                                    -
+                                    @DateTime.Today.Add(shift.EndTime).ToString("hh:mm tt")
+                                </span>
+                            </td>
+                            <td>@shift.LateAllowanceMinutes mins</td>
+                            <td>@shift.MinimumHoursForFullDay hrs</td>
+                            <td>@shift.MinimumHoursForHalfDay hrs</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<Shift> shifts = new();
+    private Shift newShift = new();
+
+    // Form Helper variables for the HTML5 time input
+    private DateTime startTime = DateTime.Today.AddHours(9);
+    private DateTime endTime = DateTime.Today.AddHours(18);
+
+    private string? message;
+    private bool isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadShifts();
+    }
+
+    private async Task LoadShifts()
+    {
+        shifts = await ShiftService.GetAllShiftsAsync();
+    }
+
+    private async Task HandleCreate()
+    {
+        try
+        {
+            isError = false;
+            message = "";
+
+            // 1. Assign values from local helper variables
+            newShift.StartTime = startTime.TimeOfDay;
+            newShift.EndTime = endTime.TimeOfDay;
+
+            // 2. Simple validation check
+            if (string.IsNullOrWhiteSpace(newShift.Name))
+            {
+                isError = true;
+                message = "Shift Name is required.";
+                return;
+            }
+
+            // 3. Save to database via Service
+            await ShiftService.CreateShiftAsync(newShift);
+
+            // 4. Reset UI
+            message = $"Successfully added shift: {newShift.Name}";
+            newShift = new Shift(); // Reset Model
+            startTime = DateTime.Today.AddHours(9); // Reset Timepicker
+            endTime = DateTime.Today.AddHours(18);
+
+            await LoadShifts();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = $"Error saving shift: {ex.Message}";
+        }
+    }
+}
