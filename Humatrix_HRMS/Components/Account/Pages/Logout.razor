@@ -1,0 +1,19 @@
+﻿@page "/Account/Logout"
+
+@using Microsoft.AspNetCore.Identity
+@using Humatrix_HRMS.Data
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager NavigationManager
+
+<h3>Logging out...</h3>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await SignInManager.SignOutAsync();
+
+        // 🔥 FORCE FULL RELOAD
+        NavigationManager.NavigateTo("/Account/Login", true);
+    }
+}
