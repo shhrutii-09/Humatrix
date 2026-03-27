@@ -58,7 +58,7 @@ namespace Humatrix_HRMS.Services
             else
             {
                 exists.EmployeeId = employee.EmployeeId;
-                exists.CheckIn = DateTime.UtcNow;
+                exists.CheckIn = DateTime.Now;
                 exists.IsPresent = true;
             }
 
@@ -103,6 +103,7 @@ namespace Humatrix_HRMS.Services
             var query = _context.Attendances
                 .Include(a => a.User)
                 .Include(a => a.Employee)
+                .ThenInclude(e => e.Shift)
                 .Where(a => a.OrganizationId == currentUser.OrganizationId);
 
             if (date.HasValue)
@@ -170,20 +171,49 @@ namespace Humatrix_HRMS.Services
             return list;
         }
 
+        //private string GetStatus(Attendance a)
+        //{
+        //    if (a.CheckIn == null) return "Absent";
+
+        //    // Note: Ensure your server/app handles local time vs UTC consistently
+        //    var checkInTime = a.CheckIn.Value.ToLocalTime().TimeOfDay;
+        //    if (checkInTime > new TimeSpan(10, 30, 0)) return "Late";
+
+        //    if (a.CheckOut != null)
+        //    {
+        //        var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
+        //        if (hours < 4) return "Half Day";
+        //    }
+        //    return "Present";
+        //}
+
         private string GetStatus(Attendance a)
         {
             if (a.CheckIn == null) return "Absent";
 
-            // Note: Ensure your server/app handles local time vs UTC consistently
-            var checkInTime = a.CheckIn.Value.ToLocalTime().TimeOfDay;
-            if (checkInTime > new TimeSpan(10, 30, 0)) return "Late";
+            var shift = a.Employee?.Shift;
+
+            if (shift == null)
+            {
+                return a.CheckOut != null ? "Present" : "Checked In";
+            }
+
+            var checkInTime = a.CheckIn.Value.TimeOfDay;
+            var lateThreshold = shift.StartTime.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
+            bool isLate = checkInTime > lateThreshold;
 
             if (a.CheckOut != null)
             {
-                var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
-                if (hours < 4) return "Half Day";
+                var hoursWorked = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
+
+                if (hoursWorked < shift.MinimumHoursForHalfDay) return "Short Hours";
+                if (hoursWorked < shift.MinimumHoursForFullDay) return "Half Day";
+
+                return isLate ? "Late" : "Present";
             }
-            return "Present";
+
+            // If they haven't checked out yet, show their morning status
+            return isLate ? "Late (Active)" : "Checked In";
         }
 
         public async Task<Attendance?> GetTodayStatusAsync()

@@ -50,6 +50,7 @@ builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<OrgDashboardService>();
 builder.Services.AddScoped<DesignationService>();
+builder.Services.AddScoped<ShiftService>();
 
 
 builder.Services.AddCascadingAuthenticationState();
