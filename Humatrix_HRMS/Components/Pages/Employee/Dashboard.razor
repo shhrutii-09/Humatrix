@@ -1,36 +1,88 @@
-﻿@* @page "/employee/dashboard"
-
-@using Humatrix_HRMS.Data
+﻿@page "/employee/dashboard"
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
 @attribute [Authorize(Roles = "Employee")]
+@inject EmployeeService EmployeeService
+@rendermode InteractiveServer
 
-@inject CurrentUserService CurrentUserService
+<PageTitle>Dashboard | Humatrix</PageTitle>
 
-<PageTitle>My Dashboard</PageTitle>
-
-<div class="container mt-4">
-
-    <div class="alert alert-light border-start border-primary border-5">
-        <h4>Welcome, @user?.FirstName!</h4>
-        <p>Email: @user?.Email</p>
-        <p>Department: @user?.DepartmentId</p>
+<div class="container-fluid px-4 mt-4">
+    <div class="mb-4">
+        <h2 class="fw-bold">Welcome, @(data?.FullName ?? "User")!</h2>
+        <p class="text-muted">Here is your professional summary for today.</p>
     </div>
 
-    <div class="card p-3">
-        <h5>Quick Actions</h5>
-        <button class="btn btn-outline-success w-100 mb-2">Clock In</button>
-        <button class="btn btn-outline-primary w-100">View Profile</button>
-    </div>
+    @if (data == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Loading your dashboard...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-4 h-100 border-start border-primary border-4">
+                    <h6 class="text-muted small fw-bold text-uppercase">Department</h6>
+                    <h4 class="fw-bold mb-0">@data.DepartmentName</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-4 h-100 border-start border-info border-4">
+                    <h6 class="text-muted small fw-bold text-uppercase">Designation</h6>
+                    <h4 class="fw-bold mb-0">@data.DesignationName</h4>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-4 h-100 border-start border-warning border-4">
+                    <h6 class="text-muted small fw-bold text-uppercase">Current Shift</h6>
+                    <h4 class="fw-bold mb-0">@data.ShiftName</h4>
+                </div>
+            </div>
 
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm p-4">
+                    <h5 class="fw-bold mb-4">Employment Summary</h5>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="small text-muted d-block">Employee Code</label>
+                            <span class="fw-bold">@data.EmployeeCode</span>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="small text-muted d-block">Joining Date</label>
+                            <span class="fw-bold">@data.JoiningDate.ToString("MMMM dd, yyyy")</span>
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted d-block">Account Status</label>
+                            <span class="badge bg-success-subtle text-success">@data.Status</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm text-center p-4">
+                    <div class="mx-auto mb-3 bg-primary rounded-circle text-white d-flex align-items-center justify-content-center" style="width:70px; height:70px; font-size: 1.5rem;">
+                        @data.FullName[0]
+                    </div>
+                    <h5 class="fw-bold mb-1">@data.FullName</h5>
+                    <p class="text-muted small mb-4">@data.Email</p>
+                    <a href="/employee/profile" class="btn btn-outline-primary w-100">View Full Profile</a>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
-    private ApplicationUser? user;
+    private EmployeeDashboardDto? data;
 
     protected override async Task OnInitializedAsync()
     {
-        user = await CurrentUserService.GetUserAsync();
+        data = await EmployeeService.GetEmployeeDashboardDataAsync();
     }
-} *@
+}
