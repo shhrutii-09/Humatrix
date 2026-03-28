@@ -9,12 +9,26 @@
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="Humatrix_HRMS.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <HeadOutlet />
 </head>
 
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        window.clipboardCopy = {
+            copyText: function (text) {
+                navigator.clipboard.writeText(text).then(function () {
+                    // Optional: Show a brief 'Copied!' toast/notification here if you want
+                    console.log("Copied to clipboard: " + text);
+                })
+                .catch(function (error) {
+                    alert("Failed to copy link: " + error);
+                });
+            }
+        };
+    </script>
 </body>
 
 </html>
