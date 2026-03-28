@@ -1,10 +1,9 @@
 ﻿@implements IDisposable
-
 @inject NavigationManager NavigationManager
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="/">Humatrix_HRMS</a>
+        <a class="navbar-brand" href="/">HRMS</a>
     </div>
 </div>
 
@@ -13,48 +12,94 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
 
-        <!-- Home (Visible to all) -->
+        @* --- DYNAMIC DASHBOARD LINK BASED ON ROLE --- *@
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu"></span> Home
-            </NavLink>
+            <AuthorizeView>
+                <Authorized>
+                    @if (context.User.IsInRole("SuperAdmin"))
+                    {
+                        <NavLink class="nav-link" href="/admin/dashboard" Match="NavLinkMatch.All">
+                            <span class="bi bi-speedometer2"></span> Dashboard
+                        </NavLink>
+                    }
+                    else if (context.User.IsInRole("OrgAdmin") || context.User.IsInRole("HR"))
+                    {
+                        <NavLink class="nav-link" href="/org/dashboard" Match="NavLinkMatch.All">
+                            <span class="bi bi-speedometer2"></span> Dashboard
+                        </NavLink>
+                    }
+                    else
+                    {
+                        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                            <span class="bi bi-speedometer2"></span> Dashboard
+                        </NavLink>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                        <span class="bi bi-speedometer2"></span> Dashboard
+                    </NavLink>
+                </NotAuthorized>
+            </AuthorizeView>
         </div>
 
-        <!-- SuperAdmin Only: Organizations -->
-        <AuthorizeView Roles="SuperAdmin">
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/admin/dashboard">
-                        <span class="bi bi-building"></span> Organizations
-                    </NavLink>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-
-        <!-- Authentication Section -->
         <AuthorizeView>
             <Authorized>
-                <!-- Username -->
+                @* --- SUPER ADMIN: No extra organization link needed as per your request --- *@
+
+                @* --- ORG ADMIN & HR ONLY --- *@
+                <AuthorizeView Roles="OrgAdmin, HR" Context="managementContext">
+                    @* "My Organization" removed from here as it's now the main Dashboard link *@
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/org/departments">
+                            <span class="bi bi-diagram-3"></span> Departments
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/org/designations">
+                            <span class="bi bi-person-badge"></span> Designations
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/org/add-hr">
+                            <span class="bi bi-people"></span> Manage HR
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+
+                @* --- COMMON FOR ORG ADMIN, HR, EMP --- *@
+                <AuthorizeView Roles="OrgAdmin, HR, Employee" Context="commonContext">
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/employees">
+                            <span class="bi bi-person-workspace"></span> Employees
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/shifts">
+                            <span class="bi bi-clock-history"></span> Shifts
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+
+                @* --- LOGOUT & PROFILE --- *@
+                <div class="dropdown-divider"></div>
                 <div class="nav-item px-3">
-                    <span class="nav-link">
-                        <span class="bi bi-person-fill"></span> @context.User.Identity?.Name
+                    <span class="nav-link text-light opacity-75 small">
+                        <i class="bi bi-person-circle"></i> @context.User.Identity?.Name
                     </span>
                 </div>
-
-                <!-- Logout -->
                 <div class="nav-item px-3">
                     <form action="Account/Logout" method="post">
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link btn btn-link text-start">
-                            <span class="bi bi-arrow-bar-left"></span> Logout
+                        <button type="submit" class="nav-link btn btn-link text-start w-100">
+                            <span class="bi bi-box-arrow-left"></span> Logout
                         </button>
                     </form>
                 </div>
             </Authorized>
 
             <NotAuthorized>
-                <!-- Login -->
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="/Account/Login">
                         <span class="bi bi-box-arrow-in-right"></span> Login
@@ -81,8 +126,5 @@
         StateHasChanged();
     }
 
-    public void Dispose()
-    {
-        NavigationManager.LocationChanged -= OnLocationChanged;
-    }
+    public void Dispose() => NavigationManager.LocationChanged -= OnLocationChanged;
 }
