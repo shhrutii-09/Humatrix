@@ -14,55 +14,139 @@
 @inject ShiftService ShiftService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+@inject IJSRuntime JS // 👈 Added this for JS Interop
 
-<h3>Add Employee (HR)</h3>
+<PageTitle>Add Employee | Humatrix HRMS</PageTitle>
 
-<EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="hrAddEmployeeForm">
-    <DataAnnotationsValidator />
-    <ValidationSummary class="text-danger" />
-
-    <InputText @bind-Value="model.FirstName" class="form-control mb-2" placeholder="First Name" />
-    <InputText @bind-Value="model.LastName" class="form-control mb-2" placeholder="Last Name" />
-    <InputText @bind-Value="model.Email" type="email" class="form-control mb-2" placeholder="Email" />
-
-    <label>Department</label>
-    <input class="form-control mb-2" value="@departmentName" readonly />
-
-    <label>Designation</label>
-    <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
-        <option value="">Select Designation</option>
-        @foreach (var d in designations)
-        {
-            <option value="@d.DesignationId">@d.Name</option>
-        }
-    </InputSelect>
-
-    <label>Shift</label>
-    <InputSelect @bind-Value="model.ShiftId" class="form-control mb-2">
-        <option value="" disabled selected>Assign Shift</option>
-        @foreach (var s in shifts)
-        {
-            <option value="@s.ShiftId">@s.Name</option>
-        }
-    </InputSelect>
-
-    <button type="submit" class="btn btn-success" disabled="@isSubmitting">
-        @(isSubmitting ? "Creating..." : "Create Employee")
-    </button>
-</EditForm>
-
-@if (!string.IsNullOrEmpty(link))
-{
-    <div class="alert alert-success mt-3">
-        <b>Invite Link:</b>
-        <input class="form-control" value="@link" readonly />
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="fw-normal">Add New Employee</h2>
+        <button class="btn btn-primary shadow-sm" style="background-color: #5c4ac7; border: none;" @onclick='() => Nav.NavigateTo("/hr/dashboard")'>
+            BACK TO DASHBOARD
+        </button>
     </div>
-}
 
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger mt-3">@error</div>
-}
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="hrAddEmployeeForm">
+                <DataAnnotationsValidator />
+
+                <div class="row g-4">
+                    <div class="col-md-7">
+                        @* <h5 class="mb-3 text-muted border-bottom pb-2">Information</h5> *@
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold">First Name</label>
+                                <InputText @bind-Value="model.FirstName" class="form-control" placeholder="Enter first name" />
+                                <ValidationMessage For="@(() => model.FirstName)" class="text-danger small" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold">Last Name</label>
+                                <InputText @bind-Value="model.LastName" class="form-control" placeholder="Enter last name" />
+                                <ValidationMessage For="@(() => model.LastName)" class="text-danger small" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Email Address</label>
+                            <InputText @bind-Value="model.Email" type="email" class="form-control" placeholder="employee@company.com" />
+                            <ValidationMessage For="@(() => model.Email)" class="text-danger small" />
+                        </div>
+                    </div>
+
+                    <div class="col-md-5 border-start ps-4">
+                        <h5 class="mb-3 text-muted border-bottom pb-2">Assignment</h5>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Department</label>
+                            <input class="form-control bg-light" value="@departmentName" readonly />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Designation</label>
+                            <InputSelect @bind-Value="model.DesignationId" class="form-select">
+                                <option value="" disabled selected>Select Designation</option>
+                                @foreach (var d in designations)
+                                {
+                                    <option value="@d.DesignationId">@d.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Work Shift</label>
+                            <InputSelect @bind-Value="model.ShiftId" class="form-select">
+                                <option value="" disabled selected>Select Shift</option>
+                                @foreach (var s in shifts)
+                                {
+                                    <option value="@s.ShiftId">@s.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => model.ShiftId)" class="text-danger small" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 border-top pt-3 text-end">
+                    <button type="submit" class="btn btn-success px-5" style="background-color: #28a745; border: none;" disabled="@isSubmitting">
+                        @(isSubmitting ? "PROCESSING..." : "ADD")
+                    </button>
+                </div>
+            </EditForm>
+
+            @if (!string.IsNullOrEmpty(link))
+            {
+                <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3" style="background-color: #e6ffed;">
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
+                            <b class="text-success" style="font-size: 1.1rem;">Employee created successfully!</b>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            @if (showCopiedFeedback)
+                            {
+                                <span class="badge bg-success me-2 animate__animated animate__fadeIn">Copied!</span>
+                            }
+
+                            <button class="btn btn-link text-success border-0 fs-3 p-0"
+                                    title="Copy Invite Link"
+                                    @onclick="CopyLinkToClipboard">
+                                <i class="bi bi-files"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger mt-3 border-0 shadow-sm">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> @error
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control:focus, .form-select:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.25);
+    }
+
+    .form-label {
+        color: #6c757d;
+    }
+    /* Simple hover effect for the copy icon */
+    .btn-link:hover i {
+        transform: scale(1.1);
+        transition: 0.1s ease-in-out;
+    }
+</style>
 
 @code {
     CreateEmployeeDto model = new();
@@ -73,7 +157,9 @@
     string? link;
     string? error;
     bool isSubmitting;
+    private bool showCopiedFeedback = false;
 
+    // Existing Initialization logic...
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthState.GetAuthenticationStateAsync();
@@ -82,10 +168,8 @@
         if (user?.DepartmentId != null)
         {
             model.DepartmentId = user.DepartmentId;
-
             var dept = await DeptService.GetByIdAsync(user.DepartmentId.Value);
             departmentName = dept?.Name;
-
             designations = await DesignationService.GetByDepartmentAsync(user.DepartmentId.Value);
             shifts = await ShiftService.GetAllShiftsAsync();
         }
@@ -100,11 +184,19 @@
             link = null;
 
             model.Role = "Employee";
+            //
             link = await EmployeeService.CreateEmployeeAsync(model);
 
-            // Reset form but keep department context
-            var deptId = model.DepartmentId;
-            model = new CreateEmployeeDto { DepartmentId = deptId, Role = "Employee" };
+            // --- Form Reset Logic ---
+            // Save the current department ID to keep the context for the next entry
+            var currentDeptId = model.DepartmentId;
+
+            // Re-initialize the model to clear all input fields (First Name, Last Name, Email, etc.)
+            model = new CreateEmployeeDto
+            {
+                DepartmentId = currentDeptId,
+                Role = "Employee"
+            };
         }
         catch (Exception ex)
         {
@@ -113,6 +205,23 @@
         finally
         {
             isSubmitting = false;
+        }
+    }
+
+    private async Task CopyLinkToClipboard()
+    {
+        if (!string.IsNullOrEmpty(link))
+        {
+            await JS.InvokeVoidAsync("clipboardCopy.copyText", link);
+
+            // Show toast feedback
+            showCopiedFeedback = true;
+            StateHasChanged();
+
+            // Hide after 2 seconds
+            await Task.Delay(2000);
+            showCopiedFeedback = false;
+            StateHasChanged();
         }
     }
 }

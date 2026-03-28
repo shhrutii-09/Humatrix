@@ -282,5 +282,38 @@ namespace Humatrix_HRMS.Services
             _context = context;
             _config = config; // 👈 ADD THIS
         }
+
+        public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null) return null;
+
+            var dept = await _context.Departments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.DepartmentId == user.DepartmentId);
+            var desig = await _context.Designations.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.DesignationId == user.DesignationId);
+            var profile = await _context.Employees.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+            var shift = await _context.Shifts.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ShiftId == profile.ShiftId);
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return new EmployeeListDto
+            {
+                Email = user.Email!,
+                FirstName = user.FirstName ?? "",
+                LastName = user.LastName ?? "",
+                Name = $"{user.FirstName} {user.LastName}",
+                Role = roles.FirstOrDefault() ?? "Employee",
+                Department = dept?.Name ?? "N/A",
+                Designation = desig?.Name ?? "N/A",
+                DepartmentId = user.DepartmentId,
+                DesignationId = user.DesignationId,
+                ShiftId = profile?.ShiftId,
+                ShiftName = shift?.Name ?? "No Shift",
+                IsActive = user.IsActive
+            };
+        }
     }
 }

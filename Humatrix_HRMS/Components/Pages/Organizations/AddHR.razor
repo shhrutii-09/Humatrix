@@ -1,6 +1,7 @@
 ﻿@page "/org/add-hr"
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "OrgAdmin")]
@@ -8,101 +9,180 @@
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
 @inject DesignationService DesignationService
+@inject ShiftService ShiftService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
-<h3>Add HR</h3>
+<PageTitle>Add HR | Humatrix HRMS</PageTitle>
 
-<EditForm Model="model" OnValidSubmit="CreateHR" FormName="addHRForm">
-    <DataAnnotationsValidator />
-    <ValidationSummary class="text-danger" />
-
-    <InputText @bind-Value="model.FirstName" class="form-control mb-2" placeholder="First Name" />
-    <InputText @bind-Value="model.LastName" class="form-control mb-2" placeholder="Last Name" />
-    <InputText @bind-Value="model.Email" type="email" class="form-control mb-2" placeholder="Email" />
-
-    <!-- Department -->
-    @* <InputSelect @bind-Value="model.DepartmentId" class="form-control mb-2" @onchange="OnDepartmentChanged">
-        <option value="">Select Department</option>
-        @foreach (var d in departments)
-        {
-            <option value="@d.DepartmentId">@d.Name</option>
-        }
-    </InputSelect>
-
-    <!-- Designation -->
-    <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
-        <option value="">Select Designation</option>
-        @foreach (var d in designations)
-        {
-            <option value="@d.DesignationId">@d.Name</option>
-        }
-    </InputSelect> *@
-
-    <select class="form-control mb-2" @onchange="OnDepartmentChanged">
-        <option value="">Select Department</option>
-        @foreach (var d in departments)
-        {
-            <option value="@d.DepartmentId">@d.Name</option>
-        }
-    </select>
-
-    <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
-        <option value="">Select Designation</option>
-        @foreach (var d in designations)
-        {
-            <option value="@d.DesignationId">@d.Name</option>
-        }
-    </InputSelect>
-
-    <button class="btn btn-success" disabled="@isSubmitting">
-        @(isSubmitting ? "Creating..." : "Create HR")
-    </button>
-</EditForm>
-
-@if (!string.IsNullOrEmpty(link))
-{
-    <div class="alert alert-success mt-3">
-        <b>Invite Link:</b>
-        <input class="form-control" value="@link" readonly />
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="fw-normal">Add New HR Manager</h2>
+        <button class="btn btn-primary shadow-sm"
+                style="background-color: #5c4ac7; border: none;"
+                @onclick='() => Nav.NavigateTo("/org/dashboard")'>
+            BACK TO DASHBOARD
+        </button>
     </div>
-}
 
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger mt-3">@error</div>
-}
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+
+            <EditForm Model="model" OnValidSubmit="CreateHR">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                <div class="row g-4">
+
+                    <!-- LEFT -->
+                    <div class="col-md-7">
+                        <h5 class="mb-3 text-muted border-bottom pb-2">Basic Information</h5>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold">First Name</label>
+                                <InputText @bind-Value="model.FirstName" class="form-control" />
+                                <ValidationMessage For="@(() => model.FirstName)" />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold">Last Name</label>
+                                <InputText @bind-Value="model.LastName" class="form-control" />
+                                <ValidationMessage For="@(() => model.LastName)" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Email</label>
+                            <InputText @bind-Value="model.Email" type="email" class="form-control" />
+                            <ValidationMessage For="@(() => model.Email)" />
+                        </div>
+
+                        <!-- SHIFT (moved here properly) -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Work Shift</label>
+                            <InputSelect @bind-Value="model.ShiftId" class="form-select">
+                                <option value="">Select Shift</option>
+                                @foreach (var s in shifts)
+                                {
+                                    <option value="@s.ShiftId">@s.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => model.ShiftId)" />
+                        </div>
+                    </div>
+
+                    <!-- RIGHT -->
+                    <div class="col-md-5 border-start ps-4">
+                        <h5 class="mb-3 text-muted border-bottom pb-2">HR Assignment</h5>
+
+                        <!-- Department -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Department</label>
+                            <InputSelect @bind-Value="model.DepartmentId"
+                                         @bind-Value:after="OnDepartmentChanged"
+                                         class="form-select">
+                                <option value="">Select Department</option>
+                                @foreach (var d in departments)
+                                {
+                                    <option value="@d.DepartmentId">@d.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => model.DepartmentId)" />
+                        </div>
+
+                        <!-- Designation -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Designation</label>
+                            <InputSelect @bind-Value="model.DesignationId" class="form-select">
+                                <option value="">Select Designation</option>
+                                @foreach (var d in designations)
+                                {
+                                    <option value="@d.DesignationId">@d.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => model.DesignationId)" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 border-top pt-3 text-end">
+                    <button type="submit"
+                            class="btn btn-success px-4"
+                            disabled="@isSubmitting">
+                        @(isSubmitting ? "PROCESSING..." : "CREATE HR & GENERATE INVITE")
+                    </button>
+                </div>
+            </EditForm>
+
+            <!-- SUCCESS -->
+            @if (!string.IsNullOrEmpty(link))
+            {
+                <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3" style="background-color: #e6ffed;">
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
+                            <b class="text-success" style="font-size: 1.1rem;">Employee created successfully!</b>
+                        </div>
+
+                        <div class="d-flex align-items-center">
+                            @if (showCopiedFeedback)
+                            {
+                                <span class="badge bg-success me-2 animate__animated animate__fadeIn">Copied!</span>
+                            }
+
+                            <button class="btn btn-link text-success border-0 fs-3 p-0"
+                                    title="Copy Invite Link"
+                                    @onclick="CopyLinkToClipboard">
+                                <i class="bi bi-files"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+            <!-- ERROR -->
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger mt-3">
+                    @error
+                </div>
+            }
+
+        </div>
+    </div>
+</div>
 
 @code {
     CreateEmployeeDto model = new();
+
     List<DepartmentDto> departments = new();
     List<DesignationDto> designations = new();
+    List<Shift> shifts = new();
 
     string? link;
     string? error;
-    bool isSubmitting;
+    bool isSubmitting = false;
+    bool showCopiedFeedback = false;
 
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
+        shifts = await ShiftService.GetAllShiftsAsync();
     }
 
-    private async Task OnDepartmentChanged(ChangeEventArgs e)
+    private async Task OnDepartmentChanged()
     {
-        var selectedValue = e.Value?.ToString();
-
-        if (Guid.TryParse(selectedValue, out var deptId))
+        if (model.DepartmentId.HasValue)
         {
-            model.DepartmentId = deptId;
-            // Fetch designations based on the selected Department
-            designations = await DesignationService.GetByDepartmentAsync(deptId);
+            designations = await DesignationService
+                .GetByDepartmentAsync(model.DepartmentId.Value);
         }
         else
         {
-            model.DepartmentId = null;
             designations.Clear();
         }
 
-        // Sometimes StateHasChanged is needed if the async call returns quickly
-        StateHasChanged();
+        model.DesignationId = null;
     }
 
     private async Task CreateHR()
@@ -110,11 +190,15 @@
         try
         {
             isSubmitting = true;
+            error = null;
+            link = null;
+
             model.Role = "HR";
 
             link = await EmployeeService.CreateEmployeeAsync(model);
 
-            model = new();
+            // reset form
+            model = new CreateEmployeeDto();
             designations.Clear();
         }
         catch (Exception ex)
@@ -124,6 +208,18 @@
         finally
         {
             isSubmitting = false;
+        }
+    }
+
+    private async Task CopyLinkToClipboard()
+    {
+        if (!string.IsNullOrEmpty(link))
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
+            showCopiedFeedback = true;
+
+            await Task.Delay(2000);
+            showCopiedFeedback = false;
         }
     }
 }

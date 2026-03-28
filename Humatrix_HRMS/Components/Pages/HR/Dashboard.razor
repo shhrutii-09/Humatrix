@@ -1,70 +1,166 @@
-﻿@* @page "/hr/dashboard"
-
+﻿@page "/hr/dashboard"
 @using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
 
 @attribute [Authorize(Roles = "HR")]
-
 @inject EmployeeService EmployeeService
+@inject CurrentUserService CurrentUserService
+@rendermode InteractiveServer
 
-<PageTitle>HR Dashboard</PageTitle>
+<PageTitle>HR Dashboard | Humatrix</PageTitle>
 
-<div class="container mt-4">
-    <h1>HR Dashboard</h1>
-
-    @if (employees == null)
-    {
-        <p>Loading...</p>
-    }
-    else
-    {
-        <div class="card p-3 mb-4">
-            <h5>Total Employees: @employees.Count</h5>
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold">Welcome back, @currentUser?.FirstName!</h2>
+            <p class="text-muted">Here is what's happening in your department today.</p>
         </div>
+        <div class="text-end">
+            <span class="badge bg-primary p-2">HR Role</span>
+        </div>
+    </div>
 
-        <table class="table table-hover shadow-sm border">
-            <thead class="table-light">
-                <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Department</th>
-                    <th>Designation</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-purple text-white p-3">
+                <h6 class="small opacity-75">Total Team Members</h6>
+                <h2 class="mb-0 fw-bold">@(employees?.Count ?? 0)</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-3 border-start border-success border-4">
+                <h6 class="text-muted small fw-bold">Active Employees</h6>
+                <h2 class="text-success mb-0 fw-bold">@(employees?.Count(e => e.IsActive) ?? 0)</h2>
+            </div>
+        </div>
+        @* Pending Invites Removed as requested *@
+    </div>
 
-            <tbody>
-                @foreach (var emp in employees)
-                {
-                    <tr>
-                        <td>@emp.Name</td>
-                        <td>@emp.Email</td>
-                        <td>@emp.Department</td>
-                        <td>@emp.Designation</td>
-                        <td>
-                            @if (emp.IsActive)
+    <div class="row">
+        <div class="col-lg-9">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">Recent Employee List</h5>
+                    <div class="d-flex gap-2">
+                        <input type="text" @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch"
+                               class="form-control form-control-sm" placeholder="Search by name or email..." />
+                    </div>
+                </div>
+                <div class="table-responsive p-0">
+                    <table class="table align-middle mb-0">
+                        <thead class="bg-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Employee</th>
+                                <th>Designation</th>
+                                <th>Department</th>
+                                <th>Shift</th>
+                                <th>Status</th>
+                                @* <th class="text-end pe-4">Actions</th> *@
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (employees == null)
                             {
-                                <span class="badge bg-success">Active</span>
+                                <tr><td colspan="6" class="text-center py-4">Loading...</td></tr>
+                            }
+                            else if (!employees.Any())
+                            {
+                                <tr><td colspan="6" class="text-center py-4">No employees found.</td></tr>
                             }
                             else
                             {
-                                <span class="badge bg-danger">Inactive</span>
+                                @foreach (var emp in employees)
+                                {
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-sm bg-light rounded-circle text-primary d-flex align-items-center justify-content-center me-3" style="width:40px; height:40px;">
+                                                    @emp.FirstName[0]@emp.LastName[0]
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">@emp.Name</div>
+                                                    <small class="text-muted">@emp.Email</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>@emp.Designation</td>
+                                        <td><span class="badge bg-info-subtle text-info">@emp.Department</span></td>
+                                        <td>@emp.ShiftName</td>
+                                        <td>
+                                            @if (emp.IsActive)
+                                            {
+                                                <span class="badge rounded-pill bg-success-subtle text-success">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge rounded-pill bg-danger-subtle text-danger">Inactive</span>
+                                            }
+                                        </td>
+                                        @* <td class="text-end pe-4">
+                                            <button class="btn btn-sm btn-outline-secondary" title="View Profile">
+                                                <i class="bi bi-eye"></i> View
+                                            </button>
+                                        </td> *@
+                                    </tr>
+                                }
                             }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3">
+            <div class="card border-0 shadow-sm text-center p-4">
+                <div class="mx-auto mb-3 bg-primary rounded-circle text-white d-flex align-items-center justify-content-center" style="width:80px; height:80px; font-size: 2rem;">
+                    @currentUser?.FirstName?[0]
+                </div>
+                <h5 class="fw-bold">@currentUser?.FirstName @currentUser?.LastName</h5>
+                <p class="text-muted small">@currentUser?.Email</p>
+                <hr />
+                <div class="text-start">
+                    <small class="text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Your Department</small>
+                    <p class="mb-2">Admin / HR</p>
+
+                    <small class="text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Joined On</small>
+                    <p class="mb-0">@currentUser?.CreatedAt.ToString("MMM dd, yyyy")</p>
+                </div>
+                <a href="/hr/profile" class="btn btn-primary btn-sm mt-4 w-100">Edit My Profile</a>
+            </div>
+        </div>
+    </div>
 </div>
+
+<style>
+    .bg-purple { background-color: #6f42c1; }
+    .bg-success-subtle { background-color: #d1e7dd; color: #0f5132; }
+    .bg-danger-subtle { background-color: #f8d7da; color: #842029; }
+    .bg-info-subtle { background-color: #cff4fc; color: #055160; }
+    .card { border-radius: 12px; }
+</style>
 
 @code {
     private List<EmployeeListDto>? employees;
+    private ApplicationUser? currentUser;
+    private string searchTerm = "";
 
     protected override async Task OnInitializedAsync()
     {
-        employees = await EmployeeService.GetEmployeesForListAsync();
+        currentUser = await CurrentUserService.GetUserAsync();
+        await LoadEmployees();
     }
-} *@
+
+    private async Task LoadEmployees()
+    {
+        employees = await EmployeeService.GetEmployeesForListAsync(searchTerm);
+    }
+
+    private async Task HandleSearch()
+    {
+        await LoadEmployees();
+    }
+}
