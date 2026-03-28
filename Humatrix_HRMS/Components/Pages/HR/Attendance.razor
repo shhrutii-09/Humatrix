@@ -62,16 +62,32 @@
         <tbody>
             @if (attendanceList != null && attendanceList.Any())
             {
-                @foreach (var item in attendanceList)
+                @* @foreach (var item in attendanceList)
                 {
-                    <tr>
+                    <tr class="@(item.Status == "Absent" ? "table-light" : "")">
                         <td>
                             <strong>@item.EmployeeName</strong><br />
                             <small class="text-muted">@item.Email</small>
                         </td>
                         <td>@item.Department</td>
-                        <td>@item.CheckIn?.ToLocalTime().ToString("hh:mm tt")</td>
-                        <td>@item.CheckOut?.ToLocalTime().ToString("hh:mm tt")</td>
+                        <td>@(item.CheckIn.HasValue? item.CheckIn.Value.ToLocalTime().ToString("hh:mm tt") : "--:--")</td>
+                        <td>@(item.CheckOut.HasValue? item.CheckOut.Value.ToLocalTime().ToString("hh:mm tt") : "--:--")</td>
+                        <td>
+                            <span class="badge @GetStatusClass(item.Status)">@item.Status</span>
+                        </td>
+                    </tr>
+                } *@
+                @foreach (var item in attendanceList)
+                {
+                    // If the status is "Not Started", we use a neutral color so it doesn't look like an error
+                    <tr class="@(item.Status == "Absent" ? "table-danger" : item.Status == "Not Started" ? "text-muted" : "")">
+                        <td>
+                            <strong>@item.EmployeeName</strong><br />
+                            <small class="text-muted">@item.Email</small>
+                        </td>
+                        <td>@item.Department</td>
+                        <td>@(item.CheckIn.HasValue? item.CheckIn.Value.ToLocalTime().ToString("hh:mm tt") : "--:--")</td>
+                        <td>@(item.CheckOut.HasValue? item.CheckOut.Value.ToLocalTime().ToString("hh:mm tt") : "--:--")</td>
                         <td>
                             <span class="badge @GetStatusClass(item.Status)">@item.Status</span>
                         </td>
@@ -116,8 +132,13 @@
     {
         "Present" => "bg-success",
         "Late" => "bg-warning text-dark",
-        "Half Day" => "bg-orange",
+        "Late (Active)" => "bg-warning text-dark",
+        "Half Day" => "bg-info",
+        "Short Hours" => "bg-secondary",
         "Absent" => "bg-danger",
+        "Checked In" => "bg-primary",
+        "Not Started" => "bg-light text-dark",
+        "Pending Verification" => "bg-info text-dark",
         _ => "bg-secondary"
     };
 }

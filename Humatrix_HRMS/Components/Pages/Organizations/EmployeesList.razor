@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 
 @using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
@@ -11,23 +12,25 @@
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
 @inject DesignationService DesignationService
+@inject ShiftService ShiftService
 @inject AuthenticationStateProvider AuthStateProvider
 
-<h3>Employee Management</h3>
+<h3 class="mb-3">Employee Management</h3>
 
-<div class="card p-3 mb-3">
+<div class="card p-3 mb-3 shadow-sm">
     <div class="row">
         <div class="col-md-4">
+            <label class="form-label">Search</label>
             <input class="form-control"
                    placeholder="Search by name/email"
                    @bind="search"
                    @bind:event="oninput" />
         </div>
 
-        @* Filter Dropdown: Only visible to OrgAdmin *@
         @if (UserIsOrgAdmin)
         {
             <div class="col-md-4">
+                <label class="form-label">Filter by Department</label>
                 <select class="form-control" @onchange="OnDepartmentFilterChanged">
                     <option value="">All Departments</option>
                     @foreach (var d in departments)
@@ -40,100 +43,122 @@
     </div>
 </div>
 
-<table class="table table-hover table-bordered">
-    <thead class="table-light">
-        <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Department</th>
-            <th>Designation</th>
-            <th>Status</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (employees == null || !employees.Any())
-        {
-            <tr><td colspan="7" class="text-center">No employees found.</td></tr>
-        }
-        else
-        {
-            @foreach (var e in employees)
+<div class="table-responsive">
+    <table class="table table-hover table-bordered shadow-sm">
+        <thead class="table-dark">
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Designation</th>
+                <th>Shift</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (employees == null || !employees.Any())
             {
-                <tr>
-                    <td>@e.Name</td>
-                    <td>@e.Email</td>
-                    <td><span class="badge bg-info text-dark">@e.Role</span></td>
-                    <td>@e.Department</td>
-                    <td>@e.Designation</td>
-                    <td>
-                        <span class="badge bg-@(e.IsActive ? "success" : "danger")">
-                            @(e.IsActive ? "Active" : "Inactive")
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-warning" @onclick="() => OpenEditModal(e)">Edit</button>
-                        <button class="btn btn-sm @(e.IsActive ? "btn-danger" : "btn-success")"
-                                @onclick="() => ToggleStatus(e)">
-                            @(e.IsActive ? "Deactivate" : "Activate")
-                        </button>
-                    </td>
-                </tr>
+                <tr><td colspan="7" class="text-center py-4">No employees found.</td></tr>
             }
-        }
-    </tbody>
-</table>
+            else
+            {
+                @foreach (var e in employees)
+                {
+                    <tr>
+                        <td>@e.Name</td>
+                        <td>@e.Email</td>
+                        <td><span class="badge bg-info text-dark">@e.Role</span></td>
+                        <td>@e.Department</td>
+                        <td>@e.Designation</td>
+                        <td>@e.ShiftName</td>
+                        <td>
+                            <span class="badge bg-@(e.IsActive ? "success" : "danger")">
+                                @(e.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-warning me-1" @onclick="() => OpenEditModal(e)">Edit</button>
+                            <button class="btn btn-sm @(e.IsActive ? "btn-danger" : "btn-success")"
+                                    @onclick="() => ToggleStatus(e)">
+                                @(e.IsActive ? "Deactivate" : "Activate")
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
 
 @if (isEditOpen)
 {
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">Edit Employee: @editingEmail</h5>
-                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
                 </div>
                 <div class="modal-body">
                     <EditForm Model="editModel" OnValidSubmit="SaveEdit">
                         <DataAnnotationsValidator />
 
-                        <label>First Name</label>
-                        <InputText @bind-Value="editModel.FirstName" class="form-control mb-2" />
+                        <div class="mb-3">
+                            <label class="form-label">First Name</label>
+                            <InputText @bind-Value="editModel.FirstName" class="form-control" />
+                        </div>
 
-                        <label>Last Name</label>
-                        <InputText @bind-Value="editModel.LastName" class="form-control mb-2" />
+                        <div class="mb-3">
+                            <label class="form-label">Last Name</label>
+                            <InputText @bind-Value="editModel.LastName" class="form-control" />
+                        </div>
 
-                        <label>Department</label>
-                        @if (UserIsOrgAdmin)
-                        {
-                            <InputSelect ValueExpression="@(() => editModel.DepartmentId)"
-                                         Value="@editModel.DepartmentId"
-                                         ValueChanged="@((Guid? id) => OnEditDepartmentChanged(id))"
-                                         class="form-control mb-2">
-                                <option value="">Select Department</option>
-                                @foreach (var d in departments)
+                        <div class="mb-3">
+                            <label class="form-label">Department</label>
+                            @if (UserIsOrgAdmin)
+                            {
+                                <InputSelect ValueExpression="@(() => editModel.DepartmentId)"
+                                             Value="@editModel.DepartmentId"
+                                             ValueChanged="@((Guid? id) => OnEditDepartmentChanged(id))"
+                                             class="form-select">
+                                    <option value="">Select Department</option>
+                                    @foreach (var d in departments)
+                                    {
+                                        <option value="@d.DepartmentId">@d.Name</option>
+                                    }
+                                </InputSelect>
+                            }
+                            else
+                            {
+                                <input type="text" class="form-control" value="@HRDepartmentName" disabled />
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Designation</label>
+                            <InputSelect @bind-Value="editModel.DesignationId" class="form-select">
+                                <option value="">Select Designation</option>
+                                @foreach (var d in editDesignations)
                                 {
-                                    <option value="@d.DepartmentId">@d.Name</option>
+                                    <option value="@d.DesignationId">@d.Name</option>
                                 }
                             </InputSelect>
-                        }
-                        else
-                        {
-                            @* HR sees a read-only field with their own department name *@
-                            <input type="text" class="form-control mb-2" value="@HRDepartmentName" disabled />
-                        }
+                        </div>
 
-                        <label>Designation</label>
-                        <InputSelect @bind-Value="editModel.DesignationId" class="form-control mb-2">
-                            <option value="">Select Designation</option>
-                            @foreach (var d in editDesignations)
-                            {
-                                <option value="@d.DesignationId">@d.Name</option>
-                            }
-                        </InputSelect>
+                        <div class="mb-3">
+                            <label class="form-label">Shift Assignment</label>
+                            <InputSelect @bind-Value="editModel.ShiftId" class="form-select">
+                                <option value="">Select Shift</option>
+                                @foreach (var s in shifts)
+                                {
+                                    <option value="@s.ShiftId">@s.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
 
-                        <div class="mt-3">
+                        <div class="modal-footer px-0 pb-0">
                             <button type="submit" class="btn btn-primary">Save Changes</button>
                             <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
                         </div>
@@ -145,19 +170,18 @@
 }
 
 @code {
-
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
     List<EmployeeListDto> employees = new();
     List<DepartmentDto> departments = new();
     List<DesignationDto> editDesignations = new();
+    List<Shift> shifts = new();
 
     EditEmployeeDto editModel = new();
     bool isEditOpen = false;
     string? editingEmail;
 
-    // Role handling
     bool UserIsOrgAdmin = false;
     string HRDepartmentName = "";
 
@@ -180,6 +204,7 @@
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
+        shifts = await ShiftService.GetAllShiftsAsync();
 
         if (AuthState != null)
         {
@@ -190,21 +215,22 @@
             if (!UserIsOrgAdmin)
             {
                 var hrEmail = user.Identity?.Name;
-                // Optimization: Get only the specific user instead of the whole list if possible
                 var hrData = await EmployeeService.GetEmployeesForListAsync();
                 var hrProfile = hrData.FirstOrDefault(x => x.Email == hrEmail);
                 HRDepartmentName = hrProfile?.Department ?? "Department Restricted";
+
+                // If HR, filter the main list to their department by default
+                filterDepartmentId = hrProfile?.DepartmentId;
             }
         }
 
         await LoadEmployees();
     }
 
-
     private async Task LoadEmployees()
     {
         employees = await EmployeeService.GetEmployeesForListAsync(_search, filterDepartmentId);
-        await InvokeAsync(StateHasChanged);
+        StateHasChanged();
     }
 
     private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
@@ -222,6 +248,7 @@
             LastName = e.LastName,
             DepartmentId = e.DepartmentId,
             DesignationId = e.DesignationId,
+            ShiftId = e.ShiftId, // Ensure ShiftId is included in your List DTO
             Role = e.Role
         };
 
@@ -237,14 +264,9 @@
     {
         editModel.DepartmentId = id;
         editModel.DesignationId = null;
-
-        editDesignations = new(); // ✅ clear first
-
-
-        if (id.HasValue)
-            editDesignations = await DesignationService.GetByDepartmentAsync(id.Value);
-        else
-            editDesignations = new();
+        editDesignations = id.HasValue
+            ? await DesignationService.GetByDepartmentAsync(id.Value)
+            : new List<DesignationDto>();
     }
 
     private async Task SaveEdit()
@@ -257,7 +279,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
+            Console.WriteLine($"Error updating employee: {ex.Message}");
         }
     }
 

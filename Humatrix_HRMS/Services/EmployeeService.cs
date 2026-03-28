@@ -3,6 +3,7 @@ using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Humatrix_HRMS.Services
 {
@@ -61,6 +62,7 @@ namespace Humatrix_HRMS.Services
                     LastName = dto.LastName,
                     DepartmentId = dto.DepartmentId ?? Guid.Empty,
                     DesignationId = dto.DesignationId ?? Guid.Empty,
+                    ShiftId = dto.ShiftId, // Assigned here
                     EmployeeCode = await GenerateEmployeeCodeAsync(),
                     JoiningDate = DateTime.UtcNow,
                     Status = "Active"
@@ -98,14 +100,69 @@ namespace Humatrix_HRMS.Services
             }
         }
 
+        //public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(string? search = null, Guid? departmentId = null)
+        //{
+        //    var currentUser = await _currentUser.GetUserAsync();
+        //    if (currentUser?.OrganizationId == null) return new();
+
+        //    var roles = await _userManager.GetRolesAsync(currentUser);
+        //    var query = _userManager.Users.Where(u => u.OrganizationId == currentUser.OrganizationId && u.Id != currentUser.Id);
+
+        //    if (roles.Contains("HR"))
+        //        query = query.Where(u => u.DepartmentId == currentUser.DepartmentId);
+
+        //    if (departmentId.HasValue)
+        //        query = query.Where(u => u.DepartmentId == departmentId);
+
+        //    if (!string.IsNullOrWhiteSpace(search))
+        //    {
+        //        var s = search.ToLower();
+        //        query = query.Where(u => u.FirstName.ToLower().Contains(s) || u.LastName.ToLower().Contains(s) || u.Email.ToLower().Contains(s));
+        //    }
+
+        //    var users = await query.ToListAsync();
+        //    var depts = await _context.Departments.AsNoTracking().ToListAsync();
+        //    var desigs = await _context.Designations.AsNoTracking().ToListAsync();
+        //    var shifts = await _context.Shifts.AsNoTracking().ToListAsync();
+        //    var list = new List<EmployeeListDto>();
+
+        //    foreach (var u in users)
+        //    {
+        //        var userRoles = await _userManager.GetRolesAsync(u);
+        //        var role = userRoles.FirstOrDefault() ?? "Employee";
+
+        //        if (roles.Contains("HR") && (role == "HR" || role == "OrgAdmin")) continue;
+
+        //        list.Add(new EmployeeListDto
+        //        {
+        //            Email = u.Email!,
+        //            FirstName = u.FirstName,
+        //            LastName = u.LastName,
+        //            Name = $"{u.FirstName} {u.LastName}",
+        //            Role = role,
+        //            Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
+        //            Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
+        //            DepartmentId = u.DepartmentId,
+        //            DesignationId = u.DesignationId,
+        //            ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift",
+        //            ShiftId = profile?.ShiftId,
+        //            IsActive = u.IsActive
+        //        });
+        //    }
+        //    return list.OrderBy(x => x.Name).ToList();
+        //}
+
         public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(string? search = null, Guid? departmentId = null)
         {
             var currentUser = await _currentUser.GetUserAsync();
             if (currentUser?.OrganizationId == null) return new();
 
             var roles = await _userManager.GetRolesAsync(currentUser);
+
+            // 1. Get the Users query
             var query = _userManager.Users.Where(u => u.OrganizationId == currentUser.OrganizationId && u.Id != currentUser.Id);
 
+            // Filter by HR department if applicable
             if (roles.Contains("HR"))
                 query = query.Where(u => u.DepartmentId == currentUser.DepartmentId);
 
@@ -119,8 +176,17 @@ namespace Humatrix_HRMS.Services
             }
 
             var users = await query.ToListAsync();
+
+            // 2. Fetch reference data for mapping
             var depts = await _context.Departments.AsNoTracking().ToListAsync();
             var desigs = await _context.Designations.AsNoTracking().ToListAsync();
+            var shifts = await _context.Shifts.AsNoTracking().ToListAsync();
+
+            // 3. Fetch all Employee profiles for this organization to avoid multiple DB hits in the loop
+            var profiles = await _context.Employees.AsNoTracking()
+                .Where(e => e.OrganizationId == currentUser.OrganizationId)
+                .ToListAsync();
+
             var list = new List<EmployeeListDto>();
 
             foreach (var u in users)
@@ -128,7 +194,11 @@ namespace Humatrix_HRMS.Services
                 var userRoles = await _userManager.GetRolesAsync(u);
                 var role = userRoles.FirstOrDefault() ?? "Employee";
 
+                // Security check for HR role
                 if (roles.Contains("HR") && (role == "HR" || role == "OrgAdmin")) continue;
+
+                // ✅ Find the matching profile to get the ShiftId
+                var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
 
                 list.Add(new EmployeeListDto
                 {
@@ -141,9 +211,15 @@ namespace Humatrix_HRMS.Services
                     Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
                     DepartmentId = u.DepartmentId,
                     DesignationId = u.DesignationId,
+
+                    // ✅ Map Shift data correctly
+                    ShiftId = profile?.ShiftId,
+                    ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift",
+
                     IsActive = u.IsActive
                 });
             }
+
             return list.OrderBy(x => x.Name).ToList();
         }
 
@@ -166,6 +242,7 @@ namespace Humatrix_HRMS.Services
                 profile.LastName = dto.LastName;
                 profile.DepartmentId = dto.DepartmentId ?? Guid.Empty;
                 profile.DesignationId = dto.DesignationId ?? Guid.Empty;
+                profile.ShiftId = dto.ShiftId;
                 await _context.SaveChangesAsync();
             }
         }

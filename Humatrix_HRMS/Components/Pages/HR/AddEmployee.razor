@@ -1,6 +1,7 @@
 ﻿@page "/hr/add-employee"
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
@@ -10,6 +11,7 @@
 @inject EmployeeService EmployeeService
 @inject DesignationService DesignationService
 @inject DepartmentService DeptService
+@inject ShiftService ShiftService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthState
 
@@ -26,6 +28,7 @@
     <label>Department</label>
     <input class="form-control mb-2" value="@departmentName" readonly />
 
+    <label>Designation</label>
     <InputSelect @bind-Value="model.DesignationId" class="form-control mb-2">
         <option value="">Select Designation</option>
         @foreach (var d in designations)
@@ -34,7 +37,16 @@
         }
     </InputSelect>
 
-    <button class="btn btn-success" disabled="@isSubmitting">
+    <label>Shift</label>
+    <InputSelect @bind-Value="model.ShiftId" class="form-control mb-2">
+        <option value="" disabled selected>Assign Shift</option>
+        @foreach (var s in shifts)
+        {
+            <option value="@s.ShiftId">@s.Name</option>
+        }
+    </InputSelect>
+
+    <button type="submit" class="btn btn-success" disabled="@isSubmitting">
         @(isSubmitting ? "Creating..." : "Create Employee")
     </button>
 </EditForm>
@@ -42,6 +54,7 @@
 @if (!string.IsNullOrEmpty(link))
 {
     <div class="alert alert-success mt-3">
+        <b>Invite Link:</b>
         <input class="form-control" value="@link" readonly />
     </div>
 }
@@ -54,6 +67,7 @@
 @code {
     CreateEmployeeDto model = new();
     List<DesignationDto> designations = new();
+    private List<Shift> shifts = new();
 
     string? departmentName;
     string? link;
@@ -61,7 +75,7 @@
     bool isSubmitting;
 
     protected override async Task OnInitializedAsync()
-    {   
+    {
         var auth = await AuthState.GetAuthenticationStateAsync();
         var user = await UserManager.GetUserAsync(auth.User);
 
@@ -73,6 +87,7 @@
             departmentName = dept?.Name;
 
             designations = await DesignationService.GetByDepartmentAsync(user.DepartmentId.Value);
+            shifts = await ShiftService.GetAllShiftsAsync();
         }
     }
 
@@ -82,24 +97,14 @@
         {
             isSubmitting = true;
             error = null;
+            link = null;
 
             model.Role = "Employee";
-
             link = await EmployeeService.CreateEmployeeAsync(model);
 
-            var auth = await AuthState.GetAuthenticationStateAsync();
-            var user = await UserManager.GetUserAsync(auth.User);
-
-            if (model.DepartmentId == null)
-            {
-                error = "Department not assigned properly.";
-                return;
-            }
-
-            model = new CreateEmployeeDto
-            {
-                DepartmentId = user?.DepartmentId
-            };
+            // Reset form but keep department context
+            var deptId = model.DepartmentId;
+            model = new CreateEmployeeDto { DepartmentId = deptId, Role = "Employee" };
         }
         catch (Exception ex)
         {

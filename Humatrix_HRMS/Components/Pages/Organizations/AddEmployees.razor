@@ -1,5 +1,6 @@
 ﻿@page "/org/add-employee"
 @using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @rendermode InteractiveServer
@@ -8,6 +9,7 @@
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
 @inject DesignationService DesignationService
+@inject ShiftService ShiftService
 
 <h3>Add Employee</h3>
 
@@ -51,6 +53,15 @@
         }
     </InputSelect>
 
+    <label>Shift</label>
+    <InputSelect @bind-Value="model.ShiftId" class="form-control mb-2">
+        <option value="" disabled selected>Assign Shift</option>
+        @foreach (var s in shifts)
+        {
+            <option value="@s.ShiftId">@s.Name</option>
+        }
+    </InputSelect>
+
     <button class="btn btn-primary" disabled="@isSubmitting">
         @(isSubmitting ? "Creating..." : "Create Employee")
     </button>
@@ -72,6 +83,7 @@
     CreateEmployeeDto model = new();
     List<DepartmentDto> departments = new();
     List<DesignationDto> designations = new();
+    private List<Shift> shifts = new();
 
     string? link;
     string? error;
@@ -80,6 +92,7 @@
     protected override async Task OnInitializedAsync()
     {
         departments = await DeptService.GetAllAsync();
+        shifts = await ShiftService.GetAllShiftsAsync(); // Added this
     }
 
     private async Task OnDepartmentChanged(ChangeEventArgs e)

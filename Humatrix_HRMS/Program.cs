@@ -51,7 +51,7 @@ builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<OrgDashboardService>();
 builder.Services.AddScoped<DesignationService>();
 builder.Services.AddScoped<ShiftService>();
-
+builder.Services.AddHostedService<AttendanceBackgroundService>();
 
 builder.Services.AddCascadingAuthenticationState();
 

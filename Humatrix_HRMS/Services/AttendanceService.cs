@@ -22,62 +22,40 @@ namespace Humatrix_HRMS.Services
         public async Task CheckInAsync()
         {
             var user = await _currentUser.GetUserAsync();
-
-        //    var employee = await _context.Employees
-        //.FirstOrDefaultAsync(e => e.UserId == user.Id);
-
             var employee = await _context.Employees
-        .FirstOrDefaultAsync(e => e.UserId == user.Id);
+                .Include(e => e.Shift)
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
-            if (employee == null)
-                throw new Exception("Employee profile not found. Cannot check in.");
+            if (employee == null) throw new Exception("Profile not found.");
 
-            //var today = DateTime.UtcNow.Date;
             var today = DateTime.Now.Date;
-
             var exists = await _context.Attendances
                 .FirstOrDefaultAsync(a => a.UserId == user.Id && a.Date == today);
 
-            if (exists != null && exists.CheckIn != null)
-                throw new Exception("Already checked in today.");
+            if (exists?.CheckIn != null) throw new Exception("Already checked in.");
 
-            if (exists == null)
+            var attendance = exists ?? new Attendance
             {
-                var attendance = new Attendance
-                {
-                    UserId = user.Id,
-                    EmployeeId = employee.EmployeeId,
-                    Date = today,
-                    //CheckIn = DateTime.UtcNow,
-                    CheckIn = DateTime.Now,
-                    IsPresent = true,
-                    OrganizationId = user.OrganizationId ?? Guid.Empty
-                };
-                _context.Attendances.Add(attendance);
-            }
-            else
-            {
-                exists.EmployeeId = employee.EmployeeId;
-                exists.CheckIn = DateTime.Now;
-                exists.IsPresent = true;
-            }
+                UserId = user.Id,
+                EmployeeId = employee.EmployeeId,
+                Date = today,
+                OrganizationId = user.OrganizationId ?? Guid.Empty
+            };
 
+            attendance.CheckIn = DateTime.UtcNow;
+            attendance.IsPresent = true;
+
+            if (exists == null) _context.Attendances.Add(attendance);
             await _context.SaveChangesAsync();
         }
 
         public async Task CheckOutAsync()
         {
             var user = await _currentUser.GetUserAsync();
-            //var today = DateTime.UtcNow.Date;
             var today = DateTime.Now.Date;
 
-            //var attendance = await _context.Attendances
-            //    .FirstOrDefaultAsync(a => a.UserId == user.Id && a.Date == today);
             var attendance = await _context.Attendances
-    .FirstOrDefaultAsync(a =>
-        a.UserId == user.Id &&
-        a.Date == today &&
-        a.OrganizationId == user.OrganizationId);
+                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.Date == today);
 
             if (attendance == null || attendance.CheckIn == null)
                 throw new Exception("You must check in first.");
@@ -85,8 +63,7 @@ namespace Humatrix_HRMS.Services
             if (attendance.CheckOut != null)
                 throw new Exception("Already checked out.");
 
-            //attendance.CheckOut = DateTime.UtcNow;
-            attendance.CheckOut = DateTime.Now;
+            attendance.CheckOut = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
 
@@ -99,11 +76,10 @@ namespace Humatrix_HRMS.Services
             bool isHR = userRoles.Contains("HR");
             bool isOrgAdmin = userRoles.Contains("OrgAdmin");
 
-            // ✅ Optimized Query: Include both Identity User and Employee Profile
             var query = _context.Attendances
                 .Include(a => a.User)
                 .Include(a => a.Employee)
-                .ThenInclude(e => e.Shift)
+                    .ThenInclude(e => e.Shift)
                 .Where(a => a.OrganizationId == currentUser.OrganizationId);
 
             if (date.HasValue)
@@ -112,7 +88,6 @@ namespace Humatrix_HRMS.Services
                 query = query.Where(a => a.Date == d);
             }
 
-            // Security Boundaries
             if (isHR && !isOrgAdmin)
             {
                 query = query.Where(a => a.Employee.DepartmentId == currentUser.DepartmentId || a.UserId == currentUser.Id);
@@ -125,25 +100,7 @@ namespace Humatrix_HRMS.Services
 
             var results = await query.ToListAsync();
             var list = new List<AttendanceListDto>();
-
-            // Pre-fetch departments to avoid "N+1" query issues in the loop
             var allDepartments = await _context.Departments.ToListAsync();
-    //        var deptMap = await _context.Departments
-    //.ToDictionaryAsync(d => d.DepartmentId, d => d.Name);
-    //        Department = deptMap.ContainsKey(a.Employee?.DepartmentId ?? Guid.Empty)
-    //? deptMap[a.Employee.DepartmentId.Value]
-    //: "N/A";
-
-
-            var users = results.Select(a => a.User).Distinct().ToList();
-            var roleMap = new Dictionary<string, string>();
-            foreach (var u in users)
-            {
-                var roles = await _userManager.GetRolesAsync(u);
-                roleMap[u.Id] = roles.FirstOrDefault() ?? "Employee";
-            }
-
-
 
             foreach (var a in results)
             {
@@ -154,7 +111,6 @@ namespace Humatrix_HRMS.Services
 
                 list.Add(new AttendanceListDto
                 {
-                    // ✅ Pull name from Employee table; fallback to User table if profile missing
                     EmployeeName = a.Employee != null
                         ? $"{a.Employee.FirstName} {a.Employee.LastName}"
                         : $"{a.User.FirstName} {a.User.LastName}",
@@ -171,66 +127,82 @@ namespace Humatrix_HRMS.Services
             return list;
         }
 
-        //private string GetStatus(Attendance a)
-        //{
-        //    if (a.CheckIn == null) return "Absent";
-
-        //    // Note: Ensure your server/app handles local time vs UTC consistently
-        //    var checkInTime = a.CheckIn.Value.ToLocalTime().TimeOfDay;
-        //    if (checkInTime > new TimeSpan(10, 30, 0)) return "Late";
-
-        //    if (a.CheckOut != null)
-        //    {
-        //        var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
-        //        if (hours < 4) return "Half Day";
-        //    }
-        //    return "Present";
-        //}
-
+        // Shared Helper for Status Logic
         private string GetStatus(Attendance a)
         {
+            // 1. If today and no check-in yet
+            if (a.Date.Date == DateTime.Today && a.CheckIn == null) return "Not Started";
+
+            // 2. If it's a past date and no check-in (The Background Service marks this)
             if (a.CheckIn == null) return "Absent";
 
+            // 3. Standard Shift Logic
             var shift = a.Employee?.Shift;
+            if (shift == null) return "Present";
 
-            if (shift == null)
-            {
-                return a.CheckOut != null ? "Present" : "Checked In";
-            }
-
-            var checkInTime = a.CheckIn.Value.TimeOfDay;
+            var checkInLocal = a.CheckIn.Value.ToLocalTime().TimeOfDay;
             var lateThreshold = shift.StartTime.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
-            bool isLate = checkInTime > lateThreshold;
+            bool isLate = checkInLocal > lateThreshold;
 
             if (a.CheckOut != null)
             {
-                var hoursWorked = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
-
-                if (hoursWorked < shift.MinimumHoursForHalfDay) return "Short Hours";
-                if (hoursWorked < shift.MinimumHoursForFullDay) return "Half Day";
-
+                var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
+                if (hours < shift.MinimumHoursForHalfDay) return "Short Hours";
+                if (hours < shift.MinimumHoursForFullDay) return "Half Day";
                 return isLate ? "Late" : "Present";
             }
 
-            // If they haven't checked out yet, show their morning status
             return isLate ? "Late (Active)" : "Checked In";
         }
 
         public async Task<Attendance?> GetTodayStatusAsync()
         {
             var user = await _currentUser.GetUserAsync();
-            //var today = DateTime.UtcNow.Date;
             var today = DateTime.Now.Date;
             return await _context.Attendances.FirstOrDefaultAsync(a => a.UserId == user.Id && a.Date == today);
         }
 
-        public async Task<List<Attendance>> GetMyAttendanceAsync()
+        // UPDATED: Now returns DTOs and handles "Virtual" rows for today
+        public async Task<List<AttendanceListDto>> GetMyAttendanceAsync()
         {
             var user = await _currentUser.GetUserAsync();
-            return await _context.Attendances
+            var employee = await _context.Employees
+                .Include(e => e.Shift)
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+            // Get actual records from DB (includes the 'Absent' rows from background service)
+            var dbRecords = await _context.Attendances
+                .Include(a => a.Employee).ThenInclude(e => e.Shift)
                 .Where(a => a.UserId == user.Id)
                 .OrderByDescending(a => a.Date)
+                .Take(30) // Show last 30 days
                 .ToListAsync();
+
+            var dtoList = new List<AttendanceListDto>();
+
+            // Check if today exists. If not, add a 'Virtual' Not Started row
+            if (!dbRecords.Any(r => r.Date == DateTime.Today))
+            {
+                dtoList.Add(new AttendanceListDto
+                {
+                    EmployeeName = $"{employee?.FirstName} {employee?.LastName}",
+                    Date = DateTime.Today,
+                    Status = "Not Started"
+                });
+            }
+
+            foreach (var rec in dbRecords)
+            {
+                dtoList.Add(new AttendanceListDto
+                {
+                    Date = rec.Date,
+                    CheckIn = rec.CheckIn,
+                    CheckOut = rec.CheckOut,
+                    Status = GetStatus(rec)
+                });
+            }
+
+            return dtoList;
         }
     }
 }

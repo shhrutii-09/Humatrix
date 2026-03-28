@@ -20,6 +20,9 @@ namespace Humatrix_HRMS.DTOs
         [Required(ErrorMessage = "Please select a designation")]
         public Guid? DesignationId { get; set; }
 
+        [Required(ErrorMessage = "Please assign a work shift")]
+        public Guid? ShiftId { get; set; }
+
         public string Role { get; set; } = "Employee";
     }
 }

@@ -1,42 +1,35 @@
 ﻿@page "/employee/attendance"
 @rendermode InteractiveServer
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-
-@* @attribute [Authorize(Roles = "Employee,HR")] *@
 @attribute [Authorize(Roles = "Employee")]
 
 @inject AttendanceService AttendanceService
 
 <h3 class="mb-3">Attendance</h3>
+
 @if (!string.IsNullOrEmpty(error))
 {
     <div class="alert alert-danger">@error</div>
 }
+
 <div class="card p-4 shadow-sm">
-
     <h5>Today's Attendance</h5>
-
     @if (!string.IsNullOrEmpty(message))
     {
         <div class="alert alert-info">@message</div>
     }
 
     <div class="mt-3">
-        <button class="btn btn-success me-2"
-                @onclick="CheckIn"
-                disabled="@isCheckedIn">
+        <button class="btn btn-success me-2" @onclick="CheckIn" disabled="@(isCheckedIn || isLoading)">
             Check In
         </button>
-
-        <button class="btn btn-danger"
-                @onclick="CheckOut"
-                disabled="@(!isCheckedIn || isCheckedOut)">
+        <button class="btn btn-danger" @onclick="CheckOut" disabled="@(!isCheckedIn || isCheckedOut || isLoading)">
             Check Out
         </button>
     </div>
-
 </div>
 
 <h5 class="mt-4">My Attendance History</h5>
@@ -47,22 +40,34 @@
 }
 else
 {
-    <table class="table table-bordered mt-2">
+    <table class="table table-bordered table-hover mt-3 shadow-sm bg-white">
         <thead class="table-dark">
             <tr>
                 <th>Date</th>
                 <th>Check In</th>
                 <th>Check Out</th>
+                <th>Status</th>
             </tr>
         </thead>
-
         <tbody>
-            @foreach (var item in attendanceList)
+            @if (attendanceList != null && attendanceList.Any())
+            {
+                @foreach (var att in attendanceList)
+                {
+                    <tr class="@(att.Status == "Absent" ? "table-danger" : att.Status == "Not Started" ? "text-muted" : "")">
+                        <td class="fw-bold">@att.Date.ToString("dd MMM yyyy")</td>
+                        <td>@(att.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "--:--")</td>
+                        <td>@(att.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "--:--")</td>
+                        <td>
+                            <span class="badge @GetStatusClass(att.Status)">@att.Status</span>
+                        </td>
+                    </tr>
+                }
+            }
+            else
             {
                 <tr>
-                    <td>@item.Date.ToShortDateString()</td>
-                    <td>@item.CheckIn?.ToLocalTime()</td>
-                    <td>@item.CheckOut?.ToLocalTime()</td>
+                    <td colspan="4" class="text-center text-muted">No attendance records found.</td>
                 </tr>
             }
         </tbody>
@@ -73,29 +78,24 @@ else
     private bool isCheckedIn;
     private bool isCheckedOut;
     private bool isLoading;
-
     private string? error;
-
-    private List<Attendance> attendanceList = new();
-
     private string? message;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await RefreshUI();
-    }
+    // CHANGE THIS LINE:
+    private List<AttendanceListDto> attendanceList = new();
+
+    protected override async Task OnInitializedAsync() => await RefreshUI();
 
     private async Task RefreshUI()
     {
         var status = await AttendanceService.GetTodayStatusAsync();
-
         if (status != null)
         {
             isCheckedIn = status.CheckIn != null;
             isCheckedOut = status.CheckOut != null;
-
-            message = $"Check-In: {status.CheckIn?.ToLocalTime()} | " +
-                      $"Check-Out: {status.CheckOut?.ToLocalTime()}";
+            message = isCheckedIn
+                ? $"Check-In: {status.CheckIn?.ToLocalTime():hh:mm tt} | Check-Out: {status.CheckOut?.ToLocalTime():hh:mm tt}"
+                : "No attendance for today";
         }
         else
         {
@@ -104,59 +104,45 @@ else
             message = "No attendance for today";
         }
 
+        // This now returns the DTO list
         attendanceList = await AttendanceService.GetMyAttendanceAsync();
-
-        StateHasChanged(); // 🔥 VERY IMPORTANT
     }
+
+    // Helper to keep the UI colors consistent with the Admin view
+    private string GetStatusClass(string status) => status switch
+    {
+        "Present" => "bg-success",
+        "Late" => "bg-warning text-dark",
+        "Late (Active)" => "bg-warning text-dark",
+        "Half Day" => "bg-info",
+        "Short Hours" => "bg-secondary",
+        "Absent" => "bg-danger",
+        "Checked In" => "bg-primary",
+        "Not Started" => "bg-light text-dark",
+        _ => "bg-secondary"
+    };
 
     private async Task CheckIn()
     {
         try
         {
-            isLoading = true;
-            message = "Checking in...";
-            StateHasChanged();
-
+            isLoading = true; error = null;
             await AttendanceService.CheckInAsync();
-
-            await RefreshUI(); // 🔥 refresh everything
-
-            message = "Checked in successfully";
+            await RefreshUI();
         }
-        catch (Exception ex)
-        {
-            // message = ex.Message;
-            error = ex.Message;
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { isLoading = false; }
     }
 
     private async Task CheckOut()
     {
         try
         {
-            isLoading = true;
-            message = "Checking out...";
-            StateHasChanged();
-
+            isLoading = true; error = null;
             await AttendanceService.CheckOutAsync();
-
-            await RefreshUI(); // 🔥 refresh everything
-
-            message = "Checked out successfully";
+            await RefreshUI();
         }
-        catch (Exception ex)
-        {
-            message = ex.Message;
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { isLoading = false; }
     }
 }
