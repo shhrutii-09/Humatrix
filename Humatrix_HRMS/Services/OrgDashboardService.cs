@@ -27,15 +27,19 @@ namespace Humatrix_HRMS.Services
 
             var orgId = user.OrganizationId.Value;
 
-            // ✅ Total Employees (from Employee table)
-            var totalEmployees = await _context.Employees
-                .CountAsync(e => e.OrganizationId == orgId);
+            // ✅ Get active user IDs first (from Identity)
+            var activeUserIds = await _context.Users
+                .Where(u => u.OrganizationId == orgId && u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
 
-            // ✅ Active Users (Identity)
-            var activeEmployees = await _context.Users
-                .CountAsync(u => u.OrganizationId == orgId && u.IsActive);
+            // ✅ Active Employees (match with active users)
+            var activeEmployees = await _context.Employees
+                .CountAsync(e =>
+                    e.OrganizationId == orgId &&
+                    activeUserIds.Contains(e.UserId));
 
-            // ✅ Total HR (from roles)
+            // ✅ Active HR
             var totalHR = await _context.UserRoles
                 .Join(_context.Roles,
                       ur => ur.RoleId,
@@ -44,10 +48,14 @@ namespace Humatrix_HRMS.Services
                 .Join(_context.Users,
                       x => x.UserId,
                       u => u.Id,
-                      (x, u) => new { x.Name, u.OrganizationId })
+                      (x, u) => new { x.Name, u.OrganizationId, u.IsActive })
                 .CountAsync(x =>
                     x.Name == "HR" &&
-                    x.OrganizationId == orgId);
+                    x.OrganizationId == orgId &&
+                    x.IsActive);
+
+            // ✅ Total Employees = Active Employees + Active HR
+            var totalEmployees = activeEmployees + totalHR;
 
             // ✅ Departments
             var totalDepartments = await _context.Departments
