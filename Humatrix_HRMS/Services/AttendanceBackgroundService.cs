@@ -19,8 +19,6 @@ namespace Humatrix_HRMS.Services
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                // Run a check every hour. 
-                // This ensures that even if the server was down at 1 AM, it catches up quickly.
                 try
                 {
                     await MarkAbsentsAsync();

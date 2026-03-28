@@ -128,7 +128,6 @@
         border: 1px solid #5c4df2 !important;
     }
 
-    /* Validation styling */
     .validation-message {
         display: block;
         font-size: 0.75rem;
@@ -148,11 +147,10 @@
         try
         {
             generatedLink = await OrgService.CreateOrganizationAsync(orgDto);
-            orgDto = new(); // Reset form after success
+            orgDto = new(); 
         }
         catch (Exception ex)
         {
-            // Handle specific errors if needed
             Console.WriteLine(ex.Message);
         }
         finally { isSubmitting = false; }
@@ -162,7 +160,6 @@
     {
         if (!string.IsNullOrEmpty(generatedLink))
         {
-            // Using your JS helper from App.razor
             await JS.InvokeVoidAsync("clipboardCopy.copyText", generatedLink);
         }
     }
