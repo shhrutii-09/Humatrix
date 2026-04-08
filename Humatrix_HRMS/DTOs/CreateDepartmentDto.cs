@@ -10,5 +10,8 @@ namespace Humatrix_HRMS.DTOs
 
         [StringLength(250, ErrorMessage = "Description cannot exceed 250 characters")]
         public string Description { get; set; }
+
+        public bool IsActive { get; set; } // ✅ REQUIRED
+
     }
 }

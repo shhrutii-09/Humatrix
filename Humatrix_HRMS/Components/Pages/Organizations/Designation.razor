@@ -10,97 +10,139 @@
 @inject DesignationService DesignationService
 @inject NavigationManager Nav
 
-<PageTitle>Designations</PageTitle>
+<PageTitle>Designations | Humatrix HRMS</PageTitle>
 
-<h3>Designations</h3>
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-normal">Designations</h2>
+            <p class="text-muted small">Manage job titles and their associated departments.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary shadow-sm"
+                    style="background-color: #5c4ac7; border: none;"
+                    @onclick="GoToCreate">
+                <i class="bi bi-plus-circle me-2"></i> ADD DESIGNATION
+            </button>
+            <button class="btn btn-outline-secondary shadow-sm" @onclick="GoBack">
+                DASHBOARD
+            </button>
+        </div>
+    </div>
 
-<button class="btn btn-success mb-3" @onclick="GoToCreate">
-    + Add Designation
-</button>
-
-@if (designations == null)
-{
-    <p>Loading...</p>
-}
-else if (!designations.Any())
-{
-    <p>No designations found.</p>
-}
-else
-{
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <table class="table">
-                <thead>
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
                     <tr>
-                        <th>Name</th>
-                        <th>Department</th>
-                        <th style="width:180px;">Actions</th>
+                        <th class="ps-4 border-0 text-muted small">DESIGNATION NAME</th>
+                        <th class="border-0 text-muted small">DEPARTMENT</th>
+                        <th class="border-0 text-muted small text-center">STATUS</th>
+                        <th class="border-0 text-muted small text-end pe-4">ACTIONS</th>
                     </tr>
                 </thead>
-
                 <tbody>
-                    @foreach (var d in designations)
+                    @if (designations == null)
                     {
                         <tr>
-                            <td>
-                                @if (editId == d.DesignationId)
-                                {
-                                    <InputText class="form-control"
-                                               @bind-Value="editName" />
-                                }
-                                else
-                                {
-                                    @d.Name
-                                }
-                            </td>
-
-                            <td>
-                                @d.Department
-                            </td>
-
-                            <td>
-                                @if (editId == d.DesignationId)
-                                {
-                                    <button class="btn btn-success btn-sm me-2"
-                                            @onclick="() => SaveEdit(d.DesignationId)">
-                                        Save
-                                    </button>
-
-                                    <button class="btn btn-secondary btn-sm"
-                                            @onclick="CancelEdit">
-                                        Cancel
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-warning btn-sm me-2"
-                                            @onclick="() => StartEdit(d)">
-                                        Edit
-                                    </button>
-
-                                    <button class="btn btn-danger btn-sm"
-                                            @onclick="() => Delete(d.DesignationId)">
-                                        Delete
-                                    </button>
-                                }
+                            <td colspan="4" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <div class="text-muted mt-2">Loading designations...</div>
                             </td>
                         </tr>
                     }
+                    else if (!designations.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-5">
+                                <i class="bi bi-briefcase text-muted display-4 d-block mb-3"></i>
+                                <span class="text-muted">No designations found.</span>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var d in designations)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    @if (editId == d.DesignationId)
+                                    {
+                                        <div class="input-group input-group-sm">
+                                            <InputText class="form-control shadow-none" @bind-Value="editName" />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="fw-bold text-dark">@d.Name</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-soft-info text-info">@d.Department</span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input shadow-none"
+                                               type="checkbox"
+                                               checked="@d.IsActive"
+                                               @onchange="(e) => ToggleStatus(d, e)" />
+                                        <span class="small @(d.IsActive ? "text-success" : "text-danger") ms-1">
+                                            @(d.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    @if (editId == d.DesignationId)
+                                    {
+                                        <button class="btn btn-sm btn-success me-1 px-3" @onclick="() => SaveEdit(d.DesignationId)">
+                                            Save
+                                        </button>
+                                        <button class="btn btn-sm btn-light border" @onclick="CancelEdit">
+                                            Cancel
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-light border text-primary"
+                                                title="Edit Designation"
+                                                @onclick="() => StartEdit(d)">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
                 </tbody>
-
             </table>
         </div>
     </div>
-}
+</div>
 
-<button class="btn btn-secondary mt-3" @onclick="GoBack">
-    Back to Dashboard
-</button>
+<style>
+    .bg-soft-info {
+        background-color: rgba(13, 202, 240, 0.15);
+    }
+
+    .form-switch .form-check-input {
+        width: 2.5em;
+        height: 1.25em;
+        cursor: pointer;
+    }
+
+        .form-switch .form-check-input:checked {
+            background-color: #198754;
+            border-color: #198754;
+        }
+
+    .form-control:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+    }
+</style>
 
 @code {
     private List<DesignationDto>? designations;
-
     private Guid? editId;
     private Guid? editDepartmentId;
     private string? editName;
@@ -120,30 +162,35 @@ else
         editDepartmentId = d.DepartmentId;
     }
 
-    void CancelEdit()
-    {
-        editId = null;
-    }
+    void CancelEdit() => editId = null;
 
     async Task SaveEdit(Guid id)
     {
-        if (string.IsNullOrWhiteSpace(editName))
-            return;
-
-        await DesignationService.UpdateAsync(id, new CreateDesignationDto
+        try
         {
-            Name = editName,
-            // DepartmentId = Guid.Empty
-            DepartmentId = editDepartmentId.Value
-        });
+            if (string.IsNullOrWhiteSpace(editName)) return;
 
-        editId = null;
-        designations = await DesignationService.GetAllAsync();
+            await DesignationService.UpdateAsync(id, new CreateDesignationDto
+            {
+                Name = editName,
+                DepartmentId = editDepartmentId ?? Guid.Empty
+            });
+
+            editId = null;
+            designations = await DesignationService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log the error or show a notification instead of crashing
+            Console.WriteLine(ex.Message);
+        }
     }
 
-    async Task Delete(Guid id)
+    private async Task ToggleStatus(DesignationDto d, ChangeEventArgs e)
     {
-        await DesignationService.DeleteAsync(id);
+        var isActive = (bool)(e.Value ?? false);
+        d.IsActive = isActive;
+        await DesignationService.ToggleStatusAsync(d.DesignationId, isActive);
         designations = await DesignationService.GetAllAsync();
     }
 }

@@ -10,46 +10,94 @@
 @inject DepartmentService DeptService
 @inject NavigationManager Nav
 
-<PageTitle>Create Department</PageTitle>
+<PageTitle>Create Department | Humatrix HRMS</PageTitle>
 
-<h3>Create Department</h3>
-
-<div class="card p-4 shadow-sm">
-    <EditForm Model="model" OnValidSubmit="HandleCreateDepartment">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" />
-
-        <div class="mb-3">
-            <label class="form-label">Department Name</label>
-            <InputText @bind-Value="model.Name"
-                       class="form-control"
-                       placeholder="Enter department name" />
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="fw-normal">Create New Department</h2>
+            <p class="text-muted small">Define a new organizational unit within the company.</p>
         </div>
-
-        <div class="mb-3">
-            <label class="form-label">Description</label>
-            <InputTextArea @bind-Value="model.Description"
-                           class="form-control" />
-        </div>
-
-        <button type="submit"
-                class="btn btn-success me-2"
-                disabled="@isSubmitting">
-            @(isSubmitting ? "Creating..." : "Create Department")
-        </button>
-
-        <button type="button"
-                class="btn btn-secondary"
+        <button class="btn btn-primary shadow-sm"
+                style="background-color: #5c4ac7; border: none;"
                 @onclick="GoBack">
-            Back to Departments
+            BACK TO DEPARTMENTS
         </button>
-    </EditForm>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <EditForm Model="model" OnValidSubmit="HandleCreateDepartment">
+                <DataAnnotationsValidator />
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">Department Name</label>
+                            <InputText @bind-Value="model.Name"
+                                       class="form-control bg-light"
+                                       placeholder="e.g. Engineering, Marketing..." />
+                            <ValidationMessage For="@(() => model.Name)" class="text-danger small" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">Description</label>
+                            <InputTextArea @bind-Value="model.Description"
+                                           class="form-control bg-light"
+                                           rows="4"
+                                           placeholder="Briefly describe the department's responsibilities..." />
+                            <ValidationMessage For="@(() => model.Description)" class="text-danger small" />
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(error))
+                        {
+                            <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                <div>@error</div>
+                            </div>
+                        }
+
+                        <div class="d-flex gap-2 border-top pt-4">
+                            <button type="submit"
+                                    class="btn btn-primary px-4 shadow-sm"
+                                    style="background-color: #5c4ac7; border: none;"
+                                    disabled="@isSubmitting">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>Creating...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-circle me-2"></i>
+                                
+                                    <span>Create Department</span>
+                                }
+                            </button>
+                            <button type="button"
+                                    class="btn btn-light border px-4"
+                                    @onclick="GoBack">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </EditForm>
+        </div>
+    </div>
 </div>
 
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger mt-3">@error</div>
-}
+<style>
+    .form-control:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+    }
+
+    .form-control::placeholder {
+        color: #adb5bd;
+        font-size: 0.9rem;
+    }
+</style>
 
 @code {
     public CreateDepartmentDto model { get; set; } = new();

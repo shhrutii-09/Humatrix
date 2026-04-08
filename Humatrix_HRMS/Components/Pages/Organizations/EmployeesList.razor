@@ -12,6 +12,7 @@
 @inject EmployeeService EmployeeService
 @inject DepartmentService DeptService
 @inject DesignationService DesignationService
+@inject NavigationManager Nav
 @inject ShiftService ShiftService
 @inject AuthenticationStateProvider AuthStateProvider
 
@@ -23,7 +24,12 @@
             <h2 class="fw-normal">Employee Directory</h2>
             <p class="text-muted small">Manage staff..</p>
         </div>
-        <button class="btn btn-primary shadow-sm" style="background-color: #5c4ac7; border: none;" @onclick='() => { /* Navigate to Add Employee */ }'>
+        @* <button class="btn btn-primary shadow-sm" style="background-color: #5c4ac7; border: none;" @onclick='() => { /* Navigate to Add Employee */ }'>
+            <i class="bi bi-person-plus-fill me-2"></i> ADD NEW EMPLOYEE
+        </button> *@
+        <button class="btn btn-primary shadow-sm"
+                style="background-color: #5c4ac7; border: none;"
+                @onclick="NavigateToAddEmployee">
             <i class="bi bi-person-plus-fill me-2"></i> ADD NEW EMPLOYEE
         </button>
     </div>
@@ -46,8 +52,7 @@
                 @if (UserIsOrgAdmin)
                 {
                     <div class="col-md-4">
-                        <select class="form-select" @onchange="OnDepartmentFilterChanged">
-                            <option value="">All Departments</option>
+<select class="form-select" @onchange="OnDepartmentFilterChanged" value="@filterDepartmentId">                            <option value="">All Departments</option>
                             @foreach (var d in departments)
                             {
                                 <option value="@d.DepartmentId">@d.Name</option>
@@ -120,7 +125,21 @@
                                         </span>
                                     </div>
                                 </td>
+                                @* <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-light border text-primary me-1" title="Edit Employee" @onclick="() => OpenEditModal(e)">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                </td> *@
                                 <td class="text-end pe-4">
+                                    @* Add this View Button *@
+                                    @if (e.EmployeeId != Guid.Empty)
+                                    {
+                                        <button class="btn btn-sm btn-light border text-info me-1"
+                                                @onclick='() => Nav.NavigateTo($"/employee/details/{e.EmployeeId}")'>
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    }
+
                                     <button class="btn btn-sm btn-light border text-primary me-1" title="Edit Employee" @onclick="() => OpenEditModal(e)">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
@@ -354,4 +373,18 @@
     }
 
     void CloseModal() => isEditOpen = false;
+
+
+    private void NavigateToAddEmployee()
+    {
+        if (UserIsOrgAdmin)
+        {
+            Nav.NavigateTo("/org/add-employee");
+        }
+        else
+        {
+            // If they aren't an OrgAdmin, they must be HR (based on your [Authorize] attribute)
+            Nav.NavigateTo("/hr/add-employee");
+        }
+    }
 }

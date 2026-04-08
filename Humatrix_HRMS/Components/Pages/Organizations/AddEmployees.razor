@@ -159,7 +159,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        departments = await DeptService.GetAllAsync();
+        departments = await DeptService.GetActiveAsync();
         shifts = await ShiftService.GetAllShiftsAsync();
     }
 
@@ -170,14 +170,18 @@
         if (Guid.TryParse(selectedValue, out var deptId))
         {
             model.DepartmentId = deptId;
+
+            // ✅ CLEAR OLD DESIGNATION
+            model.DesignationId = null;
+
             designations = await DesignationService.GetByDepartmentAsync(deptId);
         }
         else
         {
             model.DepartmentId = null;
+            model.DesignationId = null;
             designations.Clear();
         }
-        StateHasChanged();
     }
 
     private async Task HandleSubmit()

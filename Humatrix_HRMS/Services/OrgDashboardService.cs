@@ -7,19 +7,31 @@ namespace Humatrix_HRMS.Services
 {
     public class OrgDashboardService
     {
-        private readonly ApplicationDbContext _context;
+        //private readonly ApplicationDbContext _context;
+        //private readonly CurrentUserService _currentUser;
+
+        //public OrgDashboardService(
+        //    ApplicationDbContext context,
+        //    CurrentUserService currentUser)
+        //{
+        //    _context = context;
+        //    _currentUser = currentUser;
+        //}
+
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
 
         public OrgDashboardService(
-            ApplicationDbContext context,
+            IDbContextFactory<ApplicationDbContext> contextFactory,
             CurrentUserService currentUser)
         {
-            _context = context;
+            _contextFactory = contextFactory;
             _currentUser = currentUser;
         }
 
         public async Task<OrgDashboardDto> GetDashboardDataAsync()
         {
+            using var _context = _contextFactory.CreateDbContext();
             var user = await _currentUser.GetUserAsync();
 
             if (user == null || user.OrganizationId == null)
@@ -27,43 +39,32 @@ namespace Humatrix_HRMS.Services
 
             var orgId = user.OrganizationId.Value;
 
-            // ✅ Get active user IDs first (from Identity)
+            // 1. Get Active User IDs for this Org
             var activeUserIds = await _context.Users
                 .Where(u => u.OrganizationId == orgId && u.IsActive)
                 .Select(u => u.Id)
                 .ToListAsync();
 
-            // ✅ Active Employees (match with active users)
+            // 2. Count Active Employees (linked to active users)
             var activeEmployees = await _context.Employees
-                .CountAsync(e =>
-                    e.OrganizationId == orgId &&
-                    activeUserIds.Contains(e.UserId));
+                .CountAsync(e => e.OrganizationId == orgId && activeUserIds.Contains(e.UserId));
 
-            // ✅ Active HR
-            var totalHR = await _context.UserRoles
-                .Join(_context.Roles,
-                      ur => ur.RoleId,
-                      r => r.Id,
-                      (ur, r) => new { ur.UserId, r.Name })
-                .Join(_context.Users,
-                      x => x.UserId,
-                      u => u.Id,
-                      (x, u) => new { x.Name, u.OrganizationId, u.IsActive })
-                .CountAsync(x =>
-                    x.Name == "HR" &&
-                    x.OrganizationId == orgId &&
-                    x.IsActive);
+            // 3. Count Active HRs
+            var totalHR = await (
+                from ur in _context.UserRoles
+                join r in _context.Roles on ur.RoleId equals r.Id
+                join u in _context.Users on ur.UserId equals u.Id
+                where r.Name == "HR" && u.OrganizationId == orgId && u.IsActive
+                select u.Id
+            ).CountAsync();
 
-            // ✅ Total Employees = Active Employees + Active HR
-            var totalEmployees = activeEmployees + totalHR;
-
-            // ✅ Departments
+            // 4. FIX: Count ACTIVE Departments (Removed !d.IsActive)
             var totalDepartments = await _context.Departments
-                .CountAsync(d => d.OrganizationId == orgId && !d.IsDeleted);
+                .CountAsync(d => d.OrganizationId == orgId && d.IsActive);
 
             return new OrgDashboardDto
             {
-                TotalEmployees = totalEmployees,
+                TotalEmployees = activeEmployees + totalHR,
                 ActiveEmployees = activeEmployees,
                 TotalHR = totalHR,
                 TotalDepartments = totalDepartments

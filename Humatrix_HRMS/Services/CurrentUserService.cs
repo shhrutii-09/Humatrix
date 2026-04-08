@@ -1,24 +1,40 @@
 ﻿using Humatrix_HRMS.Data;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace Humatrix_HRMS.Services
 {
     public class CurrentUserService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
-        public CurrentUserService(UserManager<ApplicationUser> userManager,
-                                  IHttpContextAccessor httpContextAccessor)
+        public CurrentUserService(
+            IHttpContextAccessor httpContextAccessor,
+            IDbContextFactory<ApplicationDbContext> contextFactory)
         {
-            _userManager = userManager;
             _httpContextAccessor = httpContextAccessor;
+            _contextFactory = contextFactory;
         }
 
         public async Task<ApplicationUser?> GetUserAsync()
         {
-            var user = _httpContextAccessor.HttpContext?.User;
-            return await _userManager.GetUserAsync(user);
+            var principal = _httpContextAccessor.HttpContext?.User;
+
+            if (principal == null)
+                return null;
+
+            var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+                return null;
+
+            using var context = _contextFactory.CreateDbContext();
+
+            return await context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId);
         }
     }
 }

@@ -6,6 +6,8 @@
         public Guid DepartmentId { get; set; }
         public string? Name { get; set; }
         public string? Department { get; set; }
+        public bool IsActive { get; set; } // ✅ ADD
+
 
     }
 }

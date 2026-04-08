@@ -11,77 +11,120 @@
 @inject DepartmentService DeptService
 @inject NavigationManager Nav
 
-<PageTitle>Create Designation</PageTitle>
+<PageTitle>Create Designation | Humatrix HRMS</PageTitle>
 
-<h3>Create Designation</h3>
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-normal">Add New Designation</h2>
+            <p class="text-muted small">Define a new job role within your organization.</p>
+        </div>
+        <button class="btn btn-outline-secondary shadow-sm" @onclick="GoBack">
+            CANCEL
+        </button>
+    </div>
 
-<div class="card p-4 shadow-sm">
-    <EditForm Model="model" OnValidSubmit="HandleCreate">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" />
+    <div class="row">
+        <div class="col-lg-6 col-md-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <EditForm Model="model" OnValidSubmit="HandleCreate">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-bold">DESIGNATION NAME</label>
+                            <InputText @bind-Value="model.Name"
+                                       class="form-control form-control-lg shadow-none"
+                                       style="font-size: 0.95rem;"
+                                       placeholder="e.g. Senior Software Engineer" />
+                            <ValidationMessage For="@(() => model.Name)" class="text-danger small" />
+                        </div>
 
-        <div class="mb-3">
-            <label>Name</label>
-            <InputText @bind-Value="model.Name"
-                       class="form-control"
-                       placeholder="Enter designation" />
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-bold">ASSIGN TO DEPARTMENT</label>
+                            <InputSelect @bind-Value="model.DepartmentId"
+                                         class="form-select form-control-lg shadow-none"
+                                         style="font-size: 0.95rem;">
+                                <option value="@Guid.Empty">-- Select Department --</option>
+                                @foreach (var d in departments)
+                                {
+                                    <option value="@d.DepartmentId">@d.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => model.DepartmentId)" class="text-danger small" />
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(error))
+                        {
+                            <div class="alert alert-danger py-2 small mb-4">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i> @error
+                            </div>
+                        }
+
+                        <div class="d-grid mt-2">
+                            <button type="submit" 
+                                    class="btn btn-primary btn-lg shadow-sm" 
+                                    style="background-color: #5c4ac7; border: none; font-size: 1rem;" 
+                                    disabled="@isSubmitting">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span> <span>CREATING...</span>
+                                }
+                                else
+                                {
+                                    <span>CREATE DESIGNATION</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
         </div>
 
-        <div class="mb-3">
-            <label>Department</label>
-            <InputSelect @bind-Value="model.DepartmentId"
-                         class="form-control">
-                @* <option value="">-- Select Department --</option> *@
-                <option value="@Guid.Empty">-- Select Department --</option>
-                @foreach (var d in departments)
-                {
-                    <option value="@d.DepartmentId">@d.Name</option>
-                }
-            </InputSelect>
-        </div>
-
-        <button class="btn btn-success me-2" disabled="@isSubmitting">
-            @(isSubmitting ? "Creating..." : "Create")
-        </button>
-
-        <button type="button"
-                class="btn btn-secondary"
-                @onclick="GoBack">
-            Back
-        </button>
-    </EditForm>
+        @* <div class="col-lg-4 d-none d-lg-block">
+            <div class="card bg-light border-0">
+                <div class="card-body p-4 text-muted small">
+                    <h6 class="text-dark mb-3">Quick Tips</h6>
+                    <ul class="ps-3">
+                        <li class="mb-2">Designations are specific to departments.</li>
+                        <li class="mb-2">Avoid duplicate names within the same department.</li>
+                        <li>You can deactivate designations later from the list view if they are no longer needed.</li>
+                    </ul>
+                </div>
+            </div>
+        </div> *@
+    </div>
 </div>
 
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger mt-3">@error</div>
-}
+<style>
+    .form-control:focus, .form-select:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+    }
+
+    .form-label {
+        letter-spacing: 0.5px;
+    }
+</style>
 
 @code {
     private CreateDesignationDto model = new();
     private List<DepartmentDto> departments = new();
-
     private bool isSubmitting = false;
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
-        departments = await DeptService.GetAllAsync();
+        departments = await DeptService.GetActiveAsync();
     }
 
     async Task HandleCreate()
     {
         error = null;
 
-        if (string.IsNullOrWhiteSpace(model.Name))
-        {
-            error = "Designation name required";
-            return;
-        }
-
         if (model.DepartmentId == Guid.Empty)
         {
-            error = "Select department";
+            error = "Please select a department.";
             return;
         }
 

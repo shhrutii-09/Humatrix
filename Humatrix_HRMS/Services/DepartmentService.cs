@@ -7,19 +7,17 @@ namespace Humatrix_HRMS.Services
 {
     public class DepartmentService
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
 
-        public DepartmentService(ApplicationDbContext context,
-                                 CurrentUserService currentUser)
+        public DepartmentService(
+            IDbContextFactory<ApplicationDbContext> contextFactory,
+            CurrentUserService currentUser)
         {
-            _context = context;
+            _contextFactory = contextFactory;
             _currentUser = currentUser;
         }
 
-        // =========================
-        // GET CURRENT USER (COMMON METHOD)
-        // =========================
         private async Task<ApplicationUser> GetCurrentUserAsync()
         {
             var user = await _currentUser.GetUserAsync();
@@ -30,20 +28,15 @@ namespace Humatrix_HRMS.Services
             return user;
         }
 
-        // =========================
-        // CREATE DEPARTMENT
-        // =========================
+        // ✅ CREATE
         public async Task CreateAsync(CreateDepartmentDto dto)
         {
+            using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
-
-            if (string.IsNullOrWhiteSpace(dto.Name))
-                throw new Exception("Department name is required");
 
             var exists = await _context.Departments.AnyAsync(d =>
                 d.OrganizationId == user.OrganizationId &&
-                d.Name.ToLower().Trim() == dto.Name.ToLower().Trim() &&
-                !d.IsDeleted);
+                d.Name.ToLower().Trim() == dto.Name.ToLower().Trim());
 
             if (exists)
                 throw new Exception("Department already exists");
@@ -52,45 +45,45 @@ namespace Humatrix_HRMS.Services
             {
                 Name = dto.Name.Trim(),
                 Description = dto.Description,
-                OrganizationId = user.OrganizationId.Value
+                OrganizationId = user.OrganizationId.Value,
+                IsActive = true
             };
 
             _context.Departments.Add(dept);
             await _context.SaveChangesAsync();
         }
-        // =========================
-        // GET ALL DEPARTMENTS (ORG BASED)
-        // =========================
+
+        // ✅ GET ALL (IMPORTANT: show ALL, not only active)
         public async Task<List<DepartmentDto>> GetAllAsync()
         {
+            using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
             return await _context.Departments
-                .Where(d => d.OrganizationId == user.OrganizationId && !d.IsDeleted)
-                .OrderBy(d => d.Name) // 🔥 better UI sorting
+                .Where(d => d.OrganizationId == user.OrganizationId)
+                .OrderBy(d => d.Name)
                 .Select(d => new DepartmentDto
                 {
                     DepartmentId = d.DepartmentId,
                     Name = d.Name,
-                    Description = d.Description
+                    Description = d.Description,
+                    IsActive = d.IsActive
                 })
                 .ToListAsync();
         }
 
-        // =========================
-        // UPDATE DEPARTMENT
-        // =========================
+        // ✅ UPDATE (IMPORTANT FIX)
         public async Task UpdateAsync(Guid id, string name, string? description)
         {
+            using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
             var dept = await _context.Departments
-                .FirstOrDefaultAsync(d => d.DepartmentId == id && !d.IsDeleted);
+                .FirstOrDefaultAsync(d => d.DepartmentId == id);
 
             if (dept == null)
                 throw new Exception("Department not found");
 
-            // 🔐 SECURITY CHECK
             if (dept.OrganizationId != user.OrganizationId)
                 throw new Exception("Access denied");
 
@@ -100,54 +93,64 @@ namespace Humatrix_HRMS.Services
             await _context.SaveChangesAsync();
         }
 
-        // =========================
-        // DELETE (SOFT DELETE)
-        // =========================
-        public async Task DeleteAsync(Guid id)
+        // ✅ TOGGLE (MAIN FIX)
+        public async Task ToggleStatusAsync(Guid id, bool isActive)
         {
+            using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
             var dept = await _context.Departments
-                .FirstOrDefaultAsync(d => d.DepartmentId == id && !d.IsDeleted);
+                .FirstOrDefaultAsync(d => d.DepartmentId == id);
 
             if (dept == null)
                 throw new Exception("Department not found");
 
-            // 🔐 SECURITY CHECK
             if (dept.OrganizationId != user.OrganizationId)
                 throw new Exception("Access denied");
 
-            dept.IsDeleted = true;
+            dept.IsActive = isActive; // ✅ CORRECT
 
             await _context.SaveChangesAsync();
         }
 
-
-        // =========================
-        // GET BY ID (FOR HR / UI)
-        // =========================
         public async Task<DepartmentDto?> GetByIdAsync(Guid id)
         {
+            using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
             var dept = await _context.Departments
-                .Where(d => d.DepartmentId == id && !d.IsDeleted)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(d =>
+                    d.DepartmentId == id &&
+                    d.OrganizationId == user.OrganizationId);
 
             if (dept == null)
                 return null;
-
-            // 🔐 SECURITY CHECK (MULTI-TENANT SAFE)
-            if (dept.OrganizationId != user.OrganizationId)
-                throw new Exception("Access denied");
 
             return new DepartmentDto
             {
                 DepartmentId = dept.DepartmentId,
                 Name = dept.Name,
-                Description = dept.Description
+                Description = dept.Description,
+                IsActive = dept.IsActive
             };
         }
 
+        public async Task<List<DepartmentDto>> GetActiveAsync()
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            var user = await GetCurrentUserAsync();
+
+            return await _context.Departments
+                .Where(d => d.OrganizationId == user.OrganizationId && d.IsActive)
+                .OrderBy(d => d.Name)
+                .Select(d => new DepartmentDto
+                {
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name,
+                    Description = d.Description,
+                    IsActive = d.IsActive
+                })
+                .ToListAsync();
+        }
     }
 }

@@ -5,7 +5,10 @@
 @using Microsoft.EntityFrameworkCore
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserManager<ApplicationUser> UserManager
-@inject ApplicationDbContext Db
+@* @inject ApplicationDbContext Db *@
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
 @inject NavigationManager Nav
 @inject SignInManager<ApplicationUser> SignInManager
 <div class="page">
@@ -30,10 +33,14 @@
     <a class="dismiss">🗙</a>
 </div>
 
-@code{
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+
+@code {
+    private bool _checked = false;
+
+    protected override async Task OnParametersSetAsync()
     {
-        if (!firstRender) return;
+        if (_checked) return;
+        _checked = true;
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var userPrincipal = authState.User;
@@ -42,23 +49,25 @@
         {
             var user = await UserManager.GetUserAsync(userPrincipal);
 
-            if (user != null)
+            if (user == null)
+                return;
+
+            if (!user.IsActive)
             {
-                if (!user.IsActive)
-                {
-                    await SignInManager.SignOutAsync();
-                    Nav.NavigateTo("/Account/Login", true);
-                    return;
-                }
+                await SignInManager.SignOutAsync();
+                Nav.NavigateTo("/Account/Login", true);
+                return;
+            }
 
-                var org = await Db.Organizations
-                    .FirstOrDefaultAsync(o => o.OrganizationId == user.OrganizationId);
+            using var db = DbFactory.CreateDbContext();
 
-                if (org != null && !org.IsActive)
-                {
-                    await SignInManager.SignOutAsync();
-                    Nav.NavigateTo("/Account/Login", true);
-                }
+            var org = await db.Organizations
+                .FirstOrDefaultAsync(o => o.OrganizationId == user.OrganizationId);
+
+            if (org != null && !org.IsActive)
+            {
+                await SignInManager.SignOutAsync();
+                Nav.NavigateTo("/Account/Login", true);
             }
         }
     }

@@ -9,7 +9,7 @@
 
         public string Name { get; set; }
 
-        public bool IsDeleted { get; set; } = false;
+        public bool IsActive { get; set; } = true; // ✅ NEW
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

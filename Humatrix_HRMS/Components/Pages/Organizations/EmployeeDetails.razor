@@ -1,0 +1,202 @@
+﻿@page "/employee/details/{id:guid}"
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin,HR")]
+@inject EmployeeService EmployeeService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Employee Details | Humatrix</PageTitle>
+
+<div class="container py-4">
+
+    <div class="mb-4">
+        <button class="btn btn-link text-decoration-none p-0 text-muted"
+                @onclick='() => Nav.NavigateTo("/employees")'>
+            <i class="bi bi-arrow-left me-1"></i> Back to Directory
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <div class="mt-2 text-muted">Loading employee profile...</div>
+        </div>
+    }
+    else if (data == null)
+    {
+        <div class="text-center text-danger">
+            Employee not found.
+        </div>
+    }
+    else
+    {
+        <!-- YOUR UI EXACT SAME -->
+        <div class="card shadow-sm border-0 p-4 mb-4">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div class="avatar-lg bg-primary text-white d-flex align-items-center justify-content-center rounded-circle fw-bold me-4"
+                         style="width: 80px; height: 80px; font-size: 2rem;">
+                        @data.Initial
+                    </div>
+                    <div>
+                        <h3 class="fw-bold mb-1">@data.FullName</h3>
+                        <p class="text-muted mb-0">@data.DesignationName — @data.DepartmentName</p>
+                    </div>
+                </div>
+                <span class="badge @(data.Status == "Active" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-2">
+                    @data.Status
+                </span>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-8">
+                <div class="card shadow-sm border-0 p-4 h-100">
+                    <h5 class="fw-bold mb-4 border-bottom pb-2">Employment Details</h5>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="small text-muted d-block">Employee Code</label>
+                            <span class="fw-bold">@data.EmployeeCode</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="small text-muted d-block">Joining Date</label>
+                            <span class="fw-bold">@data.JoiningDate.ToString("MMMM dd, yyyy")</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="small text-muted d-block">Email Address</label>
+                            <span class="fw-bold">@data.Email</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="small text-muted d-block">Work Shift</label>
+                            <span class="fw-bold text-primary">@data.ShiftName</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="display-6 fw-bold">
+                    @data.AttendancePercentage.ToString("0")%
+                </div>
+                <p class="text-muted small mt-2">
+                    @data.PresentDays / @data.TotalDays days present
+                </p>
+
+                @* <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary">
+                        <i class="bi bi-pencil me-2"></i> Edit Profile
+                    </button>
+                    <button class="btn btn-outline-secondary">
+                        <i class="bi bi-file-earmark-text me-2"></i> View History
+                    </button>
+                </div> *@
+            </div>
+
+            <div class="card shadow-sm border-0 p-4 mt-4">
+                <h5 class="fw-bold mb-3 border-bottom pb-2">Recent Attendance</h5>
+
+                @if (!data.RecentAttendance.Any())
+                {
+                    <p class="text-muted">No attendance records found.</p>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr class="text-muted small">
+                                <th>Date</th>
+                                <th>Check-In</th>
+                                <th>Check-Out</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in data.RecentAttendance)
+                            {
+                                <tr>
+                                    <td>@a.Date.ToString("dd MMM yyyy")</td>
+                                    <td>@(a.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "-")</td>
+                                    <td>@(a.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "-")</td>
+                                    <td>
+                                        <span class="badge @(a.Status == "Present" ? "bg-success" : "bg-danger")">
+                                            @a.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="card shadow-sm border-0 p-4 mb-4">
+                <h6 class="fw-bold mb-3">Last 7 Days Overview</h6>
+
+                <div class="d-flex gap-2">
+                    @foreach (var a in data.RecentAttendance.OrderBy(x => x.Date))
+                    {
+                        <div class="text-center">
+                            <div style="width: 30px; height: 60px;"
+                                 class="@(a.Status == "Present" ? "bg-success" : "bg-danger") rounded">
+                            </div>
+                            <small class="text-muted">@a.Date.ToString("dd")</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 p-4 mt-4">
+                <h5 class="fw-bold mb-3 border-bottom pb-2">Recent Leaves</h5>
+
+                @if (!data.Leaves.Any())
+                {
+                    <p class="text-muted">No leave records.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var l in data.Leaves)
+                        {
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span>@l.Type</span>
+                                <span class="text-muted">@l.Date.ToString("dd MMM yyyy")</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid id { get; set; }
+
+    // private EmployeeDashboardDto? data;
+    private EmployeeDetailsDto? data;
+    private bool isLoading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+
+        if (id == Guid.Empty)
+        {
+            Nav.NavigateTo("/employees");
+            return;
+        }
+
+        data = await EmployeeService.GetEmployeeDetailsByIdAsync(id);
+
+        isLoading = false;
+
+        if (data == null)
+        {
+            Nav.NavigateTo("/employees");
+        }
+    }
+}

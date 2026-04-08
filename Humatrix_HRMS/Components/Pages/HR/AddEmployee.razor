@@ -150,31 +150,46 @@
 
 @code {
     CreateEmployeeDto model = new();
+
     List<DesignationDto> designations = new();
-    private List<Shift> shifts = new();
+    List<Shift> shifts = new();
 
     string? departmentName;
     string? link;
     string? error;
-    bool isSubmitting;
-    private bool showCopiedFeedback = false;
 
-    // Existing Initialization logic...
+    bool isSubmitting;
+    bool showCopiedFeedback = false;
+
+    // ✅ LOAD DATA PROPERLY
     protected override async Task OnInitializedAsync()
     {
-        var auth = await AuthState.GetAuthenticationStateAsync();
-        var user = await UserManager.GetUserAsync(auth.User);
-
-        if (user?.DepartmentId != null)
+        try
         {
-            model.DepartmentId = user.DepartmentId;
-            var dept = await DeptService.GetByIdAsync(user.DepartmentId.Value);
-            departmentName = dept?.Name;
-            designations = await DesignationService.GetByDepartmentAsync(user.DepartmentId.Value);
-            shifts = await ShiftService.GetAllShiftsAsync();
+            var auth = await AuthState.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(auth.User);
+
+            if (user?.DepartmentId != null)
+            {
+                model.DepartmentId = user.DepartmentId;
+
+                // ✅ FIXED: use service instead of _context
+                var dept = await DeptService.GetByIdAsync(user.DepartmentId.Value);
+                departmentName = dept?.Name;
+
+                designations = await DesignationService
+                    .GetByDepartmentAsync(user.DepartmentId.Value);
+
+                shifts = await ShiftService.GetAllShiftsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
         }
     }
 
+    // ✅ SUBMIT
     private async Task HandleSubmit()
     {
         try
@@ -184,17 +199,15 @@
             link = null;
 
             model.Role = "Employee";
-            //
+
             link = await EmployeeService.CreateEmployeeAsync(model);
 
-            // --- Form Reset Logic ---
-            // Save the current department ID to keep the context for the next entry
-            var currentDeptId = model.DepartmentId;
+            // reset form but keep department
+            var deptId = model.DepartmentId;
 
-            // Re-initialize the model to clear all input fields (First Name, Last Name, Email, etc.)
             model = new CreateEmployeeDto
             {
-                DepartmentId = currentDeptId,
+                DepartmentId = deptId,
                 Role = "Employee"
             };
         }
@@ -208,18 +221,18 @@
         }
     }
 
+    // ✅ COPY LINK
     private async Task CopyLinkToClipboard()
     {
         if (!string.IsNullOrEmpty(link))
         {
             await JS.InvokeVoidAsync("clipboardCopy.copyText", link);
 
-            // Show toast feedback
             showCopiedFeedback = true;
             StateHasChanged();
 
-            // Hide after 2 seconds
             await Task.Delay(2000);
+
             showCopiedFeedback = false;
             StateHasChanged();
         }

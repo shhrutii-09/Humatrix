@@ -166,7 +166,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        departments = await DeptService.GetAllAsync();
+        departments = await DeptService.GetActiveAsync();
         shifts = await ShiftService.GetAllShiftsAsync();
     }
 

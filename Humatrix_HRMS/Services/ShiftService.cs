@@ -17,16 +17,28 @@ namespace Humatrix_HRMS.Services
 
         public async Task<List<Shift>> GetAllShiftsAsync()
         {
+            // ✅ Get user FIRST (avoid concurrency issues)
             var user = await _currentUser.GetUserAsync();
+
+            if (user == null || user.OrganizationId == null)
+                throw new Exception("Unauthorized");
+
             return await _context.Shifts
+                .AsNoTracking() // ✅ prevents tracking conflicts
                 .Where(s => s.OrganizationId == user.OrganizationId)
                 .ToListAsync();
         }
 
         public async Task CreateShiftAsync(Shift shift)
         {
+            // ✅ Get user FIRST
             var user = await _currentUser.GetUserAsync();
-            shift.OrganizationId = user.OrganizationId ?? Guid.Empty;
+
+            if (user == null || user.OrganizationId == null)
+                throw new Exception("Unauthorized");
+
+            shift.OrganizationId = user.OrganizationId.Value;
+
             _context.Shifts.Add(shift);
             await _context.SaveChangesAsync();
         }
