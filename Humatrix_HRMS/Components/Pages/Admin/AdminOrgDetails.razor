@@ -1,0 +1,159 @@
+﻿@page "/admin/organizations/{id:guid}"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JS
+@attribute [Authorize(Roles = "SuperAdmin")]
+
+@inject OrganizationService OrgService
+@inject NavigationManager Nav  
+
+<PageTitle>Organization Details</PageTitle>
+
+<div class="container py-4">
+
+    @* 2. Add the Back Button Section *@
+    <div class="mb-4">
+        <button class="btn btn-link text-decoration-none p-0 text-muted" @onclick='() => Nav.NavigateTo("/admin/organizations")'>
+            <i class="bi bi-arrow-left me-1"></i> Back to Organizations
+        </button>
+    </div>
+
+    @if (org == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted">Loading organization details...</div>
+        </div>
+    }
+    else
+    {
+        @* Rest of your existing UI code *@
+        <div class="card shadow-sm border-0 p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start">
+                <h4 class="fw-bold mb-3">@org.Name</h4>
+                @* Optional: Quick Edit Button *@
+                <span class="badge @(org.IsActive ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-2">
+                    @(org.IsActive ? "Active" : "Inactive")
+                </span>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-2"><b>Email:</b> <span class="text-muted">@org.Email</span></p>
+                    <p class="mb-2"><b>Phone:</b> <span class="text-muted">@org.Phone</span></p>
+                    <p class="mb-2">
+                        <b>Current Admin:</b>
+                        <span class="text-muted">@currentAdminEmail</span>
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-2"><b>Address:</b> <span class="text-muted">@org.Address</span></p>
+                </div>
+            </div>
+        </div>
+
+        @* Stats *@
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 p-3 text-center">
+                    <h6 class="text-muted small text-uppercase">Employees</h6>
+                    <h3 class="fw-bold">@employeeCount</h3>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 p-3 text-center">
+                    <h6 class="text-muted small text-uppercase">HRs</h6>
+                    <h3 class="fw-bold">@hrCount</h3>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0 p-3 text-center">
+                    <h6 class="text-muted small text-uppercase">Departments</h6>
+                    <h3 class="fw-bold">@departmentCount</h3>
+                </div>
+            </div>
+        </div>
+        <div class="card p-3 mt-3">
+            <h6 class="fw-bold mb-2">Change Organization Admin</h6>
+
+            <InputText @bind-Value="newAdminEmail" class="form-control mb-2" placeholder="Enter new admin email" />
+
+            <button class="btn btn-primary"
+                    @onclick="ChangeAdmin">
+                Change Admin
+            </button>
+
+            @if (!string.IsNullOrEmpty(adminLink))
+            {
+                <div class="alert alert-success mt-3">
+                    <b>Invite Link Generated</b>
+                    <button class="btn btn-sm btn-outline-success ms-2"
+                            @onclick="CopyLink">
+                        Copy
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter] public Guid id { get; set; }
+
+    private Organization? org;
+    private int employeeCount;
+    private int hrCount;
+    private int departmentCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try 
+        {
+            var result = await OrgService.GetOrganizationDetailsAsync(id);
+            org = result.Organization;
+            employeeCount = result.EmployeeCount;
+            hrCount = result.HRCount;
+            departmentCount = result.DepartmentCount;
+            currentAdminEmail = await OrgService.GetOrganizationAdminEmailAsync(id);
+        }
+        catch (Exception)
+        {
+            // Handle error (e.g., redirect back if ID not found)
+            Nav.NavigateTo("/admin/organizations");
+        }
+    }
+
+    private string newAdminEmail = "";
+    private string? adminLink;
+
+    private async Task ChangeAdmin()
+    {
+        if (string.IsNullOrWhiteSpace(newAdminEmail))
+            return;
+
+        adminLink = await OrgService.ChangeOrganizationAdminAsync(id, newAdminEmail);
+    }
+
+    private async Task CopyLink()
+    {
+        if (!string.IsNullOrEmpty(adminLink))
+        {
+            await JS.InvokeVoidAsync("clipboardCopy.copyText", adminLink);
+        }
+    }
+
+    private string? currentAdminEmail;
+
+}

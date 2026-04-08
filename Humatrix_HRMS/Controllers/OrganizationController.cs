@@ -19,7 +19,7 @@ public class OrganizationController : ControllerBase
     public async Task<IActionResult> Create(CreateOrganizationDto dto)
     {
         var link = await _service.CreateOrganizationAsync(dto);
-
+            
         return Ok(new
         {
             message = "Organization created",

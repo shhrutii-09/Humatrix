@@ -13,8 +13,14 @@
 
         public Guid? OrganizationId { get; set; } // ✅ NEW
 
+        public Organization Organization { get; set; } = default!;
+
+
         public bool IsUsed { get; set; } = false;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public bool IsExpired => CreatedAt < DateTime.UtcNow.AddDays(-2);
+
     }
 }

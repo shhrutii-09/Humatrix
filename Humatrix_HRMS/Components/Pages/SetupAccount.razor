@@ -16,13 +16,12 @@
 {
     <div class="alert alert-danger">@error</div>
 }
-@* 1. Change OnSubmit to OnValidSubmit to ensure validation runs *@
 <EditForm Model="model" OnValidSubmit="SetPassword" FormName="setupForm">
-    @* 2. Add DataAnnotationsValidator so [Required] actually works *@
     <DataAnnotationsValidator />
     <ValidationSummary />
 
     <div>
+        
         <label>Password</label>
         @* 3. Use InputText for better integration with EditContext *@
         <InputText type="password" @bind-Value="model.Password" class="form-control" />

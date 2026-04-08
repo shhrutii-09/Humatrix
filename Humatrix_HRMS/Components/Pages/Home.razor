@@ -1,8 +1,69 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Humatrix HRMS</PageTitle>
 
-<div class="container mt-5 text-center">
-    <h1>Welcome to Humatrix</h1>
+<div class="container-fluid vh-100 d-flex align-items-center justify-content-center bg-light">
 
+    <div class="text-center" style="max-width: 700px;">
+
+        <h1 class="fw-bold mb-3" style="font-size: 2.5rem;">
+            Welcome to <span style="color:#5c4ac7;">Humatrix</span>
+        </h1>
+
+        <p class="text-muted mb-4">
+            A modern HRMS platform to manage organizations, employees, and HR operations efficiently.
+        </p>
+
+        <a href="/Account/Login"
+           class="btn px-4 py-2 fw-bold"
+           style="background-color:#5c4ac7; color:white;">
+            Get Started
+        </a>
+
+        @* FEATURES *@
+        <div class="row mt-5 g-4">
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-4 h-100">
+                    <i class="bi bi-building fs-3 text-primary mb-3"></i>
+                    <h6 class="fw-bold">Organization Management</h6>
+                    <p class="text-muted small mb-0">
+                        Easily manage multiple companies and their structures.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-4 h-100">
+                    <i class="bi bi-people fs-3 text-success mb-3"></i>
+                    <h6 class="fw-bold">Employee Handling</h6>
+                    <p class="text-muted small mb-0">
+                        Track employees, roles, departments and activities.
+                    </p>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm p-4 h-100">
+                    <i class="bi bi-shield-check fs-3 text-warning mb-3"></i>
+                    <h6 class="fw-bold">Secure Access</h6>
+                    <p class="text-muted small mb-0">
+                        Role-based authentication and secure login system.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
 </div>
+
+<style>
+    .card {
+        border-radius: 12px;
+    }
+
+    .bg-light {
+        background-color: #f8f9fa !important;
+    }
+</style>

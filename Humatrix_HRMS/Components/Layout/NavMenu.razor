@@ -3,7 +3,7 @@
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="/">HRMS</a>
+        <a class="navbar-brand fw-bold" href="/">HRMS</a>
     </div>
 </div>
 
@@ -12,88 +12,138 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
 
-        @* --- DYNAMIC DASHBOARD LINK BASED ON ROLE --- *@
-        <div class="nav-item px-3">
-            <AuthorizeView>
-                <Authorized>
-                    @if (context.User.IsInRole("SuperAdmin"))
-                    {
-                        <NavLink class="nav-link" href="/admin/dashboard" Match="NavLinkMatch.All">
-                            <span class="bi bi-speedometer2"></span> Dashboard
-                        </NavLink>
-                    }
-                    else if (context.User.IsInRole("OrgAdmin") || context.User.IsInRole("HR"))
-                    {
-                        <NavLink class="nav-link" href="/org/dashboard" Match="NavLinkMatch.All">
-                            <span class="bi bi-speedometer2"></span> Dashboard
-                        </NavLink>
-                    }
-                    else
-                    {
-                        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-                            <span class="bi bi-speedometer2"></span> Dashboard
-                        </NavLink>
-                    }
-                </Authorized>
-                <NotAuthorized>
-                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-                        <span class="bi bi-speedometer2"></span> Dashboard
-                    </NavLink>
-                </NotAuthorized>
-            </AuthorizeView>
-        </div>
-
         <AuthorizeView>
             <Authorized>
-                @* --- SUPER ADMIN: No extra organization link needed as per your request --- *@
+                @* --- COMMON DASHBOARD (Dynamic Route) --- *@
+                @* <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="@(context.User.IsInRole("SuperAdmin") ? "/admin/dashboard" : "/org/dashboard")" Match="NavLinkMatch.All">
+                        <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Dashboard
+                    </NavLink>
+                </div> *@
 
-                @* --- ORG ADMIN & HR ONLY --- *@
-                <AuthorizeView Roles="OrgAdmin, HR" Context="managementContext">
-                    @* "My Organization" removed from here as it's now the main Dashboard link *@
+                @* --- SUPER ADMIN ONLY SECTION --- *@
+                <AuthorizeView Roles="SuperAdmin" Context="superContext">
+                    @* <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/organizations">
+                            <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Organizations
+                        </NavLink>
+                    </div> *@
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/dashboard">
+                            <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Dashboard
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/create-organization">
+                            <span class="icon-wrapper"><i class="bi bi-buildings"></i></span> Register Org
+                        </NavLink>
+                    </div>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="HR" Context="superContext">
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/hr/profile">
+                            <span class="icon-wrapper"><i class="bi bi-person-circle"></i></span> My Profile
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/hr/dashboard">
+                            <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Dashboard
+                        </NavLink>
+                    </div>
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/hr/add-employee">
+                            <span class="icon-wrapper"><i class="bi bi-person-plus"></i></span> Add Employee
+                        </NavLink>
+                    </div>
+                   
+                </AuthorizeView>
+                <AuthorizeView Roles="Employee" Context="superContext">
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/employee/profile">
+                            <span class="icon-wrapper"><i class="bi bi-person-badge"></i></span> My Profile
+                        </NavLink>
+                    </div>
+
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/employee/dashboard">
+                            <span class="icon-wrapper"><i class="bi bi-grid"></i></span> Dashboard
+                        </NavLink>
+                    </div>
+
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/employee/attendance">
+                            <span class="icon-wrapper"><i class="bi bi-calendar-check"></i></span> My Attendance
+                        </NavLink>
+                    </div>
+                   
+                </AuthorizeView>
+
+                @* --- ORG ADMIN & HR SECTION --- *@
+                <AuthorizeView Roles="OrgAdmin" Context="orgContext">
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="/org/departments">
-                            <span class="bi bi-diagram-3"></span> Departments
+                            <span class="icon-wrapper"><i class="bi bi-diagram-3"></i></span> Departments
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="/org/designations">
-                            <span class="bi bi-person-badge"></span> Designations
+                            <span class="icon-wrapper"><i class="bi bi-person-badge"></i></span> Designations
                         </NavLink>
                     </div>
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="/org/add-hr">
-                            <span class="bi bi-people"></span> Manage HR
+                            <span class="icon-wrapper"><i class="bi bi-person-plus"></i></span> Manage HR
                         </NavLink>
                     </div>
-                </AuthorizeView>
-
-                @* --- COMMON FOR ORG ADMIN, HR, EMP --- *@
-                <AuthorizeView Roles="OrgAdmin, HR, Employee" Context="commonContext">
-                    <div class="nav-item px-3">
+                    @* <div class="nav-item px-3">
                         <NavLink class="nav-link" href="/employees">
-                            <span class="bi bi-person-workspace"></span> Employees
+                            <span class="icon-wrapper"><i class="bi bi-people"></i></span> Employee Directory
                         </NavLink>
-                    </div>
+                    </div> *@
                     <div class="nav-item px-3">
                         <NavLink class="nav-link" href="/admin/shifts">
-                            <span class="bi bi-clock-history"></span> Shifts
+                            <span class="icon-wrapper"><i class="bi bi-clock-history"></i></span> Shifts
+                        </NavLink>
+                    </div>
+                    @* <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/attendance">
+                            <span class="icon-wrapper"><i class="bi bi-calendar-check"></i></span> Attendance
+                        </NavLink>
+                    </div> *@
+                </AuthorizeView>
+
+                <AuthorizeView Roles="OrgAdmin, HR" Context="orgContext">
+                    
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/employees">
+                            <span class="icon-wrapper"><i class="bi bi-people"></i></span> Employee Directory
+                        </NavLink>
+                    </div>
+                   
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="/admin/attendance">
+                            <span class="icon-wrapper"><i class="bi bi-calendar-check"></i></span> Attendance
                         </NavLink>
                     </div>
                 </AuthorizeView>
 
-                @* --- LOGOUT & PROFILE --- *@
-                <div class="dropdown-divider"></div>
+                @* --- FOOTER: USER INFO & LOGOUT --- *@
+                <div class="dropdown-divider my-3 mx-3 border-secondary"></div>
+
                 <div class="nav-item px-3">
-                    <span class="nav-link text-light opacity-75 small">
-                        <i class="bi bi-person-circle"></i> @context.User.Identity?.Name
-                    </span>
+                    <div class="nav-link text-light opacity-75 small d-flex align-items-center">
+                        <span class="icon-wrapper"><i class="bi bi-person-circle"></i></span>
+                        <span class="text-truncate">@context.User.Identity?.Name</span>
+                    </div>
                 </div>
+
                 <div class="nav-item px-3">
                     <form action="Account/Logout" method="post">
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link btn btn-link text-start w-100">
-                            <span class="bi bi-box-arrow-left"></span> Logout
+                        <button type="submit" class="nav-link btn btn-link text-start w-100 border-0 shadow-none">
+                            <span class="icon-wrapper"><i class="bi bi-box-arrow-left"></i></span> Logout
                         </button>
                     </form>
                 </div>
@@ -101,15 +151,40 @@
 
             <NotAuthorized>
                 <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                        <span class="icon-wrapper"><i class="bi bi-house-door"></i></span> Home
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
                     <NavLink class="nav-link" href="/Account/Login">
-                        <span class="bi bi-box-arrow-in-right"></span> Login
+                        <span class="icon-wrapper"><i class="bi bi-box-arrow-in-right"></i></span> Login
                     </NavLink>
                 </div>
             </NotAuthorized>
         </AuthorizeView>
-
     </nav>
 </div>
+
+<style>
+    .icon-wrapper {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.8rem;
+        margin-right: 0.5rem;
+        font-size: 1.1rem;
+    }
+
+    .nav-link.btn-link {
+        padding: 0.5rem 0;
+        color: rgba(255,255,255,0.5);
+        text-decoration: none;
+    }
+
+        .nav-link.btn-link:hover {
+            color: #fff;
+        }
+</style>
 
 @code {
     private string? currentUrl;

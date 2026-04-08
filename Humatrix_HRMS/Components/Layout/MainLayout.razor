@@ -1,5 +1,13 @@
 ﻿@inherits LayoutComponentBase
-
+@using Humatrix_HRMS.Data
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@inject SignInManager<ApplicationUser> SignInManager
 <div class="page">
     <div class="sidebar">
         <NavMenu />
@@ -21,3 +29,37 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+@code{
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userPrincipal = authState.User;
+
+        if (userPrincipal.Identity != null && userPrincipal.Identity.IsAuthenticated)
+        {
+            var user = await UserManager.GetUserAsync(userPrincipal);
+
+            if (user != null)
+            {
+                if (!user.IsActive)
+                {
+                    await SignInManager.SignOutAsync();
+                    Nav.NavigateTo("/Account/Login", true);
+                    return;
+                }
+
+                var org = await Db.Organizations
+                    .FirstOrDefaultAsync(o => o.OrganizationId == user.OrganizationId);
+
+                if (org != null && !org.IsActive)
+                {
+                    await SignInManager.SignOutAsync();
+                    Nav.NavigateTo("/Account/Login", true);
+                }
+            }
+        }
+    }
+}

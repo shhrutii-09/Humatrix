@@ -11,12 +11,14 @@
 
 <div class="container-fluid px-4 mt-4">
     <div class="mb-4">
+        @* Use a fallback for FullName to avoid null references before data loads *@
         <h2 class="fw-bold">Welcome, @(data?.FullName ?? "User")!</h2>
         <p class="text-muted">Here is your professional summary for today.</p>
     </div>
 
     @if (data == null)
     {
+        @* This state shows only while the data is being fetched *@
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
             <p class="mt-2 text-muted">Loading your dashboard...</p>
@@ -25,6 +27,7 @@
     else
     {
         <div class="row g-4">
+            @* Top Stats Cards *@
             <div class="col-md-4">
                 <div class="card border-0 shadow-sm p-4 h-100 border-start border-primary border-4">
                     <h6 class="text-muted small fw-bold text-uppercase">Department</h6>
@@ -44,6 +47,7 @@
                 </div>
             </div>
 
+            @* Main Summary Section *@
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm p-4">
                     <h5 class="fw-bold mb-4">Employment Summary</h5>
@@ -64,10 +68,12 @@
                 </div>
             </div>
 
+            @* Profile Mini-Card *@
             <div class="col-lg-4">
                 <div class="card border-0 shadow-sm text-center p-4">
-                    <div class="mx-auto mb-3 bg-primary rounded-circle text-white d-flex align-items-center justify-content-center" style="width:70px; height:70px; font-size: 1.5rem;">
-                        @data.FullName[0]
+                    <div class="mx-auto mb-3 bg-primary rounded-circle text-white d-flex align-items-center justify-content-center"
+                         style="width:70px; height:70px; font-size: 1.5rem;">
+                        @(string.IsNullOrEmpty(data.FullName) ? "?" : data.FullName[0])
                     </div>
                     <h5 class="fw-bold mb-1">@data.FullName</h5>
                     <p class="text-muted small mb-4">@data.Email</p>
@@ -81,8 +87,26 @@
 @code {
     private EmployeeDashboardDto? data;
 
-    protected override async Task OnInitializedAsync()
+    // We use OnAfterRenderAsync to ensure data fetching happens
+    // AFTER the page is interactive, avoiding the "Double Load" problem.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        data = await EmployeeService.GetEmployeeDashboardDataAsync();
+        if (firstRender)
+        {
+            try
+            {
+                // Fetch data only on the first render
+                data = await EmployeeService.GetEmployeeDashboardDataAsync();
+            }
+            catch (Exception ex)
+            {
+                // Log error here (e.g., Console.WriteLine(ex.Message);)
+            }
+            finally
+            {
+                // Tell Blazor to re-render the UI now that 'data' is populated
+                StateHasChanged();
+            }
+        }
     }
 }

@@ -28,45 +28,83 @@ namespace Humatrix_HRMS.Services
         }
 
         #region Dashboard Data
+        //public async Task<EmployeeDashboardDto?> GetEmployeeDashboardDataAsync()
+        //{
+        //    var currentUser = await _currentUser.GetUserAsync();
+        //    if (currentUser == null) return null;
+
+        //    // Fetch the profile first to get the ShiftId
+        //    var profile = await _context.Employees
+        //        .AsNoTracking()
+        //        .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
+
+        //    if (profile == null) return null;
+
+        //    // ✅ Fix: Local variables to prevent Expression Tree errors
+        //    var deptId = currentUser.DepartmentId;
+        //    var desigId = currentUser.DesignationId;
+        //    var shiftId = profile.ShiftId;
+
+        //    var dept = await _context.Departments.AsNoTracking()
+        //        .FirstOrDefaultAsync(d => d.DepartmentId == deptId);
+        //    var desig = await _context.Designations.AsNoTracking()
+        //        .FirstOrDefaultAsync(d => d.DesignationId == desigId);
+        //    var shift = await _context.Shifts.AsNoTracking()
+        //        .FirstOrDefaultAsync(s => s.ShiftId == shiftId);
+
+        //    return new EmployeeDashboardDto
+        //    {
+        //        FullName = $"{currentUser.FirstName} {currentUser.LastName}",
+        //        Email = currentUser.Email ?? string.Empty,
+        //        DepartmentName = dept?.Name ?? "N/A",
+        //        DesignationName = desig?.Name ?? "N/A",
+        //        ShiftName = shift?.Name ?? "No Shift Assigned",
+        //        EmployeeCode = profile.EmployeeCode,
+        //        JoiningDate = profile.JoiningDate,
+        //        Status = profile.Status
+        //    };
+        //}
+        //#endregion
+
+        //#region Employee Management
+
         public async Task<EmployeeDashboardDto?> GetEmployeeDashboardDataAsync()
         {
             var currentUser = await _currentUser.GetUserAsync();
             if (currentUser == null) return null;
 
-            // Fetch the profile first to get the ShiftId
-            var profile = await _context.Employees
-                .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
+            var userId = currentUser.Id;
 
-            if (profile == null) return null;
+            return await (
+                from e in _context.Employees
+                join d in _context.Departments on e.DepartmentId equals d.DepartmentId into deptJoin
+                from d in deptJoin.DefaultIfEmpty()
 
-            // ✅ Fix: Local variables to prevent Expression Tree errors
-            var deptId = currentUser.DepartmentId;
-            var desigId = currentUser.DesignationId;
-            var shiftId = profile.ShiftId;
+                join des in _context.Designations on e.DesignationId equals des.DesignationId into desJoin
+                from des in desJoin.DefaultIfEmpty()
 
-            var dept = await _context.Departments.AsNoTracking()
-                .FirstOrDefaultAsync(d => d.DepartmentId == deptId);
-            var desig = await _context.Designations.AsNoTracking()
-                .FirstOrDefaultAsync(d => d.DesignationId == desigId);
-            var shift = await _context.Shifts.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.ShiftId == shiftId);
+                join s in _context.Shifts on e.ShiftId equals s.ShiftId into shiftJoin
+                from s in shiftJoin.DefaultIfEmpty()
 
-            return new EmployeeDashboardDto
-            {
-                FullName = $"{currentUser.FirstName} {currentUser.LastName}",
-                Email = currentUser.Email ?? string.Empty,
-                DepartmentName = dept?.Name ?? "N/A",
-                DesignationName = desig?.Name ?? "N/A",
-                ShiftName = shift?.Name ?? "No Shift Assigned",
-                EmployeeCode = profile.EmployeeCode,
-                JoiningDate = profile.JoiningDate,
-                Status = profile.Status
-            };
+                where e.UserId == userId
+
+                select new EmployeeDashboardDto
+                {
+                    FullName = currentUser.FirstName + " " + currentUser.LastName,
+                    Email = currentUser.Email ?? "",
+                    EmployeeCode = e.EmployeeCode,
+                    JoiningDate = e.JoiningDate,
+                    Status = e.Status,
+
+                    DepartmentName = d != null ? d.Name : "N/A",
+                    DesignationName = des != null ? des.Name : "N/A",
+                    ShiftName = s != null ? s.Name : "No Shift Assigned"
+                }
+            )
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
         }
-        #endregion
 
-        #region Employee Management
         public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
         {
             var user = await _userManager.FindByEmailAsync(email);

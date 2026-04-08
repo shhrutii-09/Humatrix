@@ -4,62 +4,93 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using Humatrix_HRMS.Data
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
 
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject UserManager<ApplicationUser> UserManager
 
-<PageTitle>Log in</PageTitle>
+<PageTitle>Login | Humatrix</PageTitle>
 
-<h1>Log in</h1>
+<div class="container-fluid vh-100 d-flex align-items-center justify-content-center bg-light">
 
-<div class="row">
-    <div class="col-md-4">
-        <section>
+    <div class="row w-100 shadow-sm" style="max-width: 900px; border-radius:12px; overflow:hidden;">
 
-            <StatusMessage Message="@errorMessage" />
+        @* LEFT SIDE *@
+        <div class="col-md-6 d-none d-md-flex flex-column justify-content-center align-items-center text-white"
+             style="background: linear-gradient(135deg, #5c4ac7, #7a6df0);">
 
-            <!-- ✅ IMPORTANT: FormName REQUIRED -->
+            <h2 class="fw-bold">Humatrix HRMS</h2>
+            <p class="small text-center px-4">
+                Manage organizations, employees and HR operations seamlessly.
+            </p>
+
+        </div>
+
+        @* RIGHT SIDE *@
+        <div class="col-md-6 bg-white p-5">
+
+            <h3 class="fw-bold mb-2">Welcome Back </h3>
+            <p class="text-muted small mb-4">Login to continue</p>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger small">@errorMessage</div>
+            }
+
             <EditForm Model="Input" OnValidSubmit="LoginUser" FormName="loginForm">
                 <DataAnnotationsValidator />
-                <ValidationSummary class="text-danger" />
+                <ValidationSummary class="text-danger small" />
 
-                <h2>Use a local account to log in.</h2>
-                <hr />
-
-                <div class="form-floating mb-3">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Email</label>
                     <InputText @bind-Value="Input.Email"
-                               class="form-control"
-                               placeholder="name@example.com" />
-                    <label>Email</label>
+                               class="form-control bg-light border-0"
+                               placeholder="Enter email" />
                     <ValidationMessage For="() => Input.Email" />
                 </div>
 
-                <div class="form-floating mb-3">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Password</label>
                     <InputText type="password"
                                @bind-Value="Input.Password"
-                               class="form-control"
-                               placeholder="password" />
-                    <label>Password</label>
+                               class="form-control bg-light border-0"
+                               placeholder="Enter password" />
                     <ValidationMessage For="() => Input.Password" />
                 </div>
 
-                <div class="checkbox mb-3">
-                    <label>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
                         <InputCheckbox @bind-Value="Input.RememberMe" />
-                        Remember me
-                    </label>
+                        <span class="small text-muted ms-1">Remember me</span>
+                    </div>
                 </div>
 
-                <button type="submit" class="w-100 btn btn-lg btn-primary">
-                    Log in
+                <button type="submit"
+                        class="btn w-100 py-2 fw-bold"
+                        style="background-color:#5c4ac7; color:white;">
+                    LOGIN
                 </button>
 
             </EditForm>
-        </section>
+
+        </div>
     </div>
 </div>
+
+<style>
+    .form-control:focus {
+        box-shadow: none;
+        border: 1px solid #5c4ac7;
+        background-color: #fff !important;
+    }
+
+    .bg-light {
+        background-color: #f8f9fa !important;
+    }
+</style>
 
 @code {
     private string? errorMessage;
@@ -67,7 +98,6 @@
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
-    // ✅ REQUIRED for SSR form binding
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = new();
 
@@ -79,6 +109,33 @@
 
     public async Task LoginUser()
     {
+        // ✅ Step 1: Find user
+        var user = await UserManager.FindByEmailAsync(Input.Email);
+
+        if (user == null)
+        {
+            errorMessage = "Invalid login attempt.";
+            return;
+        }
+
+        // ✅ Step 2: Check user active
+        if (!user.IsActive)
+        {
+            errorMessage = "Your account is deactivated.";
+            return;
+        }
+
+        // ✅ Step 3: Check organization active
+        var org = await Db.Organizations
+            .FirstOrDefaultAsync(o => o.OrganizationId == user.OrganizationId);
+
+        if (org != null && !org.IsActive)
+        {
+            errorMessage = "Your organization is deactivated.";
+            return;
+        }
+
+        // ✅ Step 3: Login
         var result = await SignInManager.PasswordSignInAsync(
             Input.Email,
             Input.Password,
@@ -89,40 +146,27 @@
         {
             Logger.LogInformation("User logged in.");
 
-            var user = await UserManager.FindByEmailAsync(Input.Email);
+            var roles = await UserManager.GetRolesAsync(user);
 
-            if (user != null)
+            if (roles.Contains("SuperAdmin"))
             {
-                if (!user.IsActive)
-                {
-                    errorMessage = "Your account is deactivated.";
-                    return;
-                }
-
-                var roles = await UserManager.GetRolesAsync(user);
-
-                // 🔥 IMPORTANT: NO ReturnUrl → ONLY ROLE BASED
-
-                if (roles.Contains("SuperAdmin"))
-                {
-                    NavigationManager.NavigateTo("/admin/dashboard", true);
-                }
-                else if (roles.Contains("OrgAdmin"))
-                {
-                    NavigationManager.NavigateTo("/org/dashboard", true);
-                }
-                else if (roles.Contains("HR"))
-                {
-                    NavigationManager.NavigateTo("/hr/dashboard", true);
-                }
-                else if (roles.Contains("Employee"))
-                {
-                    NavigationManager.NavigateTo("/employee/dashboard", true);
-                }
-                else
-                {
-                    NavigationManager.NavigateTo("/", true);
-                }
+                NavigationManager.NavigateTo("/admin/dashboard", true);
+            }
+            else if (roles.Contains("OrgAdmin"))
+            {
+                NavigationManager.NavigateTo("/org/dashboard", true);
+            }
+            else if (roles.Contains("HR"))
+            {
+                NavigationManager.NavigateTo("/hr/dashboard", true);
+            }
+            else if (roles.Contains("Employee"))
+            {
+                NavigationManager.NavigateTo("/employee/dashboard", true);
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/", true);
             }
         }
         else if (result.IsLockedOut)
