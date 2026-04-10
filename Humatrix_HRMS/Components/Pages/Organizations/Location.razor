@@ -1,0 +1,163 @@
+﻿@page "/admin/location"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject OfficeLocationService LocationService
+@inject IJSRuntime JS
+
+<h3 class="mb-4">Office Location Settings</h3>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")">
+        @message
+    </div>
+}
+
+<EditForm Model="model" OnValidSubmit="Save">
+    <div class="row g-3">
+
+        <div class="col-md-4">
+            <label class="form-label">Office Name</label>
+            <InputText @bind-Value="model.Name" class="form-control" />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Latitude</label>
+            <InputNumber @bind-Value="model.Latitude" class="form-control" />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Longitude</label>
+            <InputNumber @bind-Value="model.Longitude" class="form-control" />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Allowed Radius (meters)</label>
+            <InputNumber @bind-Value="model.RadiusInMeters" class="form-control" />
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="col-md-12 mt-3">
+
+            <!-- Detect Location -->
+            <button type="button"
+                    class="btn btn-outline-primary me-2"
+                    @onclick="GetOfficeLocation"
+                    disabled="@isDetecting">
+
+                @if (isDetecting)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+
+                📍 Detect Location
+            </button>
+
+            <!-- Save -->
+            <button class="btn btn-primary">
+                💾 Save Location
+            </button>
+
+        </div>
+
+    </div>
+</EditForm>
+
+<!-- LOCATION DISPLAY -->
+<div class="mt-3">
+    @if (model.Latitude != 0 && model.Longitude != 0)
+    {
+        <p class="text-muted">
+            📍 Current Location: <strong>@model.Latitude, @model.Longitude</strong>
+        </p>
+
+        <a class="btn btn-outline-primary"
+           href="https://www.google.com/maps?q=@model.Latitude,@model.Longitude"
+           target="_blank">
+            🌍 View on Map
+        </a>
+    }
+    else
+    {
+        <p class="text-danger">No location selected</p>
+    }
+</div>
+
+@code {
+    private OfficeLocationDto model = new();
+    private string? message;
+    private bool isError;
+    private bool isDetecting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var existing = await LocationService.GetAsync();
+
+        if (existing != null)
+        {
+            model = new OfficeLocationDto
+            {
+                Id = existing.Id,
+                Name = existing.Name,
+                Latitude = existing.Latitude,
+                Longitude = existing.Longitude,
+                RadiusInMeters = existing.RadiusInMeters
+            };
+        }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            isError = false;
+
+            await LocationService.SaveAsync(model);
+
+            message = "Location saved successfully";
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+    }
+
+    private async Task GetOfficeLocation()
+    {
+        try
+        {
+            isDetecting = true;
+            message = null;
+
+            var location = await JS.InvokeAsync<LocationResult>("getLocation");
+
+            model.Latitude = location.Latitude;
+            model.Longitude = location.Longitude;
+
+            message = "Location detected successfully";
+            isError = false;
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = "Failed to detect location: " + ex.Message;
+        }
+        finally
+        {
+            isDetecting = false;
+        }
+    }
+
+    public class LocationResult
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+    }
+}

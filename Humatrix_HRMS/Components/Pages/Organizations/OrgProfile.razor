@@ -1,0 +1,366 @@
+﻿@page "/org/profile"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject OrganizationService OrgService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>My Profile | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Organization Profile</h2>
+        <button class="btn btn-white border shadow-sm"
+                @onclick='() => Nav.NavigateTo("/org/dashboard")'>
+            BACK TO DASHBOARD
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="text-muted mt-2">Loading profile...</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+
+            <!-- LEFT SIDE -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-4">
+
+                        <EditForm Model="orgModel" OnValidSubmit="UpdateOrganization">
+                            <DataAnnotationsValidator />
+
+                            <h5 class="text-muted border-bottom pb-2 mb-3">
+                                Organization Details
+                            </h5>
+
+                            <div class="mb-3">
+                                <label class="small fw-bold">Organization Name</label>
+                                <InputText class="form-control" @bind-Value="orgModel.Name" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="small fw-bold">Organization Email</label>
+                                <InputText class="form-control" @bind-Value="orgModel.Email" disabled />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="small fw-bold">Phone</label>
+                                <InputText class="form-control" @bind-Value="orgModel.Phone" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="small fw-bold">Address</label>
+                                <InputText class="form-control" @bind-Value="orgModel.Address" />
+                            </div>
+
+                            <div class="mt-4 d-flex gap-2">
+                                <button class="btn btn-success px-4" disabled="@isSaving">
+                                    @(isSaving ? "Saving..." : "SAVE CHANGES")
+                                </button>
+
+                                <button type="button" class="btn btn-outline-primary"
+                                        @onclick="ShowPasswordModal">
+                                    CHANGE PASSWORD
+                                </button>
+                            </div>
+                        </EditForm>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDE PANEL -->
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm text-center">
+                    <div class="card-body p-4">
+
+                        <!-- Avatar -->
+                        <div class="avatar-lg bg-light rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center"
+                             style="width: 100px; height: 100px; font-size: 2rem; color: #5c4ac7; border: 2px solid #5c4ac7;">
+                            @(string.IsNullOrEmpty(adminEmail) ? "A" : adminEmail[0].ToString().ToUpper())
+                        </div>
+
+                        <h5 class="mb-1">@orgModel.Name</h5>
+                        <p class="text-muted small">Organization Admin</p>
+
+                        <hr />
+
+                        <p class="small text-muted mb-1">ADMIN EMAIL</p>
+                        <p class="fw-bold">@adminEmail</p>
+
+                        @* <button class="btn btn-warning w-100 mt-3"
+                                @onclick="ShowChangeAdmin">
+                            CHANGE ADMIN
+                        </button> *@
+
+                    </div>
+                </div>
+
+                <!-- STATS -->
+                <div class="card border-0 shadow-sm mt-4">
+                    <div class="card-body p-4">
+
+                        <h6 class="text-muted mb-3 uppercase-tracking">
+                            ORGANIZATION OVERVIEW
+                        </h6>
+
+                        <p><strong>Employees:</strong> @employeeCount</p>
+                        <p><strong>HRs:</strong> @hrCount</p>
+                        <p><strong>Departments:</strong> @deptCount</p>
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    }
+
+    <!-- STATUS -->
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert alert-success mt-4">@statusMessage</div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mt-4">@errorMessage</div>
+    }
+</div>
+
+<!-- CHANGE ADMIN MODAL -->
+@* @if (showAdminModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">Change Admin</h5>
+                    <button class="btn-close" @onclick="CloseAdminModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <InputText class="form-control"
+                               @bind-Value="newAdminEmail"
+                               placeholder="Enter new admin email" />
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="CloseAdminModal">Cancel</button>
+                    <button class="btn btn-primary"
+                            style="background-color:#5c4ac7"
+                            @onclick="ChangeAdmin">
+                        Submit
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+} *@
+
+<!-- PASSWORD MODAL -->
+@if (showPasswordModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">Change Password</h5>
+                    <button class="btn-close" @onclick="ClosePasswordModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    @if (hasPassword)
+                    {
+                        <input type="password" class="form-control mb-2"
+                               placeholder="Current Password"
+                               @bind="currentPwd" />
+                    }
+
+                    <input type="password" class="form-control mb-2"
+                           placeholder="New Password"
+                           @bind="newPwd" />
+
+                    <input type="password" class="form-control"
+                           placeholder="Confirm Password"
+                           @bind="confirmPwd" />
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-light" @onclick="ClosePasswordModal">Cancel</button>
+                    <button class="btn btn-primary"
+                            style="background-color:#5c4ac7"
+                            @onclick="ChangePassword">
+                        Update
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .uppercase-tracking {
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.75rem;
+    }
+
+    .btn-white {
+        background: white;
+    }
+
+    .form-control:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.25);
+    }
+</style>
+
+@code {
+
+    private Organization orgModel = new();
+    private string? adminEmail;
+
+    private int employeeCount;
+    private int hrCount;
+    private int deptCount;
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+
+    private bool showPasswordModal = false;
+
+    private string newAdminEmail = "";
+
+    private string currentPwd = "";
+    private string newPwd = "";
+    private string confirmPwd = "";
+
+    private bool hasPassword;
+
+    private string? statusMessage;
+    private string? errorMessage;
+
+    private ApplicationUser? currentUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(authState.User);
+
+            if (user == null || user.OrganizationId == null)
+            {
+                errorMessage = "Invalid user or organization.";
+                return;
+            }
+
+            currentUser = user;
+
+            using var db = DbFactory.CreateDbContext();
+
+            var orgId = user.OrganizationId.Value;
+
+            orgModel = await db.Organizations
+                .FirstAsync(x => x.OrganizationId == orgId);
+
+            adminEmail = await OrgService.GetOrganizationAdminEmailAsync(orgId);
+
+            var stats = await OrgService.GetOrganizationDetailsAsync(orgId);
+
+            employeeCount = stats.EmployeeCount;
+            hrCount = stats.HRCount;
+            deptCount = stats.DepartmentCount;
+
+            hasPassword = await UserManager.HasPasswordAsync(user);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task UpdateOrganization()
+    {
+        try
+        {
+            isSaving = true;
+            await OrgService.UpdateOrganizationAsync(orgModel);
+            statusMessage = "Organization updated successfully!";
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+
+  
+
+    private void ShowPasswordModal() => showPasswordModal = true;
+    private void ClosePasswordModal() => showPasswordModal = false;
+
+    private async Task ChangePassword()
+    {
+        if (newPwd != confirmPwd)
+        {
+            errorMessage = "Passwords do not match.";
+            return;
+        }
+
+        try
+        {
+            IdentityResult result;
+
+            if (hasPassword)
+                result = await UserManager.ChangePasswordAsync(currentUser!, currentPwd, newPwd);
+            else
+                result = await UserManager.AddPasswordAsync(currentUser!, newPwd);
+
+            if (result.Succeeded)
+            {
+                statusMessage = "Password updated successfully!";
+                showPasswordModal = false;
+
+                currentPwd = newPwd = confirmPwd = "";
+            }
+            else
+            {
+                errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

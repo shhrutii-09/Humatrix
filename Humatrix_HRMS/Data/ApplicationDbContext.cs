@@ -22,6 +22,9 @@ namespace Humatrix_HRMS.Data
         public DbSet<Employee> Employees { get; set; }
 
         public DbSet<Shift> Shifts { get; set; }
+        public DbSet<Holiday> Holidays { get; set; }
+        public DbSet<LeaveRequest> LeaveRequests { get; set; }
+        public DbSet<OfficeLocation> OfficeLocations { get; set; }
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }

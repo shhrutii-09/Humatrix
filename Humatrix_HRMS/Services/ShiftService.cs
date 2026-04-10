@@ -38,7 +38,22 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Unauthorized");
 
             shift.OrganizationId = user.OrganizationId.Value;
+            if (string.IsNullOrWhiteSpace(shift.Name))
+                throw new Exception("Shift name is required");
 
+            var exists = await _context.Shifts.AnyAsync(s =>
+                s.OrganizationId == user.OrganizationId &&
+                s.Name.ToLower().Trim() == shift.Name.ToLower().Trim());
+
+            if (exists)
+                throw new Exception("Shift already exists");
+
+            //if (shift.StartTime >= shift.EndTime)
+            //    throw new Exception("Invalid shift timing");
+
+            // Allow overnight shifts
+            if (shift.StartTime == shift.EndTime)
+                throw new Exception("Start and End time cannot be same");
             _context.Shifts.Add(shift);
             await _context.SaveChangesAsync();
         }

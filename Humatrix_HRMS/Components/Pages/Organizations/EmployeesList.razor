@@ -10,6 +10,7 @@
 @attribute [Authorize(Roles = "OrgAdmin,HR")]
 
 @inject EmployeeService EmployeeService
+@inject CurrentUserService CurrentUserService
 @inject DepartmentService DeptService
 @inject DesignationService DesignationService
 @inject NavigationManager Nav
@@ -152,7 +153,51 @@
         </div>
     </div>
 </div>
+<div class="card-footer bg-white border-0 py-3">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="small text-muted">
+            @if (totalEmployees == 0)
+            {
+                <span>No entries found</span>
+            }
+            else
+            {
+                <span>
+                    Showing @(((currentPage - 1) * pageSize) + 1)
+                    to @(Math.Min(currentPage * pageSize, totalEmployees))
+                    of @totalEmployees entries
+                </span>
+            }
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                    <button class="page-link shadow-none" @onclick="() => ChangePage(currentPage - 1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                </li>
 
+                @for (int i = 1; i <= totalPages; i++)
+                {
+                    var pageNum = i;
+                    <li class="page-item @(currentPage == pageNum ? "active" : "")">
+                        <button class="page-link shadow-none @(currentPage == pageNum ? "border-0" : "")"
+                                style="@(currentPage == pageNum ? "background-color: #5c4ac7;" : "")"
+                                @onclick="() => ChangePage(pageNum)">
+                            @pageNum
+                        </button>
+                    </li>
+                }
+
+                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                    <button class="page-link shadow-none" @onclick="() => ChangePage(currentPage + 1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</div>
 @if (isEditOpen)
 {
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);" tabindex="-1">
@@ -231,6 +276,8 @@
             </div>
         </div>
     </div>
+
+   
 }
 
 <style>
@@ -270,7 +317,35 @@
     bool UserIsOrgAdmin = false;
     string HRDepartmentName = "";
 
+
+    int currentPage = 1;
+    int pageSize = 10;
+    int totalEmployees = 0;
+    int totalPages => (int)Math.Ceiling((double)totalEmployees / pageSize);
+
+    private async Task ChangePage(int newPage)
+    {
+        if (newPage >= 1 && newPage <= totalPages)
+        {
+            currentPage = newPage;
+            await LoadEmployees();
+        }
+    }
+
     private string? _search;
+    // private string? search
+    // {
+    //     get => _search;
+    //     set
+    //     {
+    //         if (_search != value)
+    //         {
+    //             _search = value;
+    //             _ = LoadEmployees();
+    //         }
+    //     }
+    // }
+
     private string? search
     {
         get => _search;
@@ -279,6 +354,7 @@
             if (_search != value)
             {
                 _search = value;
+                currentPage = 1; // RESET TO PAGE 1
                 _ = LoadEmployees();
             }
         }
@@ -299,27 +375,72 @@
 
             if (!UserIsOrgAdmin)
             {
-                var hrEmail = user.Identity?.Name;
-                var hrData = await EmployeeService.GetEmployeesForListAsync();
-                var hrProfile = hrData.FirstOrDefault(x => x.Email == hrEmail);
-                HRDepartmentName = hrProfile?.Department ?? "Restricted";
-                filterDepartmentId = hrProfile?.DepartmentId;
+                // Retrieve the full profile of the logged-in HR user
+                var currentUser = await CurrentUserService.GetUserAsync();
+                if (currentUser != null)
+                {
+                    // Lock the filter to their department
+                    filterDepartmentId = currentUser.DepartmentId;
+
+                    // Get the name for the UI display
+                    var dept = departments.FirstOrDefault(d => d.DepartmentId == filterDepartmentId);
+                    HRDepartmentName = dept?.Name ?? "Restricted";
+                }
             }
         }
 
         await LoadEmployees();
     }
 
+    // private async Task LoadEmployees()
+    // {
+    //     employees = await EmployeeService.GetEmployeesForListAsync(_search, filterDepartmentId);
+    //     StateHasChanged();
+    // }
+
+    // private async Task LoadEmployees()
+    // {
+    //     var result = await EmployeeService.GetEmployeesForListAsync(_search, filterDepartmentId, currentPage, pageSize);
+    //     employees = result.Items;
+    //     totalEmployees = result.TotalCount;
+    //     StateHasChanged();
+    // }
+
     private async Task LoadEmployees()
     {
-        employees = await EmployeeService.GetEmployeesForListAsync(_search, filterDepartmentId);
-        StateHasChanged();
+        var result = await EmployeeService.GetEmployeesForListAsync(_search, filterDepartmentId, currentPage, pageSize);
+
+        totalEmployees = result.TotalCount;
+
+        // ✅ Fix invalid page
+        if (currentPage > totalPages && totalPages > 0)
+        {
+            currentPage = totalPages;
+            result = await EmployeeService.GetEmployeesForListAsync(_search, filterDepartmentId, currentPage, pageSize);
+        }
+
+        employees = result.Items;
     }
+
+
+   // private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
+   //  {
+   //    //  Only allow changing the filter if they are an OrgAdmin
+   //      if (UserIsOrgAdmin)
+   //      {
+   //          filterDepartmentId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+   //          await LoadEmployees();
+   //      }
+   //  }
 
     private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
     {
-        filterDepartmentId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
-        await LoadEmployees();
+        if (UserIsOrgAdmin)
+        {
+            filterDepartmentId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+            currentPage = 1; // RESET TO PAGE 1
+            await LoadEmployees();
+        }
     }
 
     private async Task OpenEditModal(EmployeeListDto e)

@@ -7,6 +7,7 @@
 @attribute [Authorize(Roles = "Employee")]
 
 @inject AttendanceService AttendanceService
+@inject IJSRuntime JS
 
 <PageTitle>My Attendance | Humatrix HRMS</PageTitle>
 
@@ -205,27 +206,72 @@
         _ => "bg-secondary"
     };
 
+    // private async Task CheckIn()
+    // {
+    //     try
+    //     {
+    //         isLoading = true; error = null;
+    //         await AttendanceService.CheckInAsync();
+    //         await RefreshUI();
+    //     }
+    //     catch (Exception ex) { error = ex.Message; }
+    //     finally { isLoading = false; }
+    // }
+
     private async Task CheckIn()
     {
         try
         {
-            isLoading = true; error = null;
-            await AttendanceService.CheckInAsync();
+            isLoading = true;
+            error = null;
+
+            // 🔥 Get location from browser
+            var location = await JS.InvokeAsync<LocationResult>("getLocation");
+
+            // 🔥 Send to backend
+            await AttendanceService.CheckInAsync(location.Latitude, location.Longitude);
+
             await RefreshUI();
         }
-        catch (Exception ex) { error = ex.Message; }
-        finally { isLoading = false; }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private async Task CheckOut()
     {
         try
         {
-            isLoading = true; error = null;
-            await AttendanceService.CheckOutAsync();
+            isLoading = true;
+            error = null;
+
+            // 🔥 Get location again
+            var location = await JS.InvokeAsync<LocationResult>("getLocation");
+
+            // 🔥 Send to backend
+            await AttendanceService.CheckOutAsync(location.Latitude, location.Longitude);
+
             await RefreshUI();
         }
-        catch (Exception ex) { error = ex.Message; }
-        finally { isLoading = false; }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    public class LocationResult
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
     }
 }

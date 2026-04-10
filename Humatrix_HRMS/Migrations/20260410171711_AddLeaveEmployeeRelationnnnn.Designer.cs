@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260410171711_AddLeaveEmployeeRelationnnnn")]
+    partial class AddLeaveEmployeeRelationnnnn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -146,10 +149,6 @@ namespace Humatrix_HRMS.Migrations
 
                     b.Property<double?>("OvertimeHours")
                         .HasColumnType("float");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<double?>("TotalHours")
                         .HasColumnType("float");
@@ -360,33 +359,6 @@ namespace Humatrix_HRMS.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("LeaveRequests");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.OfficeLocation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<double>("Latitude")
-                        .HasColumnType("float");
-
-                    b.Property<double>("Longitude")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<double>("RadiusInMeters")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("OfficeLocations");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Organization", b =>

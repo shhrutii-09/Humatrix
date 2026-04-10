@@ -23,7 +23,8 @@ namespace Humatrix_HRMS.Services
             {
                 try
                 {
-                    await MarkAbsentsAsync();
+                    await AutoCheckoutAsync();   // 🔥 FIRST
+                    await MarkAbsentsAsync();   // 🔥 THEN
                 }
                 catch (Exception ex)
                 {
@@ -39,16 +40,21 @@ namespace Humatrix_HRMS.Services
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // ✅ USE UTC (consistent with rest of app)
             var targetDate = DateTime.UtcNow.Date.AddDays(-1);
 
-            // ✅ Skip weekends
+            // 1. Skip weekends
             if (targetDate.DayOfWeek == DayOfWeek.Saturday ||
                 targetDate.DayOfWeek == DayOfWeek.Sunday)
                 return;
 
-            // ✅ Get active employees (only needed fields)
-            var activeEmployees = await context.Employees
+            // 2. Get holidays
+            var holidays = await context.Holidays
+                .Where(h => h.Date == targetDate)
+                .Select(h => h.OrganizationId)
+                .ToListAsync();
+
+            // 3. Get employees
+            var employees = await context.Employees
                 .Where(e => e.Status == "Active")
                 .Select(e => new
                 {
@@ -58,43 +64,100 @@ namespace Humatrix_HRMS.Services
                 })
                 .ToListAsync();
 
-            if (!activeEmployees.Any()) return;
+            if (!employees.Any()) return;
 
-            // ✅ Use HashSet for FAST lookup
-            //var existingEmployeeIds = await context.Attendances
-            //    .Where(a => a.Date == targetDate)
-            //    .Select(a => a.EmployeeId)
-            //    .ToHashSetAsync();
+            // 4. Get employees on leave
+            var employeesOnLeave = await context.LeaveRequests
+                .Where(l =>
+                    l.Status == "Approved" &&
+                    targetDate >= l.FromDate &&
+                    targetDate <= l.ToDate)
+                .Select(l => l.EmployeeId)
+                .ToListAsync();
 
-            var existingEmployeeIds = (await context.Attendances
-    .Where(a => a.Date == targetDate)
-    .Select(a => a.EmployeeId)
-    .ToListAsync())
-    .ToHashSet();
+            var leaveSet = employeesOnLeave.ToHashSet();
 
-            var missingEmployees = activeEmployees
-                .Where(e => !existingEmployeeIds.Contains(e.EmployeeId))
+            // 5. Existing attendance
+            var existingAttendance = (await context.Attendances
+                .Where(a => a.Date == targetDate)
+                .Select(a => a.EmployeeId)
+                .ToListAsync())
+                .ToHashSet();
+
+            // 6. Filter employees who should be marked absent
+            var toMarkAbsent = employees
+                .Where(e =>
+                    !existingAttendance.Contains(e.EmployeeId) &&
+                    !leaveSet.Contains(e.EmployeeId) &&
+                    !holidays.Contains(e.OrganizationId))
                 .ToList();
 
-            if (!missingEmployees.Any()) return;
+            if (!toMarkAbsent.Any()) return;
 
-            var newAttendances = missingEmployees.Select(emp => new Attendance
+            var records = toMarkAbsent.Select(e => new Attendance
             {
                 AttendanceId = Guid.NewGuid(),
-                UserId = emp.UserId,
-                EmployeeId = emp.EmployeeId,
-                OrganizationId = emp.OrganizationId,
+                UserId = e.UserId,
+                EmployeeId = e.EmployeeId,
+                OrganizationId = e.OrganizationId,
                 Date = targetDate,
-                IsPresent = false
+                IsPresent = false,
+                Status = "Absent" // 🔥 ADD THIS
             });
 
-            await context.Attendances.AddRangeAsync(newAttendances);
+            await context.Attendances.AddRangeAsync(records);
             await context.SaveChangesAsync();
+        }
 
-            _logger.LogInformation(
-                "Auto-Absent: {Count} employees marked absent for {Date}",
-                missingEmployees.Count,
-                targetDate);
+        private async Task AutoCheckoutAsync()
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var today = DateTime.UtcNow.Date;
+
+            var records = await context.Attendances
+                .Include(a => a.Employee)
+                .ThenInclude(e => e.Shift)
+                .Where(a =>
+                    a.Date == today &&
+                    a.CheckIn != null &&
+                    a.CheckOut == null)
+                .ToListAsync();
+
+            foreach (var att in records)
+            {
+                var shift = att.Employee?.Shift;
+                if (shift == null) continue;
+
+                var checkoutTime = today.Add(shift.EndTime);
+
+                if (shift.EndTime < shift.StartTime)
+                    checkoutTime = checkoutTime.AddDays(1);
+
+                checkoutTime = checkoutTime.AddMinutes(30);
+
+                var now = DateTime.UtcNow;
+
+                if (now < checkoutTime)
+                    continue;
+
+                att.CheckOut = checkoutTime;
+
+                var totalHours = (att.CheckOut.Value - att.CheckIn.Value).TotalHours;
+                att.TotalHours = totalHours;
+
+                if (totalHours < shift.MinimumHoursForHalfDay)
+                    att.Status = "Short Hours";
+                else if (totalHours < shift.MinimumHoursForFullDay)
+                    att.Status = "Half Day";
+                else
+                    att.Status = att.Status.Contains("Late") ? "Late" : "Present";
+
+                att.IsManual = false; // ✅ system checkout
+            }
+
+            await context.SaveChangesAsync();
         }
     }
 }

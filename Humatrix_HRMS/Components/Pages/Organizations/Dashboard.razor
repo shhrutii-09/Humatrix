@@ -23,7 +23,11 @@
             <button class="btn btn-white border shadow-sm btn-sm py-2 px-3" @onclick='() => Nav.NavigateTo("/org/settings")'>
                 <i class="bi bi-gear me-2"></i>SETTINGS
             </button>
+            <button class="btn btn-white border shadow-sm btn-sm py-2 px-3" @onclick='() => Nav.NavigateTo("/org/profile")'>
+                My Profile
+            </button>
         </div>
+
     </div>
 
     @if (data == null)
@@ -213,5 +217,5 @@
 
     void GoDepartments() => Nav.NavigateTo("/org/departments");
     void GoDesignations() => Nav.NavigateTo("/org/designations");
-    void GoEmployees() => Nav.NavigateTo("/org/employees");
+    void GoEmployees() => Nav.NavigateTo("/employees");
 }

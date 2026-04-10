@@ -45,10 +45,10 @@
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">Recent Employee List</h5>
-                    <div class="d-flex gap-2">
+                    @* <div class="d-flex gap-2">
                         <input type="text" @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch"
                                class="form-control form-control-sm" placeholder="Search by name or email..." />
-                    </div>
+                    </div> *@
                 </div>
                 <div class="table-responsive p-0">
                     <table class="table align-middle mb-0">
@@ -156,7 +156,11 @@
 
     private async Task LoadEmployees()
     {
-        employees = await EmployeeService.GetEmployeesForListAsync(searchTerm);
+        // employees = await EmployeeService.GetEmployeesForListAsync(searchTerm);
+        var result = await EmployeeService.GetEmployeesForListAsync(searchTerm);
+
+        // Extract only the 'Items' list into your local 'employees' variable
+        employees = result.Items;
     }
 
     private async Task HandleSearch()

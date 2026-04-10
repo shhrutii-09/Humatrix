@@ -18,88 +18,150 @@
 <div class="container-fluid px-4 mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="fw-normal">Add New Employee</h2>
-        <button class="btn btn-primary shadow-sm" style="background-color: #5c4ac7; border: none;" @onclick='() => Nav.NavigateTo("/org/dashboard")'>
+        <button class="btn btn-primary shadow-sm"
+                style="background-color: #5c4ac7; border: none;"
+                @onclick='() => Nav.NavigateTo("/org/dashboard")'>
             BACK TO DASHBOARD
         </button>
     </div>
 
     <div class="card shadow-sm border-0">
         <div class="card-body p-4">
-            <EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="addEmployeeForm">
-                <DataAnnotationsValidator />
 
-                <div class="row g-4">
-                    <div class="col-md-7">
-                        <h5 class="mb-3 text-muted border-bottom pb-2">Basic Information</h5>
+            @if (isPageLoading)
+            {
+                <!-- 🔥 PAGE LOADING -->
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <div class="text-muted mt-2">Loading form...</div>
+                </div>
+            }
+            else
+            {
+                <EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="addEmployeeForm">
+                    <DataAnnotationsValidator />
 
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label small fw-bold">First Name</label>
-                                <InputText @bind-Value="model.FirstName" class="form-control" placeholder="Enter first name" />
-                                <ValidationMessage For="@(() => model.FirstName)" class="text-danger small" />
+                    <div class="row g-4">
+                        <!-- LEFT -->
+                        <div class="col-md-7">
+                            <h5 class="mb-3 text-muted border-bottom pb-2">Basic Information</h5>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">First Name</label>
+                                    <InputText @bind-Value="model.FirstName"
+                                               class="form-control"
+                                               placeholder="Enter first name"
+                                               disabled="@isSubmitting" />
+                                    <ValidationMessage For="@(() => model.FirstName)" class="text-danger small" />
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label small fw-bold">Last Name</label>
+                                    <InputText @bind-Value="model.LastName"
+                                               class="form-control"
+                                               placeholder="Enter last name"
+                                               disabled="@isSubmitting" />
+                                    <ValidationMessage For="@(() => model.LastName)" class="text-danger small" />
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label small fw-bold">Last Name</label>
-                                <InputText @bind-Value="model.LastName" class="form-control" placeholder="Enter last name" />
-                                <ValidationMessage For="@(() => model.LastName)" class="text-danger small" />
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Email Address</label>
+                                <InputText @bind-Value="model.Email"
+                                           type="email"
+                                           class="form-control"
+                                           placeholder="employee@company.com"
+                                           disabled="@isSubmitting" />
+                                <ValidationMessage For="@(() => model.Email)" class="text-danger small" />
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Email Address</label>
-                            <InputText @bind-Value="model.Email" type="email" class="form-control" placeholder="employee@company.com" />
-                            <ValidationMessage For="@(() => model.Email)" class="text-danger small" />
+                        <!-- RIGHT -->
+                        <div class="col-md-5 border-start ps-4">
+                            <h5 class="mb-3 text-muted border-bottom pb-2">Assignment</h5>
+
+                            <!-- Department -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Department</label>
+                                <select class="form-select"
+                                        @onchange="OnDepartmentChanged"
+                                        disabled="@isSubmitting">
+                                    <option value="" disabled selected>Select Department</option>
+                                    @foreach (var d in departments)
+                                    {
+                                        <option value="@d.DepartmentId">@d.Name</option>
+                                    }
+                                </select>
+                                <ValidationMessage For="@(() => model.DepartmentId)" class="text-danger small" />
+                            </div>
+
+                            <!-- Designation -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Designation</label>
+
+                                @if (isDesignationLoading)
+                                {
+                                    <div class="text-muted small">
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        Loading designations...
+                                    </div>
+                                }
+                                else
+                                {
+                                    <InputSelect @bind-Value="model.DesignationId"
+                                                 class="form-select"
+                                                 disabled="@isSubmitting">
+                                        <option value="" disabled selected>Select Designation</option>
+                                        @foreach (var d in designations)
+                                        {
+                                            <option value="@d.DesignationId">@d.Name</option>
+                                        }
+                                    </InputSelect>
+                                }
+
+                                <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small" />
+                            </div>
+
+                            <!-- Shift -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Work Shift</label>
+                                <InputSelect @bind-Value="model.ShiftId"
+                                             class="form-select"
+                                             disabled="@isSubmitting">
+                                    <option value="" disabled selected>Select Shift</option>
+                                    @foreach (var s in shifts)
+                                    {
+                                        <option value="@s.ShiftId">@s.Name</option>
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="@(() => model.ShiftId)" class="text-danger small" />
+                            </div>
                         </div>
                     </div>
 
-                    <div class="col-md-5 border-start ps-4">
-                        <h5 class="mb-3 text-muted border-bottom pb-2">Assignment</h5>
+                    <!-- SUBMIT -->
+                    <div class="mt-4 border-top pt-3 text-end">
+                        <button type="submit"
+                                class="btn btn-success px-5"
+                                style="background-color: #28a745; border: none;"
+                                disabled="@isSubmitting">
 
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Department</label>
-                            <select class="form-select" @onchange="OnDepartmentChanged">
-                                <option value="" disabled selected>Select Department</option>
-                                @foreach (var d in departments)
-                                {
-                                    <option value="@d.DepartmentId">@d.Name</option>
-                                }
-                            </select>
-                            <ValidationMessage For="@(() => model.DepartmentId)" class="text-danger small" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Designation</label>
-                            <InputSelect @bind-Value="model.DesignationId" class="form-select">
-                                <option value="" disabled selected>Select Designation</option>
-                                @foreach (var d in designations)
-                                {
-                                    <option value="@d.DesignationId">@d.Name</option>
-                                }
-                            </InputSelect>
-                            <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Work Shift</label>
-                            <InputSelect @bind-Value="model.ShiftId" class="form-select">
-                                <option value="" disabled selected>Select Shift</option>
-                                @foreach (var s in shifts)
-                                {
-                                    <option value="@s.ShiftId">@s.Name</option>
-                                }
-                            </InputSelect>
-                            <ValidationMessage For="@(() => model.ShiftId)" class="text-danger small" />
-                        </div>
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <span>PROCESSING...</span>
+                            }
+                            else
+                            {
+                                <span>GENERATE INVITE</span>
+                            }
+                        </button>
                     </div>
-                </div>
+                </EditForm>
+            }
 
-                <div class="mt-4 border-top pt-3 text-end">
-                    <button type="submit" class="btn btn-success px-5" style="background-color: #28a745; border: none;" disabled="@isSubmitting">
-                        @(isSubmitting ? "PROCESSING..." : "GENERATE INVITE")
-                    </button>
-                </div>
-            </EditForm>
-
+            <!-- ✅ KEEPING YOUR ORIGINAL SUCCESS BLOCK EXACTLY -->
             @if (!string.IsNullOrEmpty(link))
             {
                 <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3" style="background-color: #e6ffed;">
@@ -125,12 +187,15 @@
                 </div>
             }
 
+            <!-- ERROR -->
             @if (!string.IsNullOrEmpty(error))
             {
-                <div class="alert alert-danger mt-3 border-0 shadow-sm">
+                <div class="alert alert-danger alert-dismissible fade show mt-3 border-0 shadow-sm">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i> @error
+                    <button type="button" class="btn-close" @onclick="() => error = null"></button>
                 </div>
             }
+
         </div>
     </div>
 </div>
@@ -154,24 +219,39 @@
 
     string? link;
     string? error;
+
     bool isSubmitting;
+    bool isPageLoading = true;
+    bool isDesignationLoading = false;
+
     private bool showCopiedFeedback = false;
 
     protected override async Task OnInitializedAsync()
     {
-        departments = await DeptService.GetActiveAsync();
-        shifts = await ShiftService.GetAllShiftsAsync();
+        try
+        {
+            departments = await DeptService.GetActiveAsync();
+            shifts = await ShiftService.GetAllShiftsAsync();
+        }
+        catch
+        {
+            error = "Failed to load data";
+        }
+        finally
+        {
+            isPageLoading = false;
+        }
     }
 
     private async Task OnDepartmentChanged(ChangeEventArgs e)
     {
+        isDesignationLoading = true;
+
         var selectedValue = e.Value?.ToString();
 
         if (Guid.TryParse(selectedValue, out var deptId))
         {
             model.DepartmentId = deptId;
-
-            // ✅ CLEAR OLD DESIGNATION
             model.DesignationId = null;
 
             designations = await DesignationService.GetByDepartmentAsync(deptId);
@@ -182,6 +262,8 @@
             model.DesignationId = null;
             designations.Clear();
         }
+
+        isDesignationLoading = false;
     }
 
     private async Task HandleSubmit()
@@ -195,7 +277,6 @@
             model.Role = "Employee";
             link = await EmployeeService.CreateEmployeeAsync(model);
 
-            // Clear form details after successful generation
             model = new CreateEmployeeDto();
             designations.Clear();
         }
@@ -218,6 +299,7 @@
             StateHasChanged();
 
             await Task.Delay(2000);
+
             showCopiedFeedback = false;
             StateHasChanged();
         }

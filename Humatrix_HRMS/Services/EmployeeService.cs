@@ -140,6 +140,23 @@ namespace Humatrix_HRMS.Services
 
         public async Task UpdateEmployeeAsync(string email, EditEmployeeDto dto)
         {
+
+            if (dto.DepartmentId == null)
+                throw new Exception("Department required");
+
+            if (dto.DesignationId == null)
+                throw new Exception("Designation required");
+
+            var currentUser = await _currentUser.GetUserAsync();
+
+            var validCombo = await _context.Designations.AnyAsync(d =>
+                d.DesignationId == dto.DesignationId &&
+                d.DepartmentId == dto.DepartmentId &&
+                d.OrganizationId == currentUser.OrganizationId);
+
+            if (!validCombo)
+                throw new Exception("Designation does not belong to selected department");
+
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) throw new Exception("User not found");
 
@@ -187,36 +204,49 @@ namespace Humatrix_HRMS.Services
 
         #region List Retrieval
 
-        public async Task<List<EmployeeListDto>> GetEmployeesForListAsync(string? search = null, Guid? departmentId = null)
+        public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
+     string? search = null,
+     Guid? departmentId = null,
+     int pageNumber = 1,
+     int pageSize = 10)
         {
             var currentUser = await _currentUser.GetUserAsync();
-
             if (currentUser?.OrganizationId == null) return new();
 
-            var users = await _userManager.Users
-                .Where(u => u.OrganizationId == currentUser.OrganizationId && u.Id != currentUser.Id)
-                .ToListAsync();
+            // 1. Identify current user's role
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
+            bool isOrgAdmin = currentUserRoles.Contains("OrgAdmin");
+            bool isHR = currentUserRoles.Contains("HR");
 
-            var roles = await _userManager.GetRolesAsync(currentUser);
+            // 2. Fetch all users in organization (excluding self)
+            var usersQuery = _userManager.Users
+                .Where(u => u.OrganizationId == currentUser.OrganizationId && u.Id != currentUser.Id);
 
-            //var depts = await _context.Departments.AsNoTracking().ToListAsync();
-            //var desigs = await _context.Designations.AsNoTracking().ToListAsync();
 
+            // 🔒 SECURITY FIX: If user is HR (and NOT OrgAdmin), restrict to their department
+            if (isHR && !isOrgAdmin)
+            {
+                usersQuery = usersQuery.Where(u => u.DepartmentId == currentUser.DepartmentId);
+            }
+
+            var users = await usersQuery.ToListAsync();
+
+            // 3. Prepare metadata (Departments, Designations, etc.)
             var depts = await _context.Departments
-    .Where(d => d.OrganizationId == currentUser.OrganizationId)
-    .AsNoTracking()
-    .ToListAsync();
+                .Where(d => d.OrganizationId == currentUser.OrganizationId)
+                .AsNoTracking().ToListAsync();
 
             var desigs = await _context.Designations
                 .Where(d => d.OrganizationId == currentUser.OrganizationId)
-                .AsNoTracking()
-                .ToListAsync();
+                .AsNoTracking().ToListAsync();
 
-            var shifts = await _context.Shifts.AsNoTracking().ToListAsync();
+            var shifts = await _context.Shifts
+        .Where(s => s.OrganizationId == currentUser.OrganizationId)
+        .AsNoTracking().ToListAsync();
+
             var profiles = await _context.Employees
-                .AsNoTracking()
                 .Where(e => e.OrganizationId == currentUser.OrganizationId)
-                .ToListAsync();
+                .AsNoTracking().ToListAsync();
 
             var list = new List<EmployeeListDto>();
 
@@ -225,33 +255,16 @@ namespace Humatrix_HRMS.Services
                 var userRoles = await _userManager.GetRolesAsync(u);
                 var role = userRoles.FirstOrDefault() ?? "Employee";
 
-                if (roles.Contains("HR") && (role == "HR" || role == "OrgAdmin"))
+                // HR should not see/manage OrgAdmins or other HRs usually, 
+                // but even if they do, they are now restricted by DepartmentId above.
+                if (isHR && !isOrgAdmin && (role == "HR" || role == "OrgAdmin"))
                     continue;
 
-                //var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
                 var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
 
-                var shiftId = profile?.ShiftId;
-
-                //list.Add(new EmployeeListDto
-                //{
-                //    Email = u.Email ?? string.Empty,
-                //    FirstName = u.FirstName,
-                //    LastName = u.LastName,
-                //    Name = $"{u.FirstName} {u.LastName}",
-                //    Role = role,
-                //    Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
-                //    Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
-                //    DepartmentId = u.DepartmentId,
-                //    DesignationId = u.DesignationId,
-                //    ShiftId = profile?.ShiftId,
-                //    ShiftName = shifts.FirstOrDefault(s => s.ShiftId == shiftId)?.Name ?? "No Shift",
-                //    IsActive = u.IsActive
-                //});
                 list.Add(new EmployeeListDto
                 {
-                    EmployeeId = profile?.EmployeeId ?? Guid.Empty, // ✅ THIS IS THE FIX
-
+                    EmployeeId = profile?.EmployeeId ?? Guid.Empty,
                     Email = u.Email ?? string.Empty,
                     FirstName = u.FirstName,
                     LastName = u.LastName,
@@ -262,34 +275,34 @@ namespace Humatrix_HRMS.Services
                     DepartmentId = u.DepartmentId,
                     DesignationId = u.DesignationId,
                     ShiftId = profile?.ShiftId,
-                    ShiftName = shifts.FirstOrDefault(s => s.ShiftId == shiftId)?.Name ?? "No Shift",
+                    ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift Assigned",
                     IsActive = u.IsActive
                 });
             }
 
-            //return list.OrderBy(x => x.Name).ToList();
-
-            // 🔍 Apply search
+            // Apply Search and Manual Filters
             if (!string.IsNullOrWhiteSpace(search))
             {
                 search = search.ToLower();
-
-                list = list.Where(x =>
-                    (!string.IsNullOrEmpty(x.Name) && x.Name.ToLower().Contains(search)) ||
-                    (!string.IsNullOrEmpty(x.Email) && x.Email.ToLower().Contains(search))
-                ).ToList();
+                list = list.Where(x => x.Name.ToLower().Contains(search) || x.Email.ToLower().Contains(search)).ToList();
             }
 
-            // 🏢 Apply department filter
             if (departmentId.HasValue)
             {
                 list = list.Where(x => x.DepartmentId == departmentId).ToList();
             }
 
-            // ✅ Final sorted result
-            return list.OrderBy(x => x.Name).ToList();
-        }
+            int totalCount = list.Count;
+            var items = list
+                .OrderBy(x => x.Name)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
 
+            return (items, totalCount);
+
+            //return list.OrderBy(x => x.Name).ToList();
+        }
         #endregion
 
         #region Creation
@@ -307,6 +320,33 @@ namespace Humatrix_HRMS.Services
                 var existingUser = await _userManager.FindByEmailAsync(dto.Email);
                 if (existingUser != null)
                     throw new Exception("User already exists");
+
+                if (string.IsNullOrWhiteSpace(dto.Email))
+                    throw new Exception("Email is required");
+
+                var deptExists = await _context.Departments.AnyAsync(d =>
+                    d.DepartmentId == dto.DepartmentId &&
+                    d.OrganizationId == currentUser.OrganizationId);
+
+                if (!deptExists)
+                    throw new Exception("Invalid department");
+
+                var desigExists = await _context.Designations.AnyAsync(d =>
+                    d.DesignationId == dto.DesignationId &&
+                    d.OrganizationId == currentUser.OrganizationId);
+
+                if (!desigExists)
+                    throw new Exception("Invalid designation");
+
+                var designation = await _context.Designations
+.FirstOrDefaultAsync(d =>
+   d.DesignationId == dto.DesignationId &&
+   d.OrganizationId == currentUser.OrganizationId &&
+   d.IsActive); // ✅ IMPORTANT
+
+                if (designation == null)
+                    throw new Exception("Selected designation is inactive or invalid");
+
 
                 var user = new ApplicationUser
                 {
@@ -340,15 +380,10 @@ namespace Humatrix_HRMS.Services
                     JoiningDate = DateTime.UtcNow,
                     Status = "Active"
                 };
-                var designation = await _context.Designations
-    .FirstOrDefaultAsync(d =>
-        d.DesignationId == dto.DesignationId &&
-        d.OrganizationId == currentUser.OrganizationId &&
-        d.IsActive); // ✅ IMPORTANT
+           
 
-                if (designation == null)
-                    throw new Exception("Selected designation is inactive or invalid");
 
+                    
 
                 _context.Employees.Add(employee);
                 await _context.SaveChangesAsync();

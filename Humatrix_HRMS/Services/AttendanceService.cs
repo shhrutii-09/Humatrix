@@ -25,7 +25,7 @@ namespace Humatrix_HRMS.Services
         // =========================
         // CHECK IN
         // =========================
-        public async Task CheckInAsync()
+        public async Task CheckInAsync(double latitude, double longitude)
         {
             var user = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
@@ -33,12 +33,38 @@ namespace Humatrix_HRMS.Services
             var userId = user.Id;
             var orgId = user.OrganizationId ?? Guid.Empty;
 
+            if (orgId == Guid.Empty)
+                throw new Exception("Organization not found");
+
+            //var employee = await _context.Employees
+            //    .FirstOrDefaultAsync(e => e.UserId == userId);
+
             var employee = await _context.Employees
-                .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.UserId == userId);
+    .Include(e => e.Shift)
+    .FirstOrDefaultAsync(e => e.UserId == userId);
 
             if (employee == null)
                 throw new Exception("Profile not found.");
+
+            if (employee.Status != "Active")
+                throw new Exception("Inactive employee cannot check in");
+
+            // 🔥 GET OFFICE LOCATION
+            var office = await _context.OfficeLocations
+                .FirstOrDefaultAsync(x => x.OrganizationId == orgId);
+
+            if (office == null)
+                throw new Exception("Office location not set");
+
+            // 🔥 CALCULATE DISTANCE
+            double distance = GetDistance(
+                latitude, longitude,
+                office.Latitude, office.Longitude
+            );
+
+            // ❌ BLOCK IF OUTSIDE
+            if (distance > office.RadiusInMeters)
+                throw new Exception("You are not within office location");
 
             var today = DateTime.UtcNow.Date;
 
@@ -52,6 +78,7 @@ namespace Humatrix_HRMS.Services
             {
                 attendance = new Attendance
                 {
+                    AttendanceId = Guid.NewGuid(),
                     UserId = userId,
                     EmployeeId = employee.EmployeeId,
                     Date = today,
@@ -61,8 +88,55 @@ namespace Humatrix_HRMS.Services
                 _context.Attendances.Add(attendance);
             }
 
+            // ✅ SAVE DATA
             attendance.CheckIn = DateTime.UtcNow;
             attendance.IsPresent = true;
+
+            // 🔥 STATUS LOGIC ON CHECK-IN
+            //var shift = employee.Shift;
+
+            //if (shift != null)
+            //{
+            //    var checkInTime = attendance.CheckIn.Value.ToLocalTime().TimeOfDay;
+            //    var lateTime = shift.StartTime.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
+
+            //    attendance.Status = checkInTime > lateTime ? "Late (Active)" : "Checked In";
+            //}
+            //else
+            //{
+            //    attendance.Status = "Checked In";
+            //}
+
+            var shift = employee.Shift;
+
+            if (shift != null)
+            {
+                var shiftStart = shift.StartTime;
+                var checkInTime = attendance.CheckIn.Value.ToLocalTime().TimeOfDay;
+
+                // 🔥 handle overnight shift
+                bool isNextDayShift = shift.EndTime < shift.StartTime;
+
+                if (isNextDayShift)
+                {
+                    if (checkInTime < shift.EndTime)
+                        checkInTime = checkInTime.Add(TimeSpan.FromHours(24));
+                }
+
+                var lateTime = shiftStart.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
+
+                bool isLate = checkInTime > lateTime;
+
+                attendance.Status = isLate ? "Late (Active)" : "Checked In";
+            }
+            else
+            {
+                attendance.Status = "Checked In";
+            }
+
+            // 🔥 SAVE LOCATION
+            attendance.Latitude = latitude;
+            attendance.Longitude = longitude;
 
             await _context.SaveChangesAsync();
         }
@@ -70,14 +144,18 @@ namespace Humatrix_HRMS.Services
         // =========================
         // CHECK OUT
         // =========================
-        public async Task CheckOutAsync()
+        public async Task CheckOutAsync(double latitude, double longitude)
         {
             var user = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
 
+            var orgId = user.OrganizationId ?? Guid.Empty;
+
             var today = DateTime.UtcNow.Date;
 
             var attendance = await _context.Attendances
+                .Include(a => a.Employee)
+                .ThenInclude(e => e.Shift)
                 .FirstOrDefaultAsync(a => a.UserId == user.Id && a.Date == today);
 
             if (attendance == null || attendance.CheckIn == null)
@@ -86,9 +164,80 @@ namespace Humatrix_HRMS.Services
             if (attendance.CheckOut != null)
                 throw new Exception("Already checked out.");
 
+            // 🔥 GET OFFICE LOCATION
+            var office = await _context.OfficeLocations
+                .FirstOrDefaultAsync(x => x.OrganizationId == orgId);
+
+            if (office == null)
+                throw new Exception("Office location not set");
+
+            // 🔥 VALIDATE LOCATION
+            double distance = GetDistance(
+                latitude, longitude,
+                office.Latitude, office.Longitude
+            );
+
+            if (distance > office.RadiusInMeters)
+                throw new Exception("You are not within office location");
+
+            // ✅ SET CHECKOUT
             attendance.CheckOut = DateTime.UtcNow;
 
+            // 🔥 CALCULATE HOURS
+            var totalHours = (attendance.CheckOut.Value - attendance.CheckIn.Value).TotalHours;
+            attendance.TotalHours = totalHours;
+
+            var shift = attendance.Employee?.Shift;
+            if (shift != null && totalHours > shift.MinimumHoursForFullDay)
+            {
+                attendance.OvertimeHours = totalHours - shift.MinimumHoursForFullDay;
+            }
+            else
+            {
+                attendance.OvertimeHours = 0;
+            }
+
+            // 🔥 FINAL STATUS LOGIC AFTER CHECKOUT
+            if (shift != null)
+            {
+                if (totalHours < shift.MinimumHoursForHalfDay)
+                    attendance.Status = "Short Hours";
+                else if (totalHours < shift.MinimumHoursForFullDay)
+                    attendance.Status = "Half Day";
+                else
+                    attendance.Status = attendance.Status.Contains("Late") ? "Late" : "Present";
+            }
+            else
+            {
+                attendance.Status = "Present";
+            }
+
+            // 🔥 UPDATE LOCATION AGAIN (optional but good)
+            attendance.Latitude = latitude;
+            attendance.Longitude = longitude;
+
             await _context.SaveChangesAsync();
+        }
+
+        private double GetDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            var R = 6371000; // meters
+            var dLat = ToRadians(lat2 - lat1);
+            var dLon = ToRadians(lon2 - lon1);
+
+            var a =
+                Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+
+            return R * c;
+        }
+
+        private double ToRadians(double angle)
+        {
+            return angle * Math.PI / 180;
         }
 
         // =========================
@@ -156,7 +305,7 @@ namespace Humatrix_HRMS.Services
                     Date = a.Date,
                     CheckIn = a.CheckIn,
                     CheckOut = a.CheckOut,
-                    Status = GetStatus(a)
+                    Status = a.Status
                 });
             }
 
@@ -166,35 +315,35 @@ namespace Humatrix_HRMS.Services
         // =========================
         // STATUS LOGIC
         // =========================
-        private string GetStatus(Attendance a)
-        {
-            if (a.Date.Date == DateTime.Today && a.CheckIn == null)
-                return "Not Started";
+        //private string GetStatus(Attendance a)
+        //{
+        //    if (a.Date.Date == DateTime.Today && a.CheckIn == null)
+        //        return "Not Started";
 
-            if (a.CheckIn == null)
-                return "Absent";
+        //    if (a.CheckIn == null)
+        //        return "Absent";
 
-            var shift = a.Employee?.Shift;
-            if (shift == null)
-                return "Present";
+        //    var shift = a.Employee?.Shift;
+        //    if (shift == null)
+        //        return "Present";
 
-            var checkInTime = a.CheckIn.Value.ToLocalTime().TimeOfDay;
-            var lateTime = shift.StartTime.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
+        //    var checkInTime = a.CheckIn.Value.ToLocalTime().TimeOfDay;
+        //    var lateTime = shift.StartTime.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
 
-            bool isLate = checkInTime > lateTime;
+        //    bool isLate = checkInTime > lateTime;
 
-            if (a.CheckOut != null)
-            {
-                var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
+        //    if (a.CheckOut != null)
+        //    {
+        //        var hours = (a.CheckOut.Value - a.CheckIn.Value).TotalHours;
 
-                if (hours < shift.MinimumHoursForHalfDay) return "Short Hours";
-                if (hours < shift.MinimumHoursForFullDay) return "Half Day";
+        //        if (hours < shift.MinimumHoursForHalfDay) return "Short Hours";
+        //        if (hours < shift.MinimumHoursForFullDay) return "Half Day";
 
-                return isLate ? "Late" : "Present";
-            }
+        //        return isLate ? "Late" : "Present";
+        //    }
 
-            return isLate ? "Late (Active)" : "Checked In";
-        }
+        //    return isLate ? "Late (Active)" : "Checked In";
+        //}
 
         // =========================
         // TODAY STATUS
@@ -252,7 +401,7 @@ namespace Humatrix_HRMS.Services
                     Date = r.Date,
                     CheckIn = r.CheckIn,
                     CheckOut = r.CheckOut,
-                    Status = GetStatus(r)
+                    Status = r.Status
                 });
             }
 

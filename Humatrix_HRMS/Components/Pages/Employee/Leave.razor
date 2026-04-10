@@ -1,0 +1,55 @@
+﻿@page "/employee/leave"
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee")]
+
+@inject LeaveService LeaveService
+
+<h3>Apply Leave</h3>
+
+<EditForm Model="newLeave" OnValidSubmit="Apply">
+    <InputDate @bind-Value="newLeave.FromDate" />
+    <InputDate @bind-Value="newLeave.ToDate" />
+    <InputText @bind-Value="newLeave.Reason" placeholder="Reason" />
+    <button class="btn btn-primary">Apply</button>
+</EditForm>
+
+<h4 class="mt-4">My Leaves</h4>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>From</th>
+            <th>To</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var l in leaves)
+        {
+            <tr>
+                <td>@l.FromDate.ToShortDateString()</td>
+                <td>@l.ToDate.ToShortDateString()</td>
+                <td>@l.Status</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private LeaveRequest newLeave = new();
+    private List<LeaveRequest> leaves = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        leaves = await LeaveService.GetMyLeavesAsync();
+    }
+
+    private async Task Apply()
+    {
+        await LeaveService.ApplyLeaveAsync(newLeave);
+        newLeave = new LeaveRequest();
+        leaves = await LeaveService.GetMyLeavesAsync();
+    }
+}

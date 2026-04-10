@@ -10,8 +10,7 @@ namespace Humatrix_HRMS.Models
         public string UserId { get; set; }
         public ApplicationUser User { get; set; }
 
-        // ✅ This properly links Attendance to the Employee profile
-        public Guid? EmployeeId { get; set; } // Matches Employee's PK type
+        public Guid? EmployeeId { get; set; }
 
         [ForeignKey("EmployeeId")]
         public Employee? Employee { get; set; }
@@ -19,7 +18,28 @@ namespace Humatrix_HRMS.Models
         public DateTime Date { get; set; }
         public DateTime? CheckIn { get; set; }
         public DateTime? CheckOut { get; set; }
+
         public bool IsPresent { get; set; }
+
         public Guid OrganizationId { get; set; }
+
+        // ✅ Location tracking (you already added)
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+
+        public string Status { get; set; } = "Not Started";
+
+        // 🔥 ADD THESE ↓↓↓ (IMPORTANT)
+
+        // Total worked hours
+        public double? TotalHours { get; set; }
+
+        // Extra time beyond full day
+        public double? OvertimeHours { get; set; }
+
+        // HR manual update tracking
+        public bool IsManual { get; set; } = false;
+
+        public Guid? UpdatedBy { get; set; }
     }
 }

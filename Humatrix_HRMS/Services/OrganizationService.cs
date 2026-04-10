@@ -104,6 +104,12 @@ namespace Humatrix_HRMS.Services
             using var _context = _contextFactory.CreateDbContext();
 
             var dbOrg = await _context.Organizations.FindAsync(org.OrganizationId);
+            var exists = await _context.Organizations.AnyAsync(x =>
+    x.OrganizationId != org.OrganizationId &&
+    x.Email.ToLower() == org.Email.ToLower());
+
+            if (exists)
+                throw new Exception("Email already used");
 
             if (dbOrg != null)
             {

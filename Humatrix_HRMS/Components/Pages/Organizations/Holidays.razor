@@ -1,0 +1,62 @@
+﻿@page "/admin/holidays"
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject HolidayService HolidayService
+
+<h3>Holiday Management</h3>
+
+<EditForm Model="newHoliday" OnValidSubmit="AddHoliday">
+    <InputDate @bind-Value="newHoliday.Date" />
+    <InputText @bind-Value="newHoliday.Name" placeholder="Holiday Name" />
+    <button class="btn btn-primary">Add</button>
+</EditForm>
+
+<table class="table mt-3">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Name</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var h in holidays)
+        {
+            <tr>
+                <td>@h.Date.ToShortDateString()</td>
+                <td>@h.Name</td>
+                <td>
+                    <button class="btn btn-danger btn-sm" @onclick="() => Delete(h.HolidayId)">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Holiday> holidays = new();
+    private Holiday newHoliday = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        holidays = await HolidayService.GetAllAsync();
+    }
+
+    private async Task AddHoliday()
+    {
+        await HolidayService.CreateAsync(newHoliday);
+        newHoliday = new Holiday();
+        holidays = await HolidayService.GetAllAsync();
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await HolidayService.DeleteAsync(id);
+        holidays = await HolidayService.GetAllAsync();
+    }
+}

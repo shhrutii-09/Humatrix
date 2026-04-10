@@ -87,6 +87,14 @@ namespace Humatrix_HRMS.Services
             if (dept.OrganizationId != user.OrganizationId)
                 throw new Exception("Access denied");
 
+            var exists = await _context.Departments.AnyAsync(d =>
+    d.DepartmentId != id &&
+    d.OrganizationId == user.OrganizationId &&
+    d.Name.ToLower().Trim() == name.ToLower().Trim());
+
+            if (exists)
+                throw new Exception("Department already exists");
+
             dept.Name = name;
             dept.Description = description;
 
