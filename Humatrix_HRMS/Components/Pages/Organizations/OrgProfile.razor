@@ -1,14 +1,18 @@
 ﻿@page "/org/profile"
 @rendermode InteractiveServer
 
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Authorization
+@using static Humatrix_HRMS.Components.Pages.Employee.Attendence
 
 @attribute [Authorize(Roles = "OrgAdmin")]
+@inject OfficeLocationService LocationService
+@inject IJSRuntime JS
 
 @inject OrganizationService OrgService
 @inject UserManager<ApplicationUser> UserManager
@@ -71,6 +75,65 @@
                                 <label class="small fw-bold">Address</label>
                                 <InputText class="form-control" @bind-Value="orgModel.Address" />
                             </div>
+                            <hr class="my-4" />
+
+                            <h5 class="text-muted border-bottom pb-2 mb-3">
+                                Office Location
+                            </h5>
+
+                            <div class="row g-3">
+
+                                <div class="col-md-6">
+                                    <label class="small fw-bold">Office Name</label>
+                                    <InputText class="form-control" @bind-Value="locationModel.Name" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="small fw-bold">Latitude</label>
+                                    <InputNumber class="form-control" @bind-Value="locationModel.Latitude" />
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="small fw-bold">Longitude</label>
+                                    <InputNumber class="form-control" @bind-Value="locationModel.Longitude" />
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="small fw-bold">Allowed Radius (meters)</label>
+                                    <InputNumber class="form-control" @bind-Value="locationModel.RadiusInMeters" />
+                                </div>
+
+                                <div class="col-md-8 d-flex align-items-end">
+                                    <button type="button"
+                                            class="btn btn-outline-primary me-2"
+                                            @onclick="DetectLocation"
+                                            disabled="@isDetectingLocation">
+
+                                        @if (isDetectingLocation)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+
+                                        📍 Detect Location
+                                    </button>
+                                </div>
+
+                            </div>
+
+                            @if (locationModel.Latitude != 0 && locationModel.Longitude != 0)
+                            {
+                                <div class="mt-3">
+                                    <p class="text-muted small">
+                                        📍 Current Location: <strong>@locationModel.Latitude, @locationModel.Longitude</strong>
+                                    </p>
+
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       href="https://www.google.com/maps?q=@locationModel.Latitude,@locationModel.Longitude"
+                                       target="_blank">
+                                        🌍 View on Map
+                                    </a>
+                                </div>
+                            }
 
                             <div class="mt-4 d-flex gap-2">
                                 <button class="btn btn-success px-4" disabled="@isSaving">
@@ -261,7 +324,8 @@
 
     private string? statusMessage;
     private string? errorMessage;
-
+    private OfficeLocationDto locationModel = new();
+    private bool isDetectingLocation = false;
     private ApplicationUser? currentUser;
 
     protected override async Task OnInitializedAsync()
@@ -295,6 +359,20 @@
             deptCount = stats.DepartmentCount;
 
             hasPassword = await UserManager.HasPasswordAsync(user);
+
+            var location = await LocationService.GetAsync();
+
+            if (location != null)
+            {
+                locationModel = new OfficeLocationDto
+                {
+                    Id = location.Id,
+                    Name = location.Name,
+                    Latitude = location.Latitude,
+                    Longitude = location.Longitude,
+                    RadiusInMeters = location.RadiusInMeters
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -310,6 +388,7 @@
         {
             isSaving = true;
             await OrgService.UpdateOrganizationAsync(orgModel);
+
             statusMessage = "Organization updated successfully!";
             errorMessage = null;
         }
@@ -323,7 +402,27 @@
         }
     }
 
+    private async Task DetectLocation()
+    {
+        try
+        {
+            isDetectingLocation = true;
 
+            var loc = await JS.InvokeAsync<LocationResult>("getLocation");
+
+            locationModel.Latitude = loc.Latitude;
+            locationModel.Longitude = loc.Longitude;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Location error: " + ex.Message;
+        }
+        finally
+        {
+            isDetectingLocation = false;
+        }
+    }
+    
   
 
     private void ShowPasswordModal() => showPasswordModal = true;
