@@ -8,6 +8,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Authorization
+@using static Humatrix_HRMS.Components.Pages.Organizations.Location
 @using static Humatrix_HRMS.Components.Pages.Employee.Attendence
 
 @attribute [Authorize(Roles = "OrgAdmin")]
@@ -88,7 +89,7 @@
                                     <InputText class="form-control" @bind-Value="locationModel.Name" />
                                 </div>
 
-                                <div class="col-md-3">
+                                @* <div class="col-md-3">
                                     <label class="small fw-bold">Latitude</label>
                                     <InputNumber class="form-control" @bind-Value="locationModel.Latitude" />
                                 </div>
@@ -96,7 +97,7 @@
                                 <div class="col-md-3">
                                     <label class="small fw-bold">Longitude</label>
                                     <InputNumber class="form-control" @bind-Value="locationModel.Longitude" />
-                                </div>
+                                </div> *@
 
                                 <div class="col-md-4">
                                     <label class="small fw-bold">Allowed Radius (meters)</label>

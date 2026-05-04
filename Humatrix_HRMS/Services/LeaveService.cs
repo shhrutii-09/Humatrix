@@ -1,5 +1,7 @@
 ﻿using Humatrix_HRMS.Data;
+using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Models;
+using Humatrix_HRMS.Helpers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services
@@ -24,72 +26,95 @@ namespace Humatrix_HRMS.Services
                 ?? throw new Exception("Unauthorized");
 
             var employee = await _context.Employees
-                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+                .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                ?? throw new Exception("Employee not found");
 
-            if (employee == null)
-                throw new Exception("Employee not found");
+            var workWeek = await _context.WorkWeeks
+                .FirstOrDefaultAsync(w => w.OrganizationId == employee.OrganizationId)
+                ?? throw new Exception("Please contact HR: Work week not configured");
+
+            var today = DateTime.UtcNow.Date; // ✅ single consistent reference
+
+            if (request.FromDate.Date < today)
+                throw new Exception("Cannot apply leave for past dates");
 
             if (request.FromDate > request.ToDate)
                 throw new Exception("Invalid date range");
 
-            // ✅ Prevent overlapping leaves
+            var leaveType = await _context.LeaveTypes
+                .FirstOrDefaultAsync(lt => lt.LeaveTypeId == request.LeaveTypeId)
+                ?? throw new Exception("Leave type not found");
+
+            if (!leaveType.IsActive)
+                throw new Exception("This leave type is no longer available");
+
+            if (leaveType.MinNoticeRequiredDays > 0)
+            {
+                var daysUntilLeave = (request.FromDate.Date - today).Days; // ✅ consistent
+                if (daysUntilLeave < leaveType.MinNoticeRequiredDays)
+                    throw new Exception(
+                        $"This leave type requires at least {leaveType.MinNoticeRequiredDays} day(s) advance notice");
+            }
+
+            if (request.IsHalfDay && request.FromDate.Date != request.ToDate.Date)
+                throw new Exception("Half-day leave can only be for a single day");
+
+            if (request.IsHalfDay && !leaveType.AllowHalfDay)
+                throw new Exception("This leave type does not support half-day");
+
+            var holidays = await _context.Holidays
+                .Where(h =>
+                    h.OrganizationId == employee.OrganizationId &&
+                    !h.IsOptional &&
+                    h.Date.Date >= request.FromDate.Date &&
+                    h.Date.Date <= request.ToDate.Date)
+                .Select(h => h.Date.Date)
+                .ToListAsync();
+
+            decimal totalDays = request.IsHalfDay
+                ? 0.5m
+                : CountWorkingDays(request.FromDate.Date, request.ToDate.Date, holidays, workWeek);
+
+            if (totalDays == 0)
+                throw new Exception("No working days in the selected range");
+
             var overlap = await _context.LeaveRequests.AnyAsync(l =>
                 l.EmployeeId == employee.EmployeeId &&
                 l.Status != "Rejected" &&
-                (
-                    request.FromDate <= l.ToDate &&
-                    request.ToDate >= l.FromDate
-                ));
+                l.Status != "Cancelled" &&
+                request.FromDate.Date <= l.ToDate.Date &&
+                request.ToDate.Date >= l.FromDate.Date);
 
             if (overlap)
-                throw new Exception("Leave already applied for selected dates");
+                throw new Exception("You already have a leave request overlapping the selected dates");
+
+            var balance = await GetOrCreateBalanceAsync(employee.EmployeeId, request.LeaveTypeId);
+
+            decimal effectiveRemaining = balance.Remaining + balance.CarriedForward;
+            if (effectiveRemaining < totalDays)
+                throw new Exception(
+                    $"Insufficient leave balance. Available: {effectiveRemaining} day(s), Requested: {totalDays} day(s)");
+
+            // ✅ Transaction wraps balance update + request insert together
+            using var tx = await _context.Database.BeginTransactionAsync();
+
+            balance.Pending += totalDays;
 
             request.EmployeeId = employee.EmployeeId;
+            request.Employee = employee;
+            request.TotalDays = totalDays;
             request.Status = "Pending";
             request.AppliedAt = DateTime.UtcNow;
 
             _context.LeaveRequests.Add(request);
             await _context.SaveChangesAsync();
-        }
-
-        // =========================
-        // GET MY LEAVES
-        // =========================
-        public async Task<List<LeaveRequest>> GetMyLeavesAsync()
-        {
-            var user = await _currentUser.GetUserAsync()
-                ?? throw new Exception("Unauthorized");
-
-            var employee = await _context.Employees
-                .FirstAsync(e => e.UserId == user.Id);
-
-            return await _context.LeaveRequests
-                .Where(l => l.EmployeeId == employee.EmployeeId)
-                .OrderByDescending(l => l.AppliedAt)
-                .AsNoTracking()
-                .ToListAsync();
-        }
-
-        // =========================
-        // HR VIEW ALL
-        // =========================
-        public async Task<List<LeaveRequest>> GetAllAsync()
-        {
-            var user = await _currentUser.GetUserAsync()
-                ?? throw new Exception("Unauthorized");
-
-            return await _context.LeaveRequests
-                .Include(l => l.Employee)
-                .Where(l => l.Employee.OrganizationId == user.OrganizationId)
-                .OrderByDescending(l => l.AppliedAt)
-                .AsNoTracking()
-                .ToListAsync();
+            await tx.CommitAsync();
         }
 
         // =========================
         // APPROVE / REJECT
         // =========================
-        public async Task UpdateStatusAsync(Guid id, string status)
+        public async Task UpdateStatusAsync(Guid leaveRequestId, string status, string? rejectionReason = null)
         {
             if (status != "Approved" && status != "Rejected")
                 throw new Exception("Invalid status");
@@ -98,20 +123,429 @@ namespace Humatrix_HRMS.Services
                 ?? throw new Exception("Unauthorized");
 
             var leave = await _context.LeaveRequests
-                .Include(l => l.Employee)
-                .FirstOrDefaultAsync(l => l.LeaveRequestId == id);
+                .FirstOrDefaultAsync(l => l.LeaveRequestId == leaveRequestId)
+                ?? throw new Exception("Leave request not found");
 
-            if (leave == null)
-                throw new Exception("Leave not found");
+            var employee = await _context.Employees
+                .FirstOrDefaultAsync(e => e.EmployeeId == leave.EmployeeId)
+                ?? throw new Exception("Employee not found");
+
+            if (employee.OrganizationId != user.OrganizationId)
+                throw new Exception("Unauthorized");
 
             if (leave.Status != "Pending")
-                throw new Exception("Already processed");
+                throw new Exception("Only pending requests can be reviewed");
 
-            leave.Status = status;
-            leave.ApprovedBy = Guid.Parse(user.Id);
+            // ✅ Wrap everything in a transaction
+            using var tx = await _context.Database.BeginTransactionAsync();
+
+            var balance = await GetOrCreateBalanceAsync(leave.EmployeeId, leave.LeaveTypeId);
+
+            // Release the pending hold
+            balance.Pending = Math.Max(0, balance.Pending - leave.TotalDays);
+
+            if (status == "Approved")
+            {
+                decimal toDeduct = leave.TotalDays;
+
+                if (balance.CarriedForward > 0)
+                {
+                    var fromCarry = Math.Min(balance.CarriedForward, toDeduct);
+                    balance.CarriedForward -= fromCarry;
+                    toDeduct -= fromCarry;
+                }
+
+                balance.Used += toDeduct;
+
+                leave.Status = "Approved";
+                leave.ApprovedBy = Guid.Parse(user.Id);
+
+                var workWeek = await _context.WorkWeeks
+                    .FirstOrDefaultAsync(w => w.OrganizationId == employee.OrganizationId)
+                    ?? throw new Exception("Work week not configured");
+
+                var dates = Enumerable.Range(0, (leave.ToDate.Date - leave.FromDate.Date).Days + 1)
+                    .Select(d => leave.FromDate.Date.AddDays(d))
+                    .ToList();
+
+                // ✅ Load holidays and existing attendance records once — no N+1
+                var holidayDates = await _context.Holidays
+                    .Where(h =>
+                        h.OrganizationId == employee.OrganizationId &&
+                        !h.IsOptional &&
+                        h.Date.Date >= leave.FromDate.Date &&
+                        h.Date.Date <= leave.ToDate.Date)
+                    .Select(h => h.Date.Date)
+                    .ToListAsync();
+
+                var existingAttendanceDates = await _context.Attendances
+                    .Where(a =>
+                        a.EmployeeId == leave.EmployeeId &&
+                        a.WorkDate >= leave.FromDate.Date &&
+                        a.WorkDate <= leave.ToDate.Date)
+                    .Select(a => a.WorkDate)
+                    .ToListAsync();
+
+                foreach (var date in dates)
+                {
+                    if (!DateHelper.IsWorkingDay(date, workWeek)) continue;
+                    if (holidayDates.Contains(date)) continue;
+                    //if (existingAttendanceDates.Contains(date)) continue;
+                    if (existingAttendanceDates.Any(d => d.Date == date)) continue;
+
+                    _context.Attendances.Add(new Attendance
+                    {
+                        AttendanceId = Guid.NewGuid(),
+                        UserId = employee.UserId,
+                        EmployeeId = employee.EmployeeId,
+                        OrganizationId = employee.OrganizationId,
+                        WorkDate = date,
+                        IsPresent = leave.IsHalfDay && date == leave.FromDate.Date,
+                        Status = leave.IsHalfDay && date == leave.FromDate.Date
+                            ? AttendanceStatuses.HalfDayLeave
+                            : AttendanceStatuses.OnLeave,
+                        IsManual = true
+                    });
+                }
+            }
+            else
+            {
+                leave.Status = "Rejected";
+                leave.RejectionReason = rejectionReason;
+            }
+
             leave.ReviewedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+
+        // =========================
+        // CANCEL
+        // =========================
+        public async Task CancelRequestAsync(Guid leaveRequestId)
+        {
+            var user = await _currentUser.GetUserAsync()
+                ?? throw new Exception("Unauthorized");
+
+            var employee = await _context.Employees
+                .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                ?? throw new Exception("Employee not found");
+
+            var leave = await _context.LeaveRequests
+                .FirstOrDefaultAsync(l =>
+                    l.LeaveRequestId == leaveRequestId &&
+                    l.EmployeeId == employee.EmployeeId)
+                ?? throw new Exception("Leave request not found");
+
+            if (leave.Status != "Pending")
+                throw new Exception("Only pending requests can be cancelled");
+
+            var balance = await GetOrCreateBalanceAsync(employee.EmployeeId, leave.LeaveTypeId);
+            balance.Pending = Math.Max(0, balance.Pending - leave.TotalDays);
+
+            leave.Status = "Cancelled";
+            await _context.SaveChangesAsync();
+        }
+
+        // =========================
+        // GET MY LEAVES
+        // =========================
+        public async Task<List<LeaveRequestDto>> GetMyLeavesAsync()
+        {
+            var user = await _currentUser.GetUserAsync()
+                ?? throw new Exception("Unauthorized");
+
+            var employee = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                ?? throw new Exception("Employee not found");
+
+            return await _context.LeaveRequests
+                .AsNoTracking()
+                .Include(l => l.Employee)  // ✅ needed for ToDto to access Employee name
+                .Include(l => l.LeaveType)
+                .Where(l => l.EmployeeId == employee.EmployeeId)
+                .OrderByDescending(l => l.AppliedAt)
+                .Select(l => ToDto(l, null))
+                .ToListAsync();
+        }
+
+        // =========================
+        // GET ALL (HR)
+        // =========================
+        public async Task<List<LeaveRequestDto>> GetAllForHRAsync(string? status = null)
+        {
+            var user = await _currentUser.GetUserAsync()
+                ?? throw new Exception("Unauthorized");
+
+            var departments = await _context.Departments
+                .AsNoTracking()
+                .ToDictionaryAsync(d => d.DepartmentId, d => d.Name);
+
+            var query = _context.LeaveRequests
+                .AsNoTracking()
+                .Include(l => l.Employee)
+                .Include(l => l.LeaveType)
+                .Where(l => l.Employee.OrganizationId == user.OrganizationId);
+
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(l => l.Status == status);
+
+            var list = await query.OrderByDescending(l => l.AppliedAt).ToListAsync();
+
+            return list.Select(l =>
+            {
+                string? dept = departments.ContainsKey(l.Employee.DepartmentId)
+                    ? departments[l.Employee.DepartmentId]
+                    : null;
+
+                return ToDto(l, dept);
+            }).ToList();
+        }
+
+        // =========================
+        // GET MY BALANCES
+        // =========================
+        public async Task<List<LeaveBalanceDto>> GetMyBalancesAsync()
+        {
+            var user = await _currentUser.GetUserAsync()
+                ?? throw new Exception("Unauthorized");
+
+            var employee = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                ?? throw new Exception("Employee not found");
+
+            var leaveTypes = await _context.LeaveTypes
+                .AsNoTracking()
+                .Where(lt => lt.OrganizationId == employee.OrganizationId && lt.IsActive)
+                .ToListAsync();
+
+            var balances = new List<LeaveBalanceDto>();
+
+            foreach (var lt in leaveTypes)
+            {
+                var bal = await GetOrCreateBalanceAsync(employee.EmployeeId, lt.LeaveTypeId);
+                balances.Add(new LeaveBalanceDto
+                {
+                    LeaveTypeName = lt.Name,
+                    IsPaid = lt.IsPaid,
+                    Allocated = bal.Allocated,
+                    Used = bal.Used,
+                    Pending = bal.Pending,
+                    Remaining = bal.Remaining,
+                    CarriedForward = bal.CarriedForward
+                });
+            }
+
+            return balances;
+        }
+
+        // =========================
+        // YEARLY BALANCE INIT
+        // =========================
+        public async Task InitialiseBalancesForYearAsync(Guid organizationId, int year)
+        {
+            var employees = await _context.Employees
+                .Where(e => e.OrganizationId == organizationId && e.Status == "Active")
+                .ToListAsync();
+
+            var leaveTypes = await _context.LeaveTypes
+                .Where(lt => lt.OrganizationId == organizationId && lt.IsActive)
+                .ToListAsync();
+
+            foreach (var employee in employees)
+            {
+                foreach (var lt in leaveTypes)
+                {
+                    var exists = await _context.LeaveBalances.AnyAsync(b =>
+                        b.EmployeeId == employee.EmployeeId &&
+                        b.LeaveTypeId == lt.LeaveTypeId &&
+                        b.Year == year);
+
+                    if (exists) continue;
+
+                    decimal carryForward = 0;
+                    if (lt.MaxCarryForwardDays > 0)
+                    {
+                        var prevBalance = await _context.LeaveBalances
+                            .FirstOrDefaultAsync(b =>
+                                b.EmployeeId == employee.EmployeeId &&
+                                b.LeaveTypeId == lt.LeaveTypeId &&
+                                b.Year == year - 1);
+
+                        if (prevBalance != null)
+                        {
+                            carryForward = Math.Min(prevBalance.Remaining, lt.MaxCarryForwardDays);
+                        }
+                    }
+
+                    _context.LeaveBalances.Add(new LeaveBalance
+                    {
+                        EmployeeId = employee.EmployeeId,
+                        LeaveTypeId = lt.LeaveTypeId,
+                        Year = year,
+                        Allocated = lt.MaxDaysPerYear,
+                        Used = 0,
+                        Pending = 0,
+                        CarriedForward = carryForward
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        // =========================
+        // JOB STATUS
+        // =========================
+        public async Task<JobStatusDto> GetYearlyBalanceJobStatusAsync(Guid orgId)
+        {
+            var log = await _context.YearlyJobLogs
+                .Where(x => x.OrganizationId == orgId && x.JobName == "LeaveBalanceInit")
+                .OrderByDescending(x => x.ExecutedAt)
+                .FirstOrDefaultAsync();
+
+            if (log == null)
+                return new JobStatusDto { JobName = "Leave Balance Initialization", Status = "Not Run" };
+
+            return new JobStatusDto
+            {
+                JobName = "Leave Balance Initialization",
+                LastRun = log.ExecutedAt,
+                Status = "Success"
+            };
+        }
+
+        // =========================
+        // PRIVATE HELPERS
+        // =========================
+        private async Task<LeaveBalance> GetOrCreateBalanceAsync(Guid employeeId, Guid leaveTypeId)
+        {
+            int year = DateTime.UtcNow.Year;
+
+            var balance = await _context.LeaveBalances
+                .FirstOrDefaultAsync(b =>
+                    b.EmployeeId == employeeId &&
+                    b.LeaveTypeId == leaveTypeId &&
+                    b.Year == year);
+
+            if (balance != null) return balance;
+
+            var lt = await _context.LeaveTypes.FindAsync(leaveTypeId)
+                ?? throw new Exception("Leave type not found");
+
+            balance = new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = leaveTypeId,
+                Year = year,
+                Allocated = lt.MaxDaysPerYear,
+                Used = 0,
+                Pending = 0
+            };
+
+            _context.LeaveBalances.Add(balance);
+            await _context.SaveChangesAsync();
+
+            return balance;
+        }
+
+        private static decimal CountWorkingDays(
+            DateTime from,
+            DateTime to,
+            List<DateTime> holidays,
+            WorkWeek workWeek)
+        {
+            decimal count = 0;
+
+            for (var day = from; day <= to; day = day.AddDays(1))
+            {
+                if (!DateHelper.IsWorkingDay(day, workWeek)) continue;
+                if (holidays.Contains(day.Date)) continue;
+                count++;
+            }
+
+            return count;
+        }
+
+        private static LeaveRequestDto ToDto(LeaveRequest l, string? dept) => new()
+        {
+            LeaveRequestId = l.LeaveRequestId,
+            EmployeeName = l.Employee != null
+                ? $"{l.Employee.FirstName} {l.Employee.LastName}"
+                : "Unknown",
+            Department = dept,
+            LeaveTypeName = l.LeaveType?.Name ?? "",
+            FromDate = l.FromDate,
+            ToDate = l.ToDate,
+            IsHalfDay = l.IsHalfDay,
+            TotalDays = l.TotalDays,
+            Reason = l.Reason,
+            Status = l.Status,
+            AppliedAt = l.AppliedAt,
+            RejectionReason = l.RejectionReason
+        };
+
+        // UI compatibility method (DO NOT REMOVE)
+        public async Task CancelLeaveRequestAsync(Guid leaveRequestId)
+        {
+            await CancelRequestAsync(leaveRequestId);
+        }
+
+        public async Task<string> ResolveDailyStatus(Guid employeeId, DateTime date)
+        {
+            // 1. Holiday
+            //var isHoliday = await _context.Holidays.AnyAsync(h =>
+            //    h.OrganizationId == _currentUser.OrganizationId &&
+            //    h.Date.Date == date.Date &&
+            //    !h.IsOptional);
+            var user = await _currentUser.GetUserAsync()
+    ?? throw new Exception("Unauthorized");
+
+            var orgId = user.OrganizationId ?? Guid.Empty;
+
+            var isHoliday = await _context.Holidays.AnyAsync(h =>
+                h.OrganizationId == orgId &&
+                h.Date.Date == date.Date &&
+                !h.IsOptional);
+
+            if (isHoliday)
+                return "Holiday";
+
+            // 2. Leave
+            var leave = await _context.LeaveRequests
+                .FirstOrDefaultAsync(l =>
+                    l.EmployeeId == employeeId &&
+                    l.Status == "Approved" &&
+                    l.FromDate.Date <= date &&
+                    l.ToDate.Date >= date);
+
+            if (leave != null)
+                return $"Leave ({leave.LeaveType})";
+
+            // 3. WFH
+            var wfh = await _context.WorkFromHomeRequests
+                .FirstOrDefaultAsync(w =>
+                    w.EmployeeId == employeeId &&
+                    w.Status == "Approved" &&
+                    w.Date.Date == date);
+
+            if (wfh != null)
+                return AttendanceStatuses.WorkFromHome;
+
+            // 4. Attendance
+            var att = await _context.Attendances
+                .FirstOrDefaultAsync(a =>
+                    a.EmployeeId == employeeId &&
+                    a.WorkDate == date);
+
+            if (att != null)
+                return att.Status;
+
+            // 5. Absent
+            return AttendanceStatuses.Absent;
         }
     }
 }

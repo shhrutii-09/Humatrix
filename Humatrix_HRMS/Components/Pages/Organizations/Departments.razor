@@ -20,14 +20,36 @@
             <h2 class="fw-normal">Departments</h2>
             <p class="text-muted small">Manage organization departments</p>
         </div>
-
+        <div class="d-flex gap-2">
         <button class="btn btn-primary shadow-sm"
                 style="background-color:#5c4ac7;border:none;"
                 @onclick="GoToCreate">
             <i class="bi bi-plus-circle me-2"></i>
             ADD DEPARTMENT
         </button>
+
+        <button class="btn btn-outline-secondary shadow-sm" @onclick="GoBack">
+            DASHBOARD
+        </button>
+        </div>
     </div>
+
+    @* <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-normal">Designations</h2>
+            <p class="text-muted small">Manage job titles and their associated departments.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary shadow-sm"
+                    style="background-color: #5c4ac7; border: none;"
+                    @onclick="GoToCreate">
+                <i class="bi bi-plus-circle me-2"></i> ADD DESIGNATION
+            </button>
+            <button class="btn btn-outline-secondary shadow-sm" @onclick="GoBack">
+                DASHBOARD
+            </button>
+        </div>
+    </div> *@
 
     <!-- TABLE -->
     <div class="card shadow-sm border-0">
@@ -139,10 +161,10 @@
     </div>
 
     <!-- BACK -->
-    <button class="btn btn-light mt-3"
+    @* <button class="btn btn-light mt-3"
             @onclick="GoBack">
         ← Back
-    </button>
+    </button> *@
 
 </div>
 

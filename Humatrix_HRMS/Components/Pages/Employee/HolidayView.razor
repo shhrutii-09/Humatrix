@@ -1,0 +1,133 @@
+﻿@page "/employee/holidays"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]
+@* @attribute [Authorize(Roles = "Employee")] *@
+
+
+@inject HolidayService HolidayService
+
+<PageTitle>Holidays | Humatrix</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Holiday Calendar</h2>
+
+        <div>
+            <button class="btn btn-outline-secondary btn-sm me-2" @onclick="PrevMonth">◀</button>
+            <span class="fw-semibold">@currentMonth.ToString("MMMM yyyy")</span>
+            <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="NextMonth">▶</button>
+        </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-3">
+
+            <!-- WEEK HEADER -->
+            <div class="row text-center fw-semibold border-bottom pb-2 mb-2">
+                @foreach (var day in weekDays)
+                {
+                    <div class="col">@day</div>
+                }
+            </div>
+
+            <!-- DAYS GRID -->
+            @foreach (var week in calendar)
+            {
+                <div class="row text-center mb-2">
+
+                    @foreach (var date in week)
+                    {
+                        var holiday = GetHoliday(date);
+
+                        <div class="col border rounded p-2 position-relative"
+                             style="min-height:80px;">
+
+                            <div class="small text-muted">@date.Day</div>
+
+                            @if (holiday != null)
+                            {
+                                <div class="mt-2 p-1 rounded text-white small"
+                                     style="background-color:@(holiday.IsOptional ? "#ffc107" : "#dc3545")"
+                                     title="@holiday.Name">
+                                    @holiday.Name
+                                </div>
+                            }
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </div>
+    </div>
+
+</div>
+
+@code {
+
+    private List<Holiday> holidays = new();
+
+    private DateTime currentMonth = DateTime.Today;
+
+    private List<string> weekDays = new()
+    {
+        "Mon","Tue","Wed","Thu","Fri","Sat","Sun"
+    };
+
+    private List<List<DateTime>> calendar = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        holidays = await HolidayService.GetAllAsync();
+        BuildCalendar();
+    }
+
+    private void BuildCalendar()
+    {
+        calendar.Clear();
+
+        var firstDay = new DateTime(currentMonth.Year, currentMonth.Month, 1);
+
+        // Align to Monday
+        int offset = ((int)firstDay.DayOfWeek + 6) % 7;
+        var startDate = firstDay.AddDays(-offset);
+
+        for (int week = 0; week < 6; week++)
+        {
+            var days = new List<DateTime>();
+
+            for (int i = 0; i < 7; i++)
+            {
+                days.Add(startDate.AddDays(week * 7 + i));
+            }
+
+            calendar.Add(days);
+        }
+    }
+
+    private Holiday? GetHoliday(DateTime date)
+    {
+        return holidays.FirstOrDefault(h => h.Date.Date == date.Date);
+    }
+
+    private void PrevMonth()
+    {
+        currentMonth = currentMonth.AddMonths(-1);
+        BuildCalendar();
+    }
+
+    private void NextMonth()
+    {
+        currentMonth = currentMonth.AddMonths(1);
+        BuildCalendar();
+    }
+}

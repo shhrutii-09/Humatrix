@@ -466,8 +466,8 @@ namespace Humatrix_HRMS.Services
 
             var attendance = await context.Attendances
                 .Where(a => a.EmployeeId == employeeId &&
-                            a.Date >= startDate &&
-                            a.Date < endDate)
+                            a.WorkDate >= startDate &&
+                            a.WorkDate < endDate)
                 .ToListAsync();
 
             var totalDays = attendance.Count;
@@ -477,11 +477,11 @@ namespace Humatrix_HRMS.Services
 
             var recentAttendance = await context.Attendances
                 .Where(a => a.EmployeeId == employeeId)
-                .OrderByDescending(a => a.Date)
+                .OrderByDescending(a => a.WorkDate)
                 .Take(7)
                 .Select(a => new AttendanceListDto
                 {
-                    Date = a.Date,
+                    Date = a.WorkDate,
                     CheckIn = a.CheckIn,
                     CheckOut = a.CheckOut,
                     Status = a.IsPresent ? "Present" : "Absent"

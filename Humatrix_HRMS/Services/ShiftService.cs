@@ -57,5 +57,40 @@ namespace Humatrix_HRMS.Services
             _context.Shifts.Add(shift);
             await _context.SaveChangesAsync();
         }
+
+        public async Task UpdateShiftAsync(Guid shiftId, Shift updated)
+        {
+            var user = await _currentUser.GetUserAsync();
+            if (user == null || user.OrganizationId == null)
+                throw new Exception("Unauthorized");
+
+            var shift = await _context.Shifts
+                .FirstOrDefaultAsync(s =>
+                    s.ShiftId == shiftId &&
+                    s.OrganizationId == user.OrganizationId)
+                ?? throw new Exception("Shift not found");
+
+            // Prevent duplicate name (excluding self)
+            var nameExists = await _context.Shifts.AnyAsync(s =>
+                s.OrganizationId == user.OrganizationId &&
+                s.ShiftId != shiftId &&
+                s.Name.ToLower().Trim() == updated.Name.ToLower().Trim());
+
+            if (nameExists)
+                throw new Exception("Shift name already in use");
+
+            if (updated.StartTime == updated.EndTime)
+                throw new Exception("Start and end time cannot be the same");
+
+            shift.Name = updated.Name;
+            shift.StartTime = updated.StartTime;
+            shift.EndTime = updated.EndTime;
+            shift.LateAllowanceMinutes = updated.LateAllowanceMinutes;
+            shift.MinimumHoursForFullDay = updated.MinimumHoursForFullDay;
+            shift.MinimumHoursForHalfDay = updated.MinimumHoursForHalfDay;
+
+            await _context.SaveChangesAsync();
+        }
+
     }
 }

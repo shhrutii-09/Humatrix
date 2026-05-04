@@ -15,7 +15,8 @@ namespace Humatrix_HRMS.Models
         [ForeignKey("EmployeeId")]
         public Employee? Employee { get; set; }
 
-        public DateTime Date { get; set; }
+        //public DateTime Date { get; set; }
+        public DateTime WorkDate { get; set; }
         public DateTime? CheckIn { get; set; }
         public DateTime? CheckOut { get; set; }
 
@@ -26,7 +27,7 @@ namespace Humatrix_HRMS.Models
         // ✅ Location tracking (you already added)
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
-
+        public bool NeedsOvertimeApproval { get; set; }
         public string Status { get; set; } = "Not Started";
 
         // 🔥 ADD THESE ↓↓↓ (IMPORTANT)
@@ -36,6 +37,7 @@ namespace Humatrix_HRMS.Models
 
         // Extra time beyond full day
         public double? OvertimeHours { get; set; }
+        public double ApprovedOvertimeHours { get; set; } = 0;
 
         // HR manual update tracking
         public bool IsManual { get; set; } = false;

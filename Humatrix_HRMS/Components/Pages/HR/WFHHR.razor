@@ -1,0 +1,102 @@
+﻿@page "/hr/wfh"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "HR")]
+
+@inject WorkFromHomeService WfhService
+
+<PageTitle>WFH Approvals</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <h2 class="mb-4">WFH Approvals</h2>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+
+            <table class="table mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Employee</th>
+                        <th>Date</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var r in list)
+                    {
+                        <tr>
+
+                            <td>@r.Employee?.FirstName</td>
+
+                            <td>@r.Date.ToString("dd MMM")</td>
+
+                            <td>@r.Reason</td>
+
+                            <td>
+                                <span class="badge @GetStatusClass(r.Status)">
+                                    @r.Status
+                                </span>
+                            </td>
+
+                            <td>
+                                @if (r.Status == "Pending")
+                                {
+                                    <button class="btn btn-success btn-sm"
+                                            @onclick="() => Approve(r.Id)">
+                                        Approve
+                                    </button>
+
+                                    <button class="btn btn-danger btn-sm ms-2"
+                                            @onclick="() => Reject(r.Id)">
+                                        Reject
+                                    </button>
+                                }
+                            </td>
+
+                        </tr>
+                    }
+                </tbody>
+
+            </table>
+
+        </div>
+    </div>
+
+</div>
+
+@code {
+
+    private List<WorkFromHomeRequest> list = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        list = await WfhService.GetAllAsync();
+    }
+
+    private async Task Approve(Guid id)
+    {
+        await WfhService.UpdateStatusAsync(id, "Approved");
+        list = await WfhService.GetAllAsync();
+    }
+
+    private async Task Reject(Guid id)
+    {
+        await WfhService.UpdateStatusAsync(id, "Rejected", "Rejected by HR");
+        list = await WfhService.GetAllAsync();
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Approved" => "bg-success",
+        "Rejected" => "bg-danger",
+        _ => "bg-warning text-dark"
+    };
+}

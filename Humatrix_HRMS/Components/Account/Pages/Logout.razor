@@ -1,19 +1,24 @@
 ﻿@page "/Account/Logout"
-
 @using Microsoft.AspNetCore.Identity
 @using Humatrix_HRMS.Data
+@using Microsoft.AspNetCore.Mvc
+@attribute [IgnoreAntiforgeryToken]
 
 @inject SignInManager<ApplicationUser> SignInManager
 @inject NavigationManager NavigationManager
 
-<h3>Logging out...</h3>
-
 @code {
+    // Add this to catch the parameter the form is trying to send
+    [Parameter]
+    [SupplyParameterFromForm]
+    public string? ReturnUrl { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         await SignInManager.SignOutAsync();
 
-        // 🔥 FORCE FULL RELOAD
-        NavigationManager.NavigateTo("/Account/Login", true);
+        // Use the ReturnUrl if it exists, otherwise go to Login
+        var destination = !string.IsNullOrEmpty(ReturnUrl) ? ReturnUrl : "/Account/Login";
+        NavigationManager.NavigateTo(destination, true);
     }
 }

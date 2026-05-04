@@ -1,62 +1,186 @@
-﻿@page "/admin/holidays"
+﻿@page "/org/holidays"
+@rendermode InteractiveServer
+
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "OrgAdmin")]
+
+@attribute [Authorize(Roles = "OrgAdmin,HR")]
 
 @inject HolidayService HolidayService
 
-<h3>Holiday Management</h3>
+<PageTitle>Holidays | Humatrix</PageTitle>
 
-<EditForm Model="newHoliday" OnValidSubmit="AddHoliday">
-    <InputDate @bind-Value="newHoliday.Date" />
-    <InputText @bind-Value="newHoliday.Name" placeholder="Holiday Name" />
-    <button class="btn btn-primary">Add</button>
-</EditForm>
+<div class="container-fluid px-4 mt-4">
 
-<table class="table mt-3">
-    <thead>
-        <tr>
-            <th>Date</th>
-            <th>Name</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var h in holidays)
-        {
-            <tr>
-                <td>@h.Date.ToShortDateString()</td>
-                <td>@h.Name</td>
-                <td>
-                    <button class="btn btn-danger btn-sm" @onclick="() => Delete(h.HolidayId)">
-                        Delete
-                    </button>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Holiday Calendar</h2>
+
+        <button class="btn btn-primary" @onclick="Open">
+            + Add Holiday
+        </button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+
+            <table class="table mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th style="width:120px;"></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (holidays.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                No holidays configured
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var h in holidays)
+                        {
+                            <tr>
+                                <td>@h.Date.ToString("dd MMM yyyy")</td>
+                                <td class="fw-semibold">@h.Name</td>
+                                <td>
+                                    <span class="badge @(h.IsOptional ? "bg-warning" : "bg-success")">
+                                        @(h.IsOptional ? "Optional" : "Mandatory")
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => Delete(h.HolidayId)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    @if (showModal)
+    {
+        <div class="modal fade show d-block">
+            <div class="modal-dialog">
+                <div class="modal-content">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Add Holiday</h5>
+                        <button class="btn-close" @onclick="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <div class="mb-2">
+                            <label class="small fw-bold">Date</label>
+                            <InputDate class="form-control" @bind-Value="model.Date" />
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="small fw-bold">Holiday Name</label>
+                            <InputText class="form-control" @bind-Value="model.Name" />
+                        </div>
+
+                        <div class="form-check mt-2">
+                            <InputCheckbox class="form-check-input" @bind-Value="model.IsOptional" />
+                            <label class="form-check-label">
+                                Optional Holiday
+                            </label>
+                        </div>
+
+                        <div class="text-muted small mt-2">
+                            Optional holidays are NOT auto-excluded from leave calculation.
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="Close">Cancel</button>
+
+                        <button class="btn btn-success" @onclick="Save">
+                            Save
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop fade show"></div>
+    }
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger mt-3">@error</div>
+    }
+
+</div>
 
 @code {
+
     private List<Holiday> holidays = new();
-    private Holiday newHoliday = new();
+    private Holiday model = new();
+
+    private bool showModal = false;
+    private string? error;
 
     protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
     {
         holidays = await HolidayService.GetAllAsync();
     }
 
-    private async Task AddHoliday()
+    private void Open()
     {
-        await HolidayService.CreateAsync(newHoliday);
-        newHoliday = new Holiday();
-        holidays = await HolidayService.GetAllAsync();
+        model = new Holiday
+        {
+            Date = DateTime.Today
+        };
+        showModal = true;
+        error = null;
+    }
+
+    private void Close()
+    {
+        showModal = false;
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            await HolidayService.CreateAsync(model);
+            showModal = false;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
     }
 
     private async Task Delete(Guid id)
     {
         await HolidayService.DeleteAsync(id);
-        holidays = await HolidayService.GetAllAsync();
+        await Load();
     }
 }

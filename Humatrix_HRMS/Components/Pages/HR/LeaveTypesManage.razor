@@ -1,0 +1,336 @@
+﻿@page "/admin/leave-types"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@inject CurrentUserService CurrentUser
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Leave Types | Humatrix</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-semibold mb-0">Leave Types</h2>
+            <small class="text-muted">Manage organization leave policies</small>
+        </div>
+
+        <button class="btn btn-primary shadow-sm" @onclick="OpenCreate">
+            + Add Leave Type
+        </button>
+    </div>
+
+    <!-- ALERT -->
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-@messageType alert-dismissible fade show">
+            @message
+            <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+        </div>
+    }
+
+    <!-- TABLE -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Paid</th>
+                        <th>Max Days</th>
+                        <th>Carry Forward</th>
+                        <th>Half Day</th>
+                        <th>Notice</th>
+                        <th>Status</th>
+                        <th class="text-end" style="width:200px;">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (loading)
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <div class="spinner-border"></div>
+                            </td>
+                        </tr>
+                    }
+                    else if (leaveTypes.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No leave types configured
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var lt in leaveTypes.OrderByDescending(x => x.IsActive).ThenBy(x => x.Name))
+                        {
+                            <tr>
+                                <td class="fw-semibold">@lt.Name</td>
+                                <td>@(lt.IsPaid ? "Yes" : "No")</td>
+                                <td>@lt.MaxDaysPerYear</td>
+                                <td>@lt.MaxCarryForwardDays</td>
+                                <td>@(lt.AllowHalfDay ? "Yes" : "No")</td>
+                                <td>@lt.MinNoticeRequiredDays day(s)</td>
+
+                                <td>
+                                    <span class="badge @(lt.IsActive ? "bg-success" : "bg-secondary")">
+                                        @(lt.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </td>
+
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-2"
+                                            @onclick="() => Edit(lt)">
+                                        Edit
+                                    </button>
+
+                                    <button class="btn btn-sm btn-outline-warning"
+                                            @onclick="() => Toggle(lt)">
+                                        @(lt.IsActive ? "Deactivate" : "Activate")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    @if (showModal)
+    {
+        <div class="modal fade show d-block">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content shadow">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            @(isEdit ? "Edit Leave Type" : "Create Leave Type")
+                        </h5>
+                        <button class="btn-close" @onclick="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <div class="row g-3">
+
+                            <div class="col-md-6">
+                                <label class="form-label">Name</label>
+                                <input class="form-control" @bind="model.Name" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Max Days</label>
+                                <input type="number" class="form-control" @bind="model.MaxDaysPerYear" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Carry Forward</label>
+                                <input type="number" class="form-control" @bind="model.MaxCarryForwardDays" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Notice Required (Days)</label>
+                                <input type="number" class="form-control" @bind="model.MinNoticeRequiredDays" />
+                            </div>
+
+                            <div class="col-md-4 form-check mt-4">
+                                <input type="checkbox" class="form-check-input" @bind="model.IsPaid" />
+                                <label class="form-check-label">Paid Leave</label>
+                            </div>
+
+                            <div class="col-md-4 form-check mt-4">
+                                <input type="checkbox" class="form-check-input" @bind="model.AllowHalfDay" />
+                                <label class="form-check-label">Allow Half Day</label>
+                            </div>
+
+                            <div class="col-md-4 form-check mt-4">
+                                <input type="checkbox" class="form-check-input" @bind="model.IsActive" />
+                                <label class="form-check-label">Active</label>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="Close">Cancel</button>
+
+                        <button class="btn btn-success" @onclick="Save">
+                            @(isEdit ? "Update" : "Create")
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop fade show"></div>
+    }
+
+</div>
+
+@code {
+
+    private List<LeaveType> leaveTypes = new();
+    private LeaveType model = new();
+
+    private bool showModal = false;
+    private bool isEdit = false;
+    private bool loading = false;
+
+    private string? message;
+    private string messageType = "success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+
+        using var db = DbFactory.CreateDbContext();
+        var user = await CurrentUser.GetUserAsync();
+
+        leaveTypes = await db.LeaveTypes
+            .Where(x => x.OrganizationId == user.OrganizationId)
+            .ToListAsync();
+
+        loading = false;
+    }
+
+    private void OpenCreate()
+    {
+        model = new LeaveType();
+        isEdit = false;
+        showModal = true;
+    }
+
+    private void Edit(LeaveType lt)
+    {
+        model = new LeaveType
+        {
+            LeaveTypeId = lt.LeaveTypeId,
+            OrganizationId = lt.OrganizationId, // ✅ IMPORTANT FIX
+            Name = lt.Name,
+            IsPaid = lt.IsPaid,
+            AllowHalfDay = lt.AllowHalfDay,
+            MaxDaysPerYear = lt.MaxDaysPerYear,
+            MaxCarryForwardDays = lt.MaxCarryForwardDays,
+            MinNoticeRequiredDays = lt.MinNoticeRequiredDays,
+            IsActive = lt.IsActive
+        };
+
+        isEdit = true;
+        showModal = true;
+    }
+
+    private void Close()
+    {
+        showModal = false;
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new Exception("Leave type name is required");
+
+            if (model.MaxDaysPerYear <= 0)
+                throw new Exception("Max days must be greater than 0");
+
+            if (model.MaxCarryForwardDays > model.MaxDaysPerYear)
+                throw new Exception("Carry forward cannot exceed max days");
+
+            using var db = DbFactory.CreateDbContext();
+            var user = await CurrentUser.GetUserAsync();
+
+            if (isEdit)
+            {
+                // ✅ SAFE UPDATE (no data corruption)
+                var existing = await db.LeaveTypes
+                    .FirstOrDefaultAsync(x =>
+                        x.LeaveTypeId == model.LeaveTypeId &&
+                        x.OrganizationId == user.OrganizationId);
+
+                if (existing == null)
+                    throw new Exception("Leave type not found or unauthorized");
+
+                existing.Name = model.Name;
+                existing.IsPaid = model.IsPaid;
+                existing.AllowHalfDay = model.AllowHalfDay;
+                existing.MaxDaysPerYear = model.MaxDaysPerYear;
+                existing.MaxCarryForwardDays = model.MaxCarryForwardDays;
+                existing.MinNoticeRequiredDays = model.MinNoticeRequiredDays;
+                existing.IsActive = model.IsActive;
+
+                message = "Leave type updated successfully";
+            }
+            else
+            {
+                model.LeaveTypeId = Guid.NewGuid();
+                model.OrganizationId = user.OrganizationId!.Value;
+                model.IsActive = true;
+
+                db.LeaveTypes.Add(model);
+                message = "Leave type created successfully";
+            }
+
+            await db.SaveChangesAsync();
+
+            messageType = "success";
+            showModal = false;
+
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            messageType = "danger";
+        }
+    }
+
+    private async Task Toggle(LeaveType lt)
+    {
+        using var db = DbFactory.CreateDbContext();
+        var user = await CurrentUser.GetUserAsync();
+
+        var entity = await db.LeaveTypes
+            .FirstOrDefaultAsync(x =>
+                x.LeaveTypeId == lt.LeaveTypeId &&
+                x.OrganizationId == user.OrganizationId);
+
+        if (entity == null) return;
+
+        entity.IsActive = !entity.IsActive;
+
+        await db.SaveChangesAsync();
+
+        message = $"Leave type {(entity.IsActive ? "activated" : "deactivated")}";
+        messageType = "warning";
+
+        await Load();
+    }
+
+    private void ClearMessage()
+    {
+        message = null;
+    }
+}

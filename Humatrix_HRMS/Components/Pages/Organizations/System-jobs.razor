@@ -1,0 +1,119 @@
+﻿@page "/admin/system-jobs"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject LeaveService LeaveService
+@inject CurrentUserService CurrentUser
+
+<PageTitle>System Jobs | Humatrix</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <h2 class="fw-normal mb-4">System Jobs</h2>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+
+            @if (job == null)
+            {
+                <p>Loading...</p>
+            }
+            else
+            {
+                <div class="d-flex justify-content-between align-items-center">
+
+                    <div>
+                        <div class="fw-semibold">@job.JobName</div>
+
+                        <div class="text-muted small">
+                            Last Run:
+                            @(job.LastRun.HasValue
+                                                    ? job.LastRun.Value.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                                                    : "Never")
+                    </div>
+                </div>
+
+                    <div class="d-flex align-items-center">
+
+                        <span class="badge me-3 @GetBadgeClass(job.Status)">
+                            @job.Status
+                        </span>
+
+                        <button class="btn btn-sm btn-primary"
+                                @onclick="RunNow"
+                                disabled="@isRunning">
+                            @(isRunning ? "Running..." : "Run Now")
+                        </button>
+
+                    </div>
+
+                </div>
+
+            @if (!string.IsNullOrEmpty(message))
+                {
+                    <div class="alert alert-success mt-3">@message</div>
+                }
+            }
+
+        </div>
+    </div>
+
+</div>
+
+@code {
+
+    private JobStatusDto? job;
+    private bool isRunning = false;
+    private string? message;
+
+    private Guid orgId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await CurrentUser.GetUserAsync();
+        orgId = user!.OrganizationId!.Value;
+
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        job = await LeaveService.GetYearlyBalanceJobStatusAsync(orgId);
+    }
+
+    private async Task RunNow()
+    {
+        isRunning = true;
+        message = null;
+
+        try
+        {
+            await LeaveService.InitialiseBalancesForYearAsync(orgId, DateTime.UtcNow.Year);
+
+            message = "Leave balances initialized successfully";
+
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+
+        isRunning = false;
+    }
+
+    private string GetBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Success" => "bg-success",
+            "Failed" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+}

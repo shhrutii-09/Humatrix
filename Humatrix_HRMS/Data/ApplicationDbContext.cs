@@ -23,11 +23,51 @@ namespace Humatrix_HRMS.Data
 
         public DbSet<Shift> Shifts { get; set; }
         public DbSet<Holiday> Holidays { get; set; }
-        public DbSet<LeaveRequest> LeaveRequests { get; set; }
         public DbSet<OfficeLocation> OfficeLocations { get; set; }
+
+        public DbSet<LeaveBalance> LeaveBalances { get; set; }
+        public DbSet<LeaveType> LeaveTypes { get; set; }
+
+        public DbSet<LeaveRequest> LeaveRequests { get; set; }
+
+        public DbSet<WorkWeek> WorkWeeks { get; set; }
+
+        public DbSet<WorkFromHomeRequest> WorkFromHomeRequests { get; set; }
+
+        public DbSet<YearlyJobLog> YearlyJobLogs { get; set; }
+
+        public DbSet<OvertimeRequest> OvertimeRequests { get; set; }
+
+        public DbSet<AttendanceCorrectionRequest> AttendanceCorrectionRequests { get; set; }
+
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<LeaveBalance>()
+                .Property(l => l.Pending)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<LeaveBalance>()
+                .Property(l => l.Used)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<LeaveBalance>()
+                .Property(l => l.CarriedForward)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<LeaveRequest>()
+                .Property(l => l.TotalDays)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<Attendance>()
+    .HasIndex(a => new { a.EmployeeId, a.WorkDate })
+    .IsUnique();
+        }
     }
 
     }

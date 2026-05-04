@@ -2,14 +2,17 @@
 {
     public class AttendanceListDto
     {
-        public string EmployeeName { get; set; }
-        public string Email { get; set; }
+        public Guid? AttendanceId { get; set; }
+        public string EmployeeName { get; set; } = "";
+        public string? Email { get; set; }
         public string? Department { get; set; }
-        public string Role { get; set; }
+        public string? Role { get; set; }
         public DateTime Date { get; set; }
         public DateTime? CheckIn { get; set; }
         public DateTime? CheckOut { get; set; }
-
-        public string Status { get; set; } // Present / Late / Half Day
+        public double? TotalHours { get; set; }
+        public double? OvertimeHours { get; set; }
+        public string Status { get; set; } = "";
+        public bool IsManual { get; set; }
     }
 }

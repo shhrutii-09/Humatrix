@@ -63,11 +63,20 @@ builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<OrgDashboardService>();
 builder.Services.AddScoped<DesignationService>();
 builder.Services.AddScoped<ShiftService>();
-builder.Services.AddHostedService<AttendanceBackgroundService>();
 builder.Services.AddScoped<HolidayService>();
+builder.Services.AddScoped<WorkWeekService>();
 builder.Services.AddScoped<LeaveService>();
-builder.Services.AddScoped<OfficeLocationService>();
+builder.Services.AddHostedService<YearlyBalanceService>();
+builder.Services.AddScoped<OvertimeService>();
+builder.Services.AddScoped<WorkFromHomeService>();
 
+builder.Services.AddScoped<AttendanceCorrectionService>();
+builder.Services.AddHostedService<AttendanceBackgroundService>();
+
+
+builder.Services.AddScoped<OfficeLocationService>();
+//builder.Services.AddScoped<AttendanceService>();  
+builder.Services.AddControllers();
 builder.Services.AddCascadingAuthenticationState();
 
 

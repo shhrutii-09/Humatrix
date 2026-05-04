@@ -7,11 +7,22 @@
 @attribute [Authorize(Roles = "SuperAdmin")]
 @inject OrganizationService OrgService
 @inject IJSRuntime JS
+<div class="container-fluid px-4 mt-4">
 
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card border-0 shadow-lg rounded-4 p-4">
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="fw-normal">Register Organization</h2>
+
+        <a href="/admin/dashboard"
+           class="btn btn-primary shadow-sm"
+           style="background-color: #5c4ac7; border: none;">
+            BACK TO DASHBOARD
+        </a>
+    </div>
+
+    <!-- MAIN FORM (still card, but full-width like employee page) -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
                 <div class="text-center mb-4">
                     <div class="icon-shape bg-purple-light text-purple mb-3">
                         <i class="bi bi-building fs-3"></i>
@@ -70,6 +81,22 @@
                         </button>
                         <a href="/admin/dashboard" class="btn btn-link text-muted small text-decoration-none text-center">Cancel and return</a>
                     </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger mt-3 border-0 shadow-sm">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            @errorMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success mt-3 border-0 shadow-sm">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            @successMessage
+                        </div>
+                    }
                 </EditForm>
 
                 @if (!string.IsNullOrEmpty(generatedLink))
@@ -79,7 +106,10 @@
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
                                 <div>
-                                    <b class="text-success d-block" style="font-size: 1rem;">Created Successfully!</b>
+                                    @* <b class="text-success d-block" style="font-size: 1rem;">Created Successfully!</b> *@
+                                    <b class="text-success" style="font-size: 1.1rem;">
+                                        Organization created successfully!
+                                    </b>
                                     <span class="text-muted small">Copy the invite link below.</span>
                                 </div>
                             </div>
@@ -97,61 +127,39 @@
             </div>
         </div>
     </div>
-</div>
+@* </div> *@
 
-<style>
-    .icon-shape {
-        width: 60px;
-        height: 60px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 16px;
-    }
 
-    .bg-purple-light {
-        background-color: #f3f0ff;
-    }
-
-    .text-purple {
-        color: #5c4df2;
-    }
-
-    .admin-section {
-        background: #f0f7ff;
-        border: 1px solid #cce3ff;
-    }
-
-    .form-control:focus {
-        background-color: #fff !important;
-        box-shadow: 0 0 0 4px rgba(92, 77, 242, 0.1) !important;
-        border: 1px solid #5c4df2 !important;
-    }
-
-    .validation-message {
-        display: block;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-top: 0.25rem;
-    }
-</style>
 
 @code {
     public CreateOrganizationDto orgDto { get; set; } = new();
     private string? generatedLink;
     private bool isSubmitting = false;
 
+    private string? errorMessage;
+    private string? successMessage;
+
+
     private async Task HandleCreateOrganization()
     {
         isSubmitting = true;
+        errorMessage = null;
+        successMessage = null;
+        generatedLink = null;
         try
         {
             generatedLink = await OrgService.CreateOrganizationAsync(orgDto);
+            successMessage = "Organization created successfully!";
+
             orgDto = new(); 
         }
+        // catch (Exception ex)
+        // {
+        //     Console.WriteLine(ex.Message);
+        // }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
+            errorMessage = GetFriendlyMessage(ex.Message);
         }
         finally { isSubmitting = false; }
     }
@@ -162,5 +170,20 @@
         {
             await JS.InvokeVoidAsync("clipboardCopy.copyText", generatedLink);
         }
+    }
+
+    private string GetFriendlyMessage(string message)
+    {
+        if (message.Contains("Organization with this email"))
+            return "This organization email is already registered.";
+
+        if (message.Contains("User with this email"))
+            return "This admin email is already in use.";
+
+        if (message.Contains("Password"))
+            return "Password rules not satisfied. Please check requirements.";
+
+        // fallback
+        return "Something went wrong. Please try again.";
     }
 }

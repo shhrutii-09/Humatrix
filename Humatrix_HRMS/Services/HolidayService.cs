@@ -46,7 +46,12 @@ namespace Humatrix_HRMS.Services
 
         public async Task DeleteAsync(Guid id)
         {
-            var holiday = await _context.Holidays.FindAsync(id);
+            //var holiday = await _context.Holidays.FindAsync(id);
+            var user = await _currentUser.GetUserAsync();
+
+            var holiday = await _context.Holidays
+                .FirstOrDefaultAsync(h => h.HolidayId == id &&
+                                          h.OrganizationId == user.OrganizationId);
             if (holiday == null) return;
 
             _context.Holidays.Remove(holiday);

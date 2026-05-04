@@ -1,10 +1,10 @@
 ﻿@implements IDisposable
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="/">HRMS</a>
-    </div>
+<!-- LOGO -->
+<div class="sidebar-header">
+    <span class="logo-text">HuMatrix</span>
 </div>
 
 <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
@@ -12,177 +12,275 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
 
-        <AuthorizeView>
+        <AuthorizeView Context="mainContext">
             <Authorized>
-                @* --- COMMON DASHBOARD (Dynamic Route) --- *@
-                @* <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="@(context.User.IsInRole("SuperAdmin") ? "/admin/dashboard" : "/org/dashboard")" Match="NavLinkMatch.All">
-                        <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Dashboard
-                    </NavLink>
-                </div> *@
 
-                @* --- SUPER ADMIN ONLY SECTION --- *@
+                <!-- SUPER ADMIN -->
                 <AuthorizeView Roles="SuperAdmin" Context="superContext">
-                    @* <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/admin/organizations">
-                            <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Organizations
-                        </NavLink>
-                    </div> *@
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/admin/dashboard">
-                            <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Dashboard
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/admin/create-organization">
-                            <span class="icon-wrapper"><i class="bi bi-buildings"></i></span> Register Org
-                        </NavLink>
-                    </div>
+                    <NavLink class="nav-item-custom" href="/admin/dashboard">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Dashboard</span>
+                    </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/admin/create-organization">
+                        <i class="bi bi-buildings"></i>
+                        <span>Register Org</span>
+                    </NavLink>
                 </AuthorizeView>
 
-                <AuthorizeView Roles="HR" Context="superContext">
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/hr/profile">
-                            <span class="icon-wrapper"><i class="bi bi-person-circle"></i></span> My Profile
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/hr/dashboard">
-                            <span class="icon-wrapper"><i class="bi bi-speedometer2"></i></span> Dashboard
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/hr/add-employee">
-                            <span class="icon-wrapper"><i class="bi bi-person-plus"></i></span> Add Employee
-                        </NavLink>
-                    </div>
-                   
-                </AuthorizeView>
-                <AuthorizeView Roles="Employee" Context="superContext">
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/employee/profile">
-                            <span class="icon-wrapper"><i class="bi bi-person-badge"></i></span> My Profile
-                        </NavLink>
-                    </div>
+                <!-- HR -->
+                <AuthorizeView Roles="HR" Context="hrContext">
+                    <NavLink class="nav-item-custom" href="/hr/profile">
+                        <i class="bi bi-person-circle"></i>
+                        <span>My Profile</span>
+                    </NavLink>
 
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/employee/dashboard">
-                            <span class="icon-wrapper"><i class="bi bi-grid"></i></span> Dashboard
-                        </NavLink>
-                    </div>
+                    <NavLink class="nav-item-custom" href="/hr/dashboard">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Dashboard</span>
+                    </NavLink>
 
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/employee/attendance">
-                            <span class="icon-wrapper"><i class="bi bi-calendar-check"></i></span> My Attendance
-                        </NavLink>
-                    </div>
-                   
-                </AuthorizeView>
-
-                @* --- ORG ADMIN & HR SECTION --- *@
-                <AuthorizeView Roles="OrgAdmin" Context="orgContext">
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/org/departments">
-                            <span class="icon-wrapper"><i class="bi bi-diagram-3"></i></span> Departments
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/org/designations">
-                            <span class="icon-wrapper"><i class="bi bi-person-badge"></i></span> Designations
-                        </NavLink>
-                    </div>
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/org/add-hr">
-                            <span class="icon-wrapper"><i class="bi bi-person-plus"></i></span> Manage HR
-                        </NavLink>
-                    </div>
-                    @* <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/employees">
-                            <span class="icon-wrapper"><i class="bi bi-people"></i></span> Employee Directory
-                        </NavLink>
-                    </div> *@
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/admin/shifts">
-                            <span class="icon-wrapper"><i class="bi bi-clock-history"></i></span> Shifts
-                        </NavLink>
-                    </div>
-                    @* <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/admin/attendance">
-                            <span class="icon-wrapper"><i class="bi bi-calendar-check"></i></span> Attendance
-                        </NavLink>
-                    </div> *@
-                </AuthorizeView>
-
-                <AuthorizeView Roles="OrgAdmin, HR" Context="orgContext">
+                    <NavLink class="nav-item-custom" href="/hr/add-employee">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Add Employee</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/hr/leaves">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Leave Requests</span>
+                    </NavLink>
                     
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/employees">
-                            <span class="icon-wrapper"><i class="bi bi-people"></i></span> Employee Directory
-                        </NavLink>
-                    </div>
-                   
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link" href="/admin/attendance">
-                            <span class="icon-wrapper"><i class="bi bi-calendar-check"></i></span> Attendance
-                        </NavLink>
-                    </div>
+                    <NavLink class="nav-item-custom" href="/hr/wfh">
+                        <i class="bi bi-person-plus"></i>
+                        <span>WFH Approvals</span>
+                    </NavLink>
                 </AuthorizeView>
 
-                @* --- FOOTER: USER INFO & LOGOUT --- *@
-                <div class="dropdown-divider my-3 mx-3 border-secondary"></div>
+                <!-- EMPLOYEE -->
+                <AuthorizeView Roles="Employee" Context="empContext">
+                    <NavLink class="nav-item-custom" href="/employee/profile">
+                        <i class="bi bi-person-badge"></i>
+                        <span>My Profile</span>
+                    </NavLink>
 
-                <div class="nav-item px-3">
-                    <div class="nav-link text-light opacity-75 small d-flex align-items-center">
-                        <span class="icon-wrapper"><i class="bi bi-person-circle"></i></span>
-                        <span class="text-truncate">@context.User.Identity?.Name</span>
+                    <NavLink class="nav-item-custom" href="/employee/dashboard">
+                        <i class="bi bi-grid"></i>
+                        <span>Dashboard</span>
+                    </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/employee/attendance">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>My Attendance</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/holidays">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Holidays</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/leaves">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>My Leaves</span>
+                    </NavLink>
+                    @* <NavLink class="nav-item-custom" href="/employee/leaves/apply">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Leaves Apply</span>
+                    </NavLink> *@
+                    <NavLink class="nav-item-custom" href="/employee/wfh">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>WFH</span>
+                    </NavLink>
+                </AuthorizeView>
+
+                <!-- ORG ADMIN -->
+                <AuthorizeView Roles="OrgAdmin" Context="orgContext">
+                    <NavLink class="nav-item-custom" href="/org/departments">
+                        <i class="bi bi-diagram-3"></i>
+                        <span>Departments</span>
+                    </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/org/designations">
+                        <i class="bi bi-briefcase"></i>
+                        <span>Designations</span>
+                    </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/org/add-hr">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Manage HR</span>
+                    </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/admin/shifts">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Shifts</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/org/holidays">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Manage Holidays</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/org/workweeks">
+                        <i class="bi bi-clock-history"></i>
+                        <span>Work Week</span>
+                    </NavLink>
+                </AuthorizeView>
+
+                <!-- COMMON -->
+                <AuthorizeView Roles="OrgAdmin,HR" Context="commonContext">
+                    <NavLink class="nav-item-custom" href="/employees">
+                        <i class="bi bi-people"></i>
+                        <span>Employee Directory</span>
+                    </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/admin/attendance">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Attendance</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/admin/leave-types">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Leave Type Manage</span>
+                    </NavLink>
+                </AuthorizeView>
+
+                <!-- FOOTER -->
+                <div class="sidebar-footer">
+                    <div class="user-info">
+                        <i class="bi bi-person-circle"></i>
+                        <span class="text-truncate">@mainContext.User.Identity?.Name</span>
                     </div>
-                </div>
 
-                <div class="nav-item px-3">
-                    <form action="Account/Logout" method="post">
+                    <form action="Account/Logout" method="post" onsubmit="return confirmLogout()">
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link btn btn-link text-start w-100 border-0 shadow-none">
-                            <span class="icon-wrapper"><i class="bi bi-box-arrow-left"></i></span> Logout
+                        <button type="submit" class="logout-btn">
+                            <i class="bi bi-box-arrow-left"></i>
+                            <span>Logout</span>
                         </button>
                     </form>
+
+                    <script>
+                        function confirmLogout() {
+                            return confirm("Are you sure you want to logout?");
+                        }
+                    </script>
+                    @* <form id="logoutForm" action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                    </form>
+                    <button class="logout-btn" @onclick="ConfirmLogout">
+                        <i class="bi bi-box-arrow-left"></i>
+                        <span>Logout</span>
+                    </button> *@
                 </div>
+
             </Authorized>
 
             <NotAuthorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-                        <span class="icon-wrapper"><i class="bi bi-house-door"></i></span> Home
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="/Account/Login">
-                        <span class="icon-wrapper"><i class="bi bi-box-arrow-in-right"></i></span> Login
-                    </NavLink>
-                </div>
+                <NavLink class="nav-item-custom" href="/" Match="NavLinkMatch.All">
+                    <i class="bi bi-house-door"></i>
+                    <span>Home</span>
+                </NavLink>
+
+                <NavLink class="nav-item-custom" href="/Account/Login">
+                    <i class="bi bi-box-arrow-in-right"></i>
+                    <span>Login</span>
+                </NavLink>
             </NotAuthorized>
         </AuthorizeView>
+
     </nav>
 </div>
 
 <style>
-    .icon-wrapper {
-        display: inline-flex;
+    /* SIDEBAR */
+    .sidebar-header {
+        padding: 18px 20px;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: white;
+        background: linear-gradient(180deg, #1c1f4a, #4b1d6b);
+    }
+
+    .logo-text {
+        letter-spacing: 1px;
+    }
+
+    /* NAV AREA */
+    .nav-scrollable {
+        height: calc(100vh - 60px);
+        overflow-y: auto;
+        background: linear-gradient(180deg, #1c1f4a, #4b1d6b);
+        padding-top: 10px;
+    }
+
+    /* NAV ITEM (FIXED ALIGNMENT) */
+    .nav-item-custom {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        width: 1.8rem;
-        margin-right: 0.5rem;
-        font-size: 1.1rem;
-    }
-
-    .nav-link.btn-link {
-        padding: 0.5rem 0;
-        color: rgba(255,255,255,0.5);
+        gap: 12px;
+        padding: 12px 18px;
+        margin: 4px 10px;
+        border-radius: 8px;
         text-decoration: none;
+        font-size: 0.95rem;
+        color: rgba(255,255,255,0.75);
+        transition: all 0.2s ease;
     }
 
-        .nav-link.btn-link:hover {
+        /* ICON FIX */
+        .nav-item-custom i {
+            width: 22px;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        /* TEXT */
+        .nav-item-custom span {
+            white-space: nowrap;
+        }
+
+        /* HOVER */
+        .nav-item-custom:hover {
+            background: rgba(255,255,255,0.08);
             color: #fff;
+        }
+
+        /* ACTIVE */
+        .nav-item-custom.active {
+            background: white;
+            color: #5c4ac7 !important;
+            font-weight: 600;
+        }
+
+    /* FOOTER */
+    .sidebar-footer {
+        margin-top: 15px;
+        padding: 15px;
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* USER */
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85rem;
+        opacity: 0.8;
+        margin-bottom: 10px;
+    }
+
+    /* LOGOUT */
+    .logout-btn {
+        width: 100%;
+        border: none;
+        background: none;
+        color: rgba(255,255,255,0.75);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        border-radius: 6px;
+        transition: 0.2s;
+    }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.08);
+            color: white;
         }
 </style>
 
@@ -202,4 +300,14 @@
     }
 
     public void Dispose() => NavigationManager.LocationChanged -= OnLocationChanged;
+
+
+    private async Task ConfirmLogout()
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to logout?");
+        if (confirm)
+        {
+            await JS.InvokeVoidAsync("submitLogoutForm");
+        }
+    }
 }

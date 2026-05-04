@@ -20,11 +20,14 @@
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="fw-normal">Add New HR Manager</h2>
-        <button class="btn btn-primary shadow-sm"
+        @* <button class="btn btn-primary shadow-sm"
                 style="background-color: #5c4ac7; border: none;"
                 disabled="@isSubmitting"
                 @onclick='() => Nav.NavigateTo("/org/dashboard")'>
             BACK TO DASHBOARD
+        </button> *@
+        <button class="btn btn-outline-secondary shadow-sm" @onclick='() => Nav.NavigateTo("/org/dashboard")'>
+            DASHBOARD
         </button>
     </div>
 

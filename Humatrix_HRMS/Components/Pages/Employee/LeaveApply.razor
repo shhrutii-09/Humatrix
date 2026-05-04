@@ -1,0 +1,302 @@
+﻿@page "/employee/leaves/apply"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Helpers
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize(Roles = "Employee")]
+
+@inject LeaveService LeaveService
+@inject CurrentUserService CurrentUser
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Apply Leave | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Apply Leave</h2>
+
+        <button class="btn btn-white border shadow-sm"
+                @onclick='() => Nav.NavigateTo("/employee/leaves")'>
+            BACK
+        </button>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- FORM -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+
+                    <EditForm Model="model" OnValidSubmit="Submit">
+                        <DataAnnotationsValidator />
+
+                        <!-- LEAVE TYPE -->
+                        <div class="mb-3">
+                            <label class="small fw-bold">Leave Type</label>
+                            <select class="form-control" @onchange="OnLeaveTypeChanged">
+                                <option value="">-- Select --</option>
+                                @foreach (var lt in leaveTypes)
+                                {
+                                    <option value="@lt.LeaveTypeId">@lt.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <!-- BALANCE INFO -->
+                        @if (selectedBalance != null)
+                        {
+                            <div class="alert alert-light border small">
+                                <strong>Available:</strong> @(selectedBalance.Remaining + selectedBalance.CarriedForward) days <br />
+                                <span class="text-muted">
+                                    Used: @selectedBalance.Used | Pending: @selectedBalance.Pending
+                                </span>
+                            </div>
+                        }
+
+                        <!-- DATES -->
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="small fw-bold">From Date</label>
+                                <InputDate class="form-control"
+                                           @bind-Value="model.FromDate"
+                                           min="@today"
+                                           @onchange="Recalculate" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="small fw-bold">To Date</label>
+                                <InputDate class="form-control"
+                                           @bind-Value="model.ToDate"
+                                           min="@model.FromDate.ToString("yyyy-MM-dd")"
+                                           @onchange="Recalculate" />
+                            </div>
+                        </div>
+
+                        <!-- HALF DAY -->
+                        @if (selectedLeaveType?.AllowHalfDay == true)
+                        {
+                            <div class="form-check mt-3">
+                                <InputCheckbox class="form-check-input"
+                                               @bind-Value="model.IsHalfDay"
+                                               @onchange="Recalculate" />
+                                <label class="form-check-label">Half Day</label>
+                            </div>
+                        }
+
+                        <!-- REASON -->
+                        <div class="mt-3">
+                            <label class="small fw-bold">Reason</label>
+                            <InputTextArea class="form-control"
+                                           rows="3"
+                                           @bind-Value="model.Reason" />
+                        </div>
+
+                        <!-- CALCULATION PANEL -->
+                        <div class="alert mt-4 border @GetCalcClass()">
+                            <strong>Total Days:</strong> @calculatedDays
+
+                            @if (isInvalidRange)
+                            {
+                                <div class="text-danger small">Invalid date range</div>
+                            }
+                            else if (calculatedDays == 0)
+                            {
+                                <div class="text-warning small">No working days selected</div>
+                            }
+                            else if (isInsufficient)
+                            {
+                                <div class="text-danger small">
+                                    Insufficient balance
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-4 d-flex gap-2">
+                            <button class="btn btn-success px-4"
+                                    disabled="@(!CanSubmit)">
+                                APPLY
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    @onclick='() => Nav.NavigateTo("/employee/leaves")'>
+                                CANCEL
+                            </button>
+                        </div>
+
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDE PANEL -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h6 class="text-muted mb-3 uppercase-tracking">GUIDELINES</h6>
+
+                    <ul class="small text-muted">
+                        <li>Weekends & holidays auto excluded</li>
+                        <li>Balance checked before apply</li>
+                        <li>No overlapping leaves allowed</li>
+                        <li>Half-day depends on leave type</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger mt-4">@error</div>
+    }
+
+</div>
+
+<style>
+    .uppercase-tracking {
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.75rem;
+    }
+</style>
+
+@code {
+
+    private LeaveRequest model = new()
+    {
+        FromDate = DateTime.Today,
+        ToDate = DateTime.Today
+    };
+
+    private List<LeaveType> leaveTypes = new();
+    private List<LeaveBalanceDto> balances = new();
+    private List<DateTime> holidays = new();
+
+    private WorkWeek? workWeek;
+
+    private LeaveType? selectedLeaveType;
+    private LeaveBalanceDto? selectedBalance;
+
+    private decimal calculatedDays;
+    private bool isInvalidRange;
+    private bool isInsufficient;
+
+    private string today = DateTime.Today.ToString("yyyy-MM-dd");
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        leaveTypes = await db.LeaveTypes.Where(x => x.IsActive).ToListAsync();
+        balances = await LeaveService.GetMyBalancesAsync();
+
+        holidays = await db.Holidays
+            .Where(h => !h.IsOptional)
+            .Select(h => h.Date.Date)
+            .ToListAsync();
+
+        // workWeek = await db.WorkWeeks.FirstOrDefaultAsync();
+        var user = await CurrentUser.GetUserAsync();
+
+        workWeek = await db.WorkWeeks
+            .FirstOrDefaultAsync(w => w.OrganizationId == user.OrganizationId);
+        Recalculate();
+    }
+
+    private void OnLeaveTypeChanged(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+
+        selectedLeaveType = leaveTypes
+            .FirstOrDefault(x => x.LeaveTypeId.ToString() == id);
+
+        model.LeaveTypeId = selectedLeaveType?.LeaveTypeId ?? Guid.Empty;
+
+        selectedBalance = balances
+            .FirstOrDefault(b => b.LeaveTypeName == selectedLeaveType?.Name);
+
+        if (selectedLeaveType?.AllowHalfDay != true)
+            model.IsHalfDay = false;
+
+        Recalculate();
+    }
+
+    private void Recalculate(ChangeEventArgs? e = null)
+    {
+        isInvalidRange = false;
+        isInsufficient = false;
+
+        if (model.ToDate < model.FromDate)
+        {
+            calculatedDays = 0;
+            isInvalidRange = true;
+            return;
+        }
+
+        if (model.IsHalfDay)
+        {
+            calculatedDays = 0.5m;
+        }
+        else
+        {
+            calculatedDays = 0;
+
+            for (var d = model.FromDate.Date; d <= model.ToDate.Date; d = d.AddDays(1))
+            {
+                if (workWeek != null && !DateHelper.IsWorkingDay(d, workWeek))
+                    continue;
+
+                if (holidays.Contains(d))
+                    continue;
+
+                calculatedDays++;
+            }
+        }
+
+        if (selectedBalance != null)
+        {
+            var available = selectedBalance.Remaining + selectedBalance.CarriedForward;
+            if (calculatedDays > available)
+                isInsufficient = true;
+        }
+    }
+
+    private bool CanSubmit =>
+        !isInvalidRange &&
+        calculatedDays > 0 &&
+        !isInsufficient &&
+        model.LeaveTypeId != Guid.Empty;
+
+    private string GetCalcClass()
+    {
+        if (isInvalidRange || isInsufficient) return "alert-danger";
+        if (calculatedDays == 0) return "alert-warning";
+        return "alert-success";
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+            await LeaveService.ApplyLeaveAsync(model);
+            Nav.NavigateTo("/employee/leaves");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

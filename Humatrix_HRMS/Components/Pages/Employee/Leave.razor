@@ -1,55 +1,313 @@
-﻿@page "/employee/leave"
-@using Humatrix_HRMS.Models
+﻿@page "/employee/leaves"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+
 @attribute [Authorize(Roles = "Employee")]
 
 @inject LeaveService LeaveService
+@inject NavigationManager Nav
 
-<h3>Apply Leave</h3>
+<PageTitle>My Leaves | Humatrix HRMS</PageTitle>
 
-<EditForm Model="newLeave" OnValidSubmit="Apply">
-    <InputDate @bind-Value="newLeave.FromDate" />
-    <InputDate @bind-Value="newLeave.ToDate" />
-    <InputText @bind-Value="newLeave.Reason" placeholder="Reason" />
-    <button class="btn btn-primary">Apply</button>
-</EditForm>
+<div class="container-fluid px-4 mt-4">
 
-<h4 class="mt-4">My Leaves</h4>
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-semibold mb-0">My Leaves</h2>
+            <small class="text-muted">Manage your leave requests and balances</small>
+        </div>
 
-<table class="table">
-    <thead>
-        <tr>
-            <th>From</th>
-            <th>To</th>
-            <th>Status</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var l in leaves)
-        {
-            <tr>
-                <td>@l.FromDate.ToShortDateString()</td>
-                <td>@l.ToDate.ToShortDateString()</td>
-                <td>@l.Status</td>
-            </tr>
-        }
-    </tbody>
-</table>
+        <button class="btn btn-primary shadow-sm"
+                style="background-color:#5c4ac7; border:none;"
+                @onclick="@(() => Nav.NavigateTo("/employee/leaves/apply"))">
+            + Apply Leave
+        </button>
+    </div>
+
+    <!-- ALERT -->
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-success alert-dismissible fade show">
+            @message
+            <button class="btn-close" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger alert-dismissible fade show">
+            @error
+            <button class="btn-close" @onclick="() => error = null"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="text-muted mt-2">Loading leaves...</p>
+        </div>
+    }
+    else
+    {
+        <!-- BALANCE CARDS -->
+        <div class="row g-3 mb-4">
+            @if (!balances.Any())
+            {
+                <div class="col-12 text-muted text-center">
+                    No leave balances available
+                </div>
+            }
+            else
+            {
+                @foreach (var bal in balances)
+                {
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+
+                                <div class="d-flex justify-content-between">
+                                    <small class="fw-semibold text-muted">
+                                        @bal.LeaveTypeName
+                                    </small>
+
+                                    @if (bal.IsPaid)
+                                    {
+                                        <span class="badge bg-success">Paid</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Unpaid</span>
+                                    }
+                                </div>
+
+                                <h3 class="mt-2 mb-1">@bal.Remaining</h3>
+
+                                <div class="small text-muted">
+                                    Used: @bal.Used |
+                                    Pending: @bal.Pending
+                                </div>
+
+                                @if (bal.CarriedForward > 0)
+                                {
+                                    <span class="badge bg-info mt-2">
+                                        Carry: @bal.CarriedForward
+                                    </span>
+                                }
+
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- TABLE -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h5 class="mb-0 fw-semibold">Leave History</h5>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Dates</th>
+                            <th>Type</th>
+                            <th>Days</th>
+                            <th>Status</th>
+                            <th>Applied</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @if (!leaves.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    No leave requests found.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var l in leaves.OrderByDescending(x => x.AppliedAt))
+                            {
+                                <tr class="@(l.Status == "Pending" ? "table-warning" : "")">
+
+                                    <td class="ps-4 fw-semibold">
+                                        @l.FromDate.ToString("dd MMM") -
+                                        @l.ToDate.ToString("dd MMM")
+
+                                        <div class="small text-muted">
+                                            @l.Reason
+                                        </div>
+                                    </td>
+
+                                    <td>@l.LeaveTypeName</td>
+
+                                    <td>@l.TotalDays</td>
+
+                                    <td>
+                                        <span class="badge @GetStatusClass(l.Status)">
+                                            @l.Status
+                                        </span>
+                                    </td>
+
+                                    <td class="small text-muted">
+                                        @l.AppliedAt.ToLocalTime().ToString("dd MMM yyyy")
+                                    </td>
+
+                                    <td>
+                                        @if (l.Status == "Pending")
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    disabled="@actionLoading"
+                                                    @onclick="() => ConfirmCancel(l.LeaveRequestId)">
+                                                Cancel
+                                            </button>
+                                        }
+                                    </td>
+
+                                </tr>
+                            }
+                        }
+                    </tbody>
+
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- CONFIRM CANCEL MODAL -->
+    @if (showCancelModal)
+    {
+        <div class="modal fade show d-block">
+            <div class="modal-dialog">
+                <div class="modal-content shadow">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Cancel Leave</h5>
+                        <button class="btn-close" @onclick="CloseCancel"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        Are you sure you want to cancel this leave request?
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="CloseCancel">
+                            No
+                        </button>
+
+                        <button class="btn btn-danger"
+                                disabled="@actionLoading"
+                                @onclick="CancelLeaveConfirmed">
+                            Yes, Cancel
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop fade show"></div>
+    }
+
+</div>
+
+<style>
+    .badge {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+    }
+</style>
 
 @code {
-    private LeaveRequest newLeave = new();
-    private List<LeaveRequest> leaves = new();
+
+    private bool isLoading = true;
+    private bool actionLoading = false;
+
+    private string? error;
+    private string? message;
+
+    private List<LeaveRequestDto> leaves = new();
+    private List<LeaveBalanceDto> balances = new();
+
+    private bool showCancelModal = false;
+    private Guid selectedLeaveId;
 
     protected override async Task OnInitializedAsync()
     {
-        leaves = await LeaveService.GetMyLeavesAsync();
+        await LoadData();
     }
 
-    private async Task Apply()
+    private async Task LoadData()
     {
-        await LeaveService.ApplyLeaveAsync(newLeave);
-        newLeave = new LeaveRequest();
-        leaves = await LeaveService.GetMyLeavesAsync();
+        try
+        {
+            isLoading = true;
+
+            leaves = await LeaveService.GetMyLeavesAsync();
+            balances = await LeaveService.GetMyBalancesAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
+
+    private void ConfirmCancel(Guid id)
+    {
+        selectedLeaveId = id;
+        showCancelModal = true;
+    }
+
+    private void CloseCancel()
+    {
+        showCancelModal = false;
+    }
+
+    private async Task CancelLeaveConfirmed()
+    {
+        try
+        {
+            actionLoading = true;
+
+            await LeaveService.CancelRequestAsync(selectedLeaveId);
+
+            message = "Leave cancelled successfully!";
+            error = null;
+
+            showCancelModal = false;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            actionLoading = false;
+        }
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Approved" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "Rejected" => "bg-danger",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
 }

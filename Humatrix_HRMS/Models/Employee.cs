@@ -39,5 +39,10 @@ namespace Humatrix_HRMS.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public string? CreatedByUserId { get; set; } // ✅ FIXED
+
+        //public Guid OrganizationId { get; set; }
+
+        [ForeignKey("OrganizationId")]
+        public Organization? Organization { get; set; }   // ← Add this navigation property
     }
 }

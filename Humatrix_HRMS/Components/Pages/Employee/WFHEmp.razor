@@ -1,0 +1,191 @@
+﻿@page "/employee/wfh"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Employee")]
+
+@inject WorkFromHomeService WfhService
+
+<PageTitle>Work From Home | Humatrix</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-semibold mb-0">Work From Home</h2>
+            <small class="text-muted">Manage your WFH requests</small>
+        </div>
+
+        <button class="btn btn-primary shadow-sm"
+                style="background-color:#5c4ac7; border:none;"
+                @onclick="OpenApply">
+            + Apply WFH
+        </button>
+    </div>
+
+    <!-- ALERT -->
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-success">@message</div>
+    }
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <!-- TABLE -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+
+            <table class="table mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @if (!requests.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                No WFH requests
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var r in requests)
+                        {
+                            <tr class="@(r.Status == "Pending" ? "table-warning" : "")">
+
+                                <td>@r.Date.ToString("dd MMM yyyy")</td>
+
+                                <td>@r.Reason</td>
+
+                                <td>
+                                    <span class="badge @GetStatusClass(r.Status)">
+                                        @r.Status
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @if (r.Status == "Pending")
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => Cancel(r.Id)">
+                                            Cancel
+                                        </button>
+                                    }
+                                </td>
+
+                            </tr>
+                        }
+                    }
+                </tbody>
+
+            </table>
+
+        </div>
+    </div>
+
+    <!-- APPLY MODAL -->
+    @if (showModal)
+    {
+        <div class="modal fade show d-block">
+            <div class="modal-dialog">
+                <div class="modal-content">
+
+                    <div class="modal-header">
+                        <h5>Apply WFH</h5>
+                        <button class="btn-close" @onclick="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <label>Date</label>
+                        <input type="date" class="form-control" @bind="model.Date" />
+
+                        <label class="mt-3">Reason</label>
+                        <textarea class="form-control" @bind="model.Reason"></textarea>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @onclick="Close">Cancel</button>
+                        <button class="btn btn-primary" @onclick="Apply">Apply</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-backdrop fade show"></div>
+    }
+
+</div>
+
+@code {
+
+    private List<WorkFromHomeRequest> requests = new();
+
+    private WorkFromHomeRequest model = new();
+
+    private bool showModal;
+    private string? message;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        requests = await WfhService.GetMyAsync();
+    }
+
+    private void OpenApply()
+    {
+        model = new WorkFromHomeRequest();
+        showModal = true;
+    }
+
+    private void Close()
+    {
+        showModal = false;
+    }
+
+    private async Task Apply()
+    {
+        try
+        {
+            await WfhService.ApplyAsync(model);
+            message = "WFH applied successfully";
+            showModal = false;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task Cancel(Guid id)
+    {
+        await WfhService.CancelAsync(id);
+        await Load();
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Approved" => "bg-success",
+        "Rejected" => "bg-danger",
+        _ => "bg-warning text-dark"
+    };
+}

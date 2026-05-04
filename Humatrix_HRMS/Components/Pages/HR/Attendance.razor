@@ -1,9 +1,11 @@
 ﻿@page "/admin/attendance"
 @rendermode InteractiveServer
+
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 
 @inject AttendanceService AttendanceService
@@ -13,6 +15,8 @@
 <PageTitle>Attendance Management | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fw-normal">Attendance Management</h2>
         <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadData">
@@ -20,44 +24,46 @@
         </button>
     </div>
 
+    <!-- STATS -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card shadow-sm border-0 border-start border-primary border-4">
                 <div class="card-body py-3">
-                    <small class="text-muted fw-bold">TOTAL EMPLOYEES</small>
+                    <small class="text-muted fw-bold">TOTAL RECORDS</small>
                     <h3 class="mb-0">@attendanceList.Count</h3>
                 </div>
             </div>
         </div>
-        @* <div class="col-md-3">
-            <div class="card shadow-sm border-0 border-start border-success border-4">
-                <div class="card-body py-3">
-                    <small class="text-muted fw-bold">PRESENT / ACTIVE</small>
-                    <h3 class="mb-0 text-success">@attendanceList.Count(x => x.Status == "Present" || x.Status == "Checked In")</h3>
-                </div>
-            </div>
-        </div> *@
+
         <div class="col-md-3">
             <div class="card shadow-sm border-0 border-start border-warning border-4">
                 <div class="card-body py-3">
-                    <small class="text-muted fw-bold">LATE</small>
-                    <h3 class="mb-0 text-warning">@attendanceList.Count(x => x.Status.Contains("Late"))</h3>
+                    <small class="text-muted fw-bold">LATE ARRIVALS</small>
+                    <h3 class="mb-0 text-warning">
+                        @* @attendanceList.Count(x => x.Status?.Contains("Late") == true) *@
+                        @attendanceList.Count(x => x.Status?.Contains("Late") == true)
+                    </h3>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card shadow-sm border-0 border-start border-danger border-4">
                 <div class="card-body py-3">
                     <small class="text-muted fw-bold">ABSENT</small>
-                    <h3 class="mb-0 text-danger">@attendanceList.Count(x => x.Status == "Absent")</h3>
+                    <h3 class="mb-0 text-danger">
+                        @attendanceList.Count(x => x.Status == "Absent")
+                    </h3>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- FILTER -->
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body p-4">
             <div class="row g-3 align-items-end">
+
                 <div class="col-md-3">
                     <label class="form-label small fw-bold text-muted">Filter Date</label>
                     <InputDate @bind-Value="selectedDate" class="form-control" />
@@ -87,7 +93,10 @@
                 </div>
 
                 <div class="col-md-3">
-                    <button class="btn btn-primary w-100 shadow-sm" style="background-color: #5c4ac7; border: none;" @onclick="LoadData" disabled="@isLoading">
+                    <button class="btn btn-primary w-100 shadow-sm"
+                            style="background-color: #5c4ac7; border: none;"
+                            @onclick="LoadData"
+                            disabled="@isLoading">
                         @if (isLoading)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
@@ -99,54 +108,95 @@
         </div>
     </div>
 
+    <!-- TABLE -->
     <div class="card shadow-sm border-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
-                        <th class="ps-4 border-0 text-muted small">EMPLOYEE</th>
-                        <th class="border-0 text-muted small">DEPARTMENT</th>
-                        <th class="border-0 text-muted small text-center">CHECK IN</th>
-                        <th class="border-0 text-muted small text-center">CHECK OUT</th>
-                        <th class="border-0 text-muted small">STATUS</th>
+                        <th class="ps-4 text-muted small">EMPLOYEE</th>
+                        <th class="text-muted small">DEPARTMENT</th>
+                        <th class="text-muted small text-center">CHECK IN</th>
+                        <th class="text-muted small text-center">CHECK OUT</th>
+                        <th class="text-muted small">STATUS</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     @if (isLoading)
                     {
-                        <tr><td colspan="5" class="text-center py-5 text-muted">Loading attendance data...</td></tr>
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                Loading attendance data...
+                            </td>
+                        </tr>
                     }
-                    else if (attendanceList != null && attendanceList.Any())
+                    else if (attendanceList?.Any() == true)
                     {
                         @foreach (var item in attendanceList)
                         {
-                            <tr class="@(item.Status == "Absent" ? "bg-light-danger" : "")">
+                            <tr class="@(item.Status == "Absent" ? "table-danger" : "")">
+
+                                <!-- EMPLOYEE -->
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center">
-                                        <div class="avatar-sm me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle fw-bold" style="width: 40px; height: 40px;">
-                                            @item.EmployeeName[0]
-                                        </div>
+                                        <div class="avatar-sm me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle fw-bold"
+                                             style="width:40px;height:40px;">
+                                            @(string.IsNullOrWhiteSpace(item.EmployeeName)
+                                                                                ? "?"
+                                                                                : item.EmployeeName[0])
+                                </div>
+
                                         <div>
-                                            <div class="fw-bold mb-0">@item.EmployeeName</div>
+                                            <div class="fw-bold">@item.EmployeeName</div>
                                             <div class="small text-muted">@item.Email</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="badge bg-light text-dark fw-normal">@item.Department</span></td>
-                                <td class="text-center font-monospace">@(item.CheckIn.HasValue? item.CheckIn.Value.ToLocalTime().ToString("hh:mm tt") : "--:--")</td>
-                                <td class="text-center font-monospace">@(item.CheckOut.HasValue? item.CheckOut.Value.ToLocalTime().ToString("hh:mm tt") : "--:--")</td>
+
+                                <!-- DEPARTMENT -->
                                 <td>
-                                    <span class="badge rounded-pill @GetStatusClass(item.Status)">@item.Status</span>
+                                    <span class="badge bg-light text-dark fw-normal">
+                                        @item.Department
+                                    </span>
+
+                            @if (item.IsManual)
+                                    {
+                                        <span class="ms-1 text-primary" title="Manual Entry">
+                                            <i class="bi bi-info-circle"></i>
+                                        </span>
+                                    }
+                            </td>
+
+                            <!-- CHECK IN -->
+                            <td class="text-center font-monospace">
+                                @(item.CheckIn.HasValue
+                                                            ? FormatTime(item.CheckIn.Value)
+                                                            : "--:--")
+                                                                  </td>
+
+                            <!-- CHECK OUT -->
+                            <td class="text-center font-monospace">
+                                @(item.CheckOut.HasValue
+                                                            ? FormatTime(item.CheckOut.Value)
+                                                            : "--:--")
+                        </td>
+
+                                <!-- STATUS -->
+                                <td>
+                                    <span class="badge rounded-pill @GetStatusClass(item.Status)">
+                                        @item.Status
+                                    </span>
                                 </td>
+
                             </tr>
-                        }
+                                        }
                     }
                     else
                     {
                         <tr>
-                            <td colspan="5" class="text-center py-5">
-                                <img src="/images/no-data.svg" alt="No data" style="width: 100px; opacity: 0.5;" class="mb-3 d-block mx-auto" />
-                                <span class="text-muted">No attendance records found for this selection.</span>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                No attendance records found.
                             </td>
                         </tr>
                     }
@@ -156,27 +206,16 @@
     </div>
 </div>
 
-<style>
-    .bg-light-danger {
-        background-color: rgba(220, 53, 69, 0.05);
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: #5c4ac7;
-        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.25);
-    }
-
-    .badge {
-        padding: 0.5em 0.8em;
-    }
-</style>
-
 @code {
+
     private List<AttendanceListDto> attendanceList = new();
     private List<DepartmentDto> departments = new();
-    private DateTime? selectedDate = DateTime.Today;
+
+    // private DateTime? selectedDate = DateTime.Today;
+    private DateTime? selectedDate = null;
     private Guid? selectedDepartmentId;
     private string? selectedRole;
+
     private bool isOrgAdmin;
     private bool isLoading;
 
@@ -186,9 +225,7 @@
         isOrgAdmin = authState.User.IsInRole("OrgAdmin");
 
         if (isOrgAdmin)
-        {
             departments = await DeptService.GetAllAsync();
-        }
 
         await LoadData();
     }
@@ -196,9 +233,15 @@
     private async Task LoadData()
     {
         isLoading = true;
+
         try
         {
-            attendanceList = await AttendanceService.GetAllAttendanceAsync(selectedDate, selectedDepartmentId, selectedRole);
+            attendanceList = await AttendanceService
+                .GetAllAttendanceAsync(selectedDate, selectedDepartmentId, selectedRole);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message); // replace with toast/snackbar later
         }
         finally
         {
@@ -206,17 +249,26 @@
         }
     }
 
-    private string GetStatusClass(string status) => status switch
+    private string FormatTime(DateTime utcTime)
+    {
+        return utcTime.ToLocalTime().ToString("hh:mm tt");
+        // 👉 later replace with org timezone if needed
+    }
+
+    private string GetStatusClass(string? status) => status switch
     {
         "Present" => "bg-success",
         "Late" => "bg-warning text-dark",
-        "Late (Active)" => "bg-warning text-dark",
         "Half Day" => "bg-info",
         "Short Hours" => "bg-secondary",
         "Absent" => "bg-danger",
-        "Checked In" => "bg-primary",
+
+        // ✅ NEW IMPORTANT STATUSES
+        "On Leave" => "bg-primary",
+        "Half Day Leave" => "bg-info text-dark",
+        "Work From Home" => "bg-dark",
+
         "Not Started" => "bg-light text-dark border",
-        "Pending Verification" => "bg-info text-dark",
         _ => "bg-secondary"
     };
 }
