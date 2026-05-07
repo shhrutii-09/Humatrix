@@ -1,372 +1,139 @@
 ﻿@page "/hr/attendance-corrections"
 @rendermode InteractiveServer
 
-@using Humatrix_HRMS.DTOs
-@using Humatrix_HRMS.DTOs.Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.DTOs.AttendanceCorrections
+@using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 
 @inject AttendanceCorrectionService CorrectionService
+@inject CurrentUserService CurrentUserService
+@inject ApplicationDbContext DbContext
 
-<PageTitle>Attendance Corrections | HR | Humatrix HRMS</PageTitle>
+<PageTitle>Attendance Corrections | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
     <!-- HEADER -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-
-        <div>
-            <h2 class="fw-semibold mb-1">
-                Attendance Corrections
-            </h2>
-
-            <p class="text-muted small mb-0">
-                Review and manage employee attendance correction requests
-            </p>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Attendance Correction Requests</h2>
 
         <button class="btn btn-outline-secondary shadow-sm"
-                @onclick="LoadData"
-                disabled="@isLoading">
+                @onclick="LoadRequests">
 
-            @if (isLoading)
-            {
-                <span class="spinner-border spinner-border-sm me-2"></span>
-            }
-
-            <i class="bi bi-arrow-clockwise me-1"></i>
-            Refresh
+            <i class="bi bi-arrow-clockwise"></i>
+            REFRESH
 
         </button>
-
-    </div>
-
-    <!-- ALERT -->
-    @if (!string.IsNullOrWhiteSpace(message))
-    {
-        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show border-0 shadow-sm mb-4">
-
-            <div class="d-flex align-items-start">
-
-                <i class="bi @(isError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2 fs-5"></i>
-
-                <div class="flex-grow-1">
-                    @message
-                </div>
-
-                <button type="button"
-                        class="btn-close"
-                        @onclick="ClearMessage">
-                </button>
-
-            </div>
-
-        </div>
-    }
-
-    <!-- STATS -->
-    <div class="row g-3 mb-4">
-
-        <div class="col-md-3">
-
-            <div class="stats-card pending-card">
-
-                <div class="stats-label">
-                    Pending
-                </div>
-
-                <div class="stats-value text-warning">
-                    @requests.Count(r => r.Status == "Pending")
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-3">
-
-            <div class="stats-card approved-card">
-
-                <div class="stats-label">
-                    Approved
-                </div>
-
-                <div class="stats-value text-success">
-                    @requests.Count(r => r.Status == "Approved")
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-3">
-
-            <div class="stats-card rejected-card">
-
-                <div class="stats-label">
-                    Rejected
-                </div>
-
-                <div class="stats-value text-danger">
-                    @requests.Count(r => r.Status == "Rejected")
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="col-md-3">
-
-            <div class="stats-card total-card">
-
-                <div class="stats-label">
-                    Total
-                </div>
-
-                <div class="stats-value">
-                    @requests.Count
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    <!-- FILTER -->
-    <div class="custom-card mb-4">
-
-        <div class="p-3 d-flex flex-wrap align-items-center gap-2">
-
-            <span class="small fw-bold text-uppercase text-muted me-2">
-                Filter:
-            </span>
-
-            @foreach (var filter in Filters)
-            {
-                <button class="btn btn-sm filter-btn @(selectedStatus == filter ? "active-filter" : "")"
-                        @onclick="() => ChangeFilter(filter)">
-
-                    @(string.IsNullOrWhiteSpace(filter)
-                                    ? "All Requests"
-                                    : filter)
-
-            </button>
-                        }
-
-        </div>
-
     </div>
 
     <!-- TABLE -->
-    <div class="custom-card overflow-hidden">
+    <div class="card shadow-sm border-0">
 
-        @if (isLoading)
-        {
-            <div class="text-center py-5">
+        <div class="table-responsive">
 
-                <div class="spinner-border text-primary mb-3"></div>
+            <table class="table table-hover align-middle mb-0">
 
-                <div class="text-muted">
-                    Loading attendance correction requests...
-                </div>
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4 text-muted small">EMPLOYEE</th>
+                        <th class="text-muted small">DATE</th>
+                        <th class="text-muted small">TYPE</th>
+                        <th class="text-muted small">REQUESTED IN</th>
+                        <th class="text-muted small">REQUESTED OUT</th>
+                        <th class="text-muted small">REASON</th>
+                        <th class="text-muted small">STATUS</th>
+                        <th class="text-muted small text-center">ACTION</th>
+                    </tr>
+                </thead>
 
-            </div>
-        }
-        else if (!FilteredRequests.Any())
-        {
-            <div class="text-center py-5">
+                <tbody>
 
-                <i class="bi bi-inbox fs-1 text-muted opacity-50 d-block mb-3"></i>
-
-                <div class="fw-semibold text-muted">
-                    No correction requests found
-                </div>
-
-                <small class="text-muted">
-                    @(string.IsNullOrWhiteSpace(selectedStatus)
-                                    ? "No requests available."
-                                    : $"No {selectedStatus.ToLower()} requests available.")
-            </small>
-
-            </div>
-                }
-        else
-        {
-            <div class="table-responsive">
-
-                <table class="table table-custom align-middle mb-0">
-
-                    <thead>
+                    @if (isLoading)
+                    {
                         <tr>
-                            <th class="ps-4">EMPLOYEE</th>
-                            <th>DEPARTMENT</th>
-                            <th>DATE</th>
-                            <th>CURRENT</th>
-                            <th>REQUESTED</th>
-                            <th>REASON</th>
-                            <th>SUBMITTED</th>
-                            <th>STATUS</th>
-                            <th class="text-end pe-4">ACTION</th>
+                            <td colspan="8"
+                                class="text-center py-5 text-muted">
+
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                Loading requests...
+
+                            </td>
                         </tr>
-                    </thead>
-
-                    <tbody>
-
-                        @foreach (var req in FilteredRequests)
+                    }
+                    else if (requests.Any())
+                    {
+                        @foreach (var item in requests)
                         {
-                            <tr class="@(req.Status == "Pending" ? "pending-row" : "")">
+                            <tr>
 
                                 <!-- EMPLOYEE -->
                                 <td class="ps-4">
 
                                     <div class="fw-semibold">
-                                        @req.EmployeeName
+                                        @item.EmployeeName
                                     </div>
 
-                                </td>
-
-                                <!-- DEPARTMENT -->
-                                <td>
-
-                                    <span class="department-badge">
-                                        @req.Department
-                                    </span>
+                                    <div class="small text-muted">
+                                        @item.Email
+                                    </div>
 
                                 </td>
 
                                 <!-- DATE -->
                                 <td>
-
-                                    <div class="fw-semibold">
-                                        @req.Date.ToString("dd MMM yyyy")
-                                    </div>
-
-                                    <small class="text-muted">
-                                        @req.Date.ToString("dddd")
-                                    </small>
-
+                                    @item.WorkDate.ToString("dd MMM yyyy")
                                 </td>
 
-                                <!-- CURRENT -->
-                                <td class="small font-monospace">
-
-                                    <div class="mb-1">
-
-                                        <i class="bi bi-box-arrow-in-right text-muted me-1"></i>
-
-                                        @FormatOrgTime(req.CurrentCheckIn)
-
-                                    </div>
-
-                                    <div>
-
-                                        <i class="bi bi-box-arrow-right text-muted me-1"></i>
-
-                                        @FormatOrgTime(req.CurrentCheckOut)
-
-                                    </div>
-
+                                <!-- TYPE -->
+                                <td>
+                                    @FormatType(item.RequestType)
                                 </td>
 
-                                <!-- REQUESTED -->
-                                <td class="small font-monospace">
+                                <!-- IN -->
+                                <td class="font-monospace">
+                                    @FormatTime(item.RequestedCheckIn)
+                                </td>
 
-                                    <div class="mb-1">
-
-                                        <i class="bi bi-box-arrow-in-right text-success me-1"></i>
-
-                                        @FormatOrgTime(req.RequestedCheckIn)
-
-                                    </div>
-
-                                    <div>
-
-                                        <i class="bi bi-box-arrow-right text-danger me-1"></i>
-
-                                        @FormatOrgTime(req.RequestedCheckOut)
-
-                                    </div>
-
+                                <!-- OUT -->
+                                <td class="font-monospace">
+                                    @FormatTime(item.RequestedCheckOut)
                                 </td>
 
                                 <!-- REASON -->
                                 <td style="max-width:250px;">
-
-                                    <div class="reason-text"
-                                         title="@req.Reason">
-
-                                        @req.Reason
-
-                                    </div>
-
-                                    @if (!string.IsNullOrWhiteSpace(req.RejectionReason))
-                                    {
-                                        <div class="small text-danger mt-1"
-                                             title="@req.RejectionReason">
-
-                                            ↳ @req.RejectionReason
-
-                                        </div>
-                                    }
-
-                                </td>
-
-                                <!-- SUBMITTED -->
-                                <td>
-
-                                    <div class="small text-muted">
-                                        @FormatOrgDateTime(req.AppliedAt)
-                                    </div>
-
+                                    @item.Reason
                                 </td>
 
                                 <!-- STATUS -->
                                 <td>
-
-                                    <span class="badge status-badge @GetStatusClass(req.Status)">
-                                        @req.Status
+                                    <span class="badge rounded-pill @GetStatusClass(item.Status)">
+                                        @item.Status
                                     </span>
-
-                                    @if (req.ReviewedAt.HasValue)
-                                    {
-                                        <div class="small text-muted mt-1">
-                                            Reviewed:
-                                            @FormatOrgDateTime(req.ReviewedAt)
-                                        </div>
-                                    }
-
                                 </td>
 
                                 <!-- ACTION -->
-                                <td class="text-end pe-4">
+                                <td class="text-center">
 
-                                    @if (req.Status == "Pending")
+                                    @if (item.Status == AttendanceCorrectionStatuses.Pending)
                                     {
-                                        <div class="d-flex justify-content-end gap-2">
+                                        <div class="d-flex justify-content-center gap-2">
 
                                             <button class="btn btn-success btn-sm"
-                                                    disabled="@actionLoading"
-                                                    @onclick="() => Approve(req.CorrectionRequestId)">
+                                                    @onclick="() => Approve(item.AttendanceCorrectionRequestId)">
 
-                                                @if (actionLoading)
-                                                {
-                                                    <span class="spinner-border spinner-border-sm me-1"></span>
-                                                }
-
-                                                <i class="bi bi-check2 me-1"></i>
-                                                Approve
+                                                APPROVE
 
                                             </button>
 
-                                            <button class="btn btn-outline-danger btn-sm"
-                                                    disabled="@actionLoading"
-                                                    @onclick="() => OpenRejectModal(req)">
+                                            <button class="btn btn-danger btn-sm"
+                                                    @onclick="() => Reject(item.AttendanceCorrectionRequestId)">
 
-                                                <i class="bi bi-x-lg me-1"></i>
-                                                Reject
+                                                REJECT
 
                                             </button>
 
@@ -375,7 +142,7 @@
                                     else
                                     {
                                         <span class="text-muted small">
-                                            —
+                                            Completed
                                         </span>
                                     }
 
@@ -383,308 +150,78 @@
 
                             </tr>
                         }
-
-                    </tbody>
-
-                </table>
-
-            </div>
-        }
-
-    </div>
-
-</div>
-
-<!-- REJECT MODAL -->
-@if (showRejectModal && rejectTarget != null)
-{
-    <div class="modal fade show d-block" tabindex="-1">
-
-        <div class="modal-dialog modal-dialog-centered">
-
-            <div class="modal-content border-0 shadow-lg">
-
-                <div class="modal-header border-0 pb-0">
-
-                    <h5 class="modal-title fw-semibold">
-                        Reject Correction Request
-                    </h5>
-
-                    <button class="btn-close"
-                            @onclick="CloseRejectModal">
-                    </button>
-
-                </div>
-
-                <div class="modal-body pt-3">
-
-                    <div class="request-preview mb-4">
-
-                        <div class="fw-semibold mb-1">
-                            @rejectTarget.EmployeeName
-                        </div>
-
-                        <div class="small text-muted mb-2">
-                            @rejectTarget.Date.ToString("dd MMM yyyy")
-                        </div>
-
-                        <div class="small">
-                            @rejectTarget.Reason
-                        </div>
-
-                    </div>
-
-                    <div class="mb-2">
-
-                        <label class="form-label fw-semibold">
-                            Rejection Reason
-                            <span class="text-danger">*</span>
-                        </label>
-
-                        <textarea class="form-control"
-                                  rows="4"
-                                  maxlength="300"
-                                  placeholder="Explain why this request is rejected..."
-                                  @bind="rejectReason">
-                            </textarea>
-
-                    </div>
-
-                    @if (!string.IsNullOrWhiteSpace(rejectError))
+                    }
+                    else
                     {
-                        <div class="small text-danger mt-2">
-                            @rejectError
-                        </div>
+                        <tr>
+                            <td colspan="8"
+                                class="text-center py-5 text-muted">
+
+                                No correction requests found.
+
+                            </td>
+                        </tr>
                     }
 
-                </div>
+                </tbody>
 
-                <div class="modal-footer border-0">
-
-                    <button class="btn btn-light border"
-                            @onclick="CloseRejectModal">
-
-                        Cancel
-
-                    </button>
-
-                    <button class="btn btn-danger"
-                            disabled="@actionLoading"
-                            @onclick="ConfirmReject">
-
-                        @if (actionLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2"></span>
-                        }
-
-                        Reject Request
-
-                    </button>
-
-                </div>
-
-            </div>
+            </table>
 
         </div>
-
     </div>
-
-    <div class="modal-backdrop fade show"></div>
-}
-
-<style>
-
-    body {
-        background: #f7f8fc;
-    }
-
-    .custom-card {
-        background: #fff;
-        border: 1px solid #e8ebf0;
-        border-radius: 16px;
-        box-shadow: 0 4px 14px rgba(0,0,0,.04);
-    }
-
-    .stats-card {
-        background: #fff;
-        border-radius: 16px;
-        padding: 20px;
-        border: 1px solid #eceff3;
-        box-shadow: 0 3px 10px rgba(0,0,0,.04);
-        border-left: 4px solid #dee2e6;
-    }
-
-    .pending-card {
-        border-left-color: #ffc107;
-    }
-
-    .approved-card {
-        border-left-color: #198754;
-    }
-
-    .rejected-card {
-        border-left-color: #dc3545;
-    }
-
-    .total-card {
-        border-left-color: #5c4ac7;
-    }
-
-    .stats-label {
-        font-size: .72rem;
-        text-transform: uppercase;
-        font-weight: 700;
-        color: #6c757d;
-        letter-spacing: .7px;
-        margin-bottom: 8px;
-    }
-
-    .stats-value {
-        font-size: 2rem;
-        font-weight: 700;
-        line-height: 1;
-    }
-
-    .filter-btn {
-        border-radius: 30px;
-        padding: .45rem .95rem;
-        font-weight: 600;
-    }
-
-    .active-filter {
-        background: #5c4ac7 !important;
-        color: white !important;
-        border-color: #5c4ac7 !important;
-    }
-
-    .table-custom thead th {
-        background: #fcfcfd;
-        color: #6c757d;
-        font-size: .72rem;
-        letter-spacing: .7px;
-        font-weight: 700;
-        padding: 15px 10px;
-        border-bottom: 1px solid #ececec;
-        white-space: nowrap;
-    }
-
-    .table-custom td {
-        padding: 16px 10px;
-        border-bottom: 1px solid #f2f3f5;
-        vertical-align: middle;
-    }
-
-    .table-custom tbody tr:hover {
-        background: #fafbff;
-    }
-
-    .pending-row {
-        background: #fffdf5;
-    }
-
-    .department-badge {
-        background: #f3f4f8;
-        border: 1px solid #e4e7ee;
-        border-radius: 50px;
-        padding: .4rem .8rem;
-        font-size: .75rem;
-        font-weight: 600;
-        color: #495057;
-        display: inline-block;
-    }
-
-    .status-badge {
-        padding: .5rem .75rem;
-        border-radius: 50px;
-        font-size: .72rem;
-        font-weight: 700;
-        letter-spacing: .3px;
-    }
-
-    .reason-text {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .request-preview {
-        background: #f8f9fc;
-        border-radius: 12px;
-        padding: 14px;
-        border: 1px solid #eceff4;
-    }
-
-    .modal-content {
-        border-radius: 18px;
-    }
-
-</style>
+</div>
 
 @code {
 
-    private List<CorrectionRequestDto> requests = new();
-
-    private readonly string[] Filters =
-    [
-        "",
-        "Pending",
-        "Approved",
-        "Rejected",
-        "Cancelled"
-    ];
-
-    private string selectedStatus = "Pending";
+    private List<AttendanceCorrectionListDto> requests = new();
 
     private bool isLoading;
-    private bool actionLoading;
-    private bool isError;
 
-    private string orgTimeZone = "India Standard Time";
-
-    private string? message;
-
-    private bool showRejectModal;
-
-    private CorrectionRequestDto? rejectTarget;
-
-    private string rejectReason = string.Empty;
-
-    private string? rejectError;
-
-
-    private IEnumerable<CorrectionRequestDto> FilteredRequests =>
-        string.IsNullOrWhiteSpace(selectedStatus)
-            ? requests
-            : requests.Where(r => r.Status == selectedStatus);
-
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
 
     protected override async Task OnInitializedAsync()
     {
-        orgTimeZone =
-            await CorrectionService.GetCurrentOrganizationTimeZoneAsync();
-
-        await LoadData();
+        await LoadOrgTimezone();
+        await LoadRequests();
     }
 
-
-    private async Task LoadData()
+    private async Task LoadOrgTimezone()
     {
+        var user = await CurrentUserService.GetUserAsync();
+
+        if (user?.OrganizationId == null)
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+            return;
+        }
+
+        var org = await DbContext.Organizations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.OrganizationId == user.OrganizationId);
+
         try
         {
-            isLoading = true;
+            orgTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+                org?.TimeZoneId ?? "UTC");
+        }
+        catch
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
+    }
 
-            isError = false;
+    private async Task LoadRequests()
+    {
+        isLoading = true;
 
-            message = null;
-
-            requests =
-                await CorrectionService.GetAllForHRAsync();
+        try
+        {
+            requests = await CorrectionService.GetAllRequestsAsync();
         }
         catch (Exception ex)
         {
-            isError = true;
-
-            message = ex.Message;
+            Console.WriteLine(ex.Message);
         }
         finally
         {
@@ -692,187 +229,77 @@
         }
     }
 
-
-    private void ChangeFilter(string status)
-    {
-        selectedStatus = status;
-    }
-
-
-    private async Task Approve(Guid requestId)
+    private async Task Approve(Guid correctionId)
     {
         try
         {
-            actionLoading = true;
+            await CorrectionService.ApproveAsync(correctionId);
 
-            isError = false;
-
-            message = null;
-
-            await CorrectionService.ReviewRequestAsync(
-                new ReviewCorrectionDto
-                {
-                    CorrectionRequestId = requestId,
-                    Approve = true
-                });
-
-            message =
-                "Attendance correction approved successfully.";
-
-            await LoadData();
+            await LoadRequests();
         }
         catch (Exception ex)
         {
-            isError = true;
-
-            message = ex.Message;
-        }
-        finally
-        {
-            actionLoading = false;
+            Console.WriteLine(ex.Message);
         }
     }
 
-
-    private void OpenRejectModal(CorrectionRequestDto request)
+    private async Task Reject(Guid correctionId)
     {
-        rejectTarget = request;
-
-        rejectReason = string.Empty;
-
-        rejectError = null;
-
-        showRejectModal = true;
-    }
-
-    private void CloseRejectModal()
-    {
-        showRejectModal = false;
-
-        rejectTarget = null;
-
-        rejectReason = string.Empty;
-
-        rejectError = null;
-    }
-
-    private async Task ConfirmReject()
-    {
-        if (rejectTarget == null)
-            return;
-
-        if (string.IsNullOrWhiteSpace(rejectReason))
-        {
-            rejectError =
-                "Please provide rejection reason.";
-
-            return;
-        }
-
         try
         {
-            actionLoading = true;
+            await CorrectionService.RejectAsync(
+                correctionId,
+                "Rejected by HR");
 
-            rejectError = null;
-
-            isError = false;
-
-            await CorrectionService.ReviewRequestAsync(
-                new ReviewCorrectionDto
-                {
-                    CorrectionRequestId =
-                        rejectTarget.CorrectionRequestId,
-
-                    Approve = false,
-
-                    RejectionReason =
-                        rejectReason.Trim()
-                });
-
-            message =
-                "Attendance correction request rejected.";
-
-            CloseRejectModal();
-
-            await LoadData();
+            await LoadRequests();
         }
         catch (Exception ex)
         {
-            isError = true;
-
-            rejectError = ex.Message;
-        }
-        finally
-        {
-            actionLoading = false;
+            Console.WriteLine(ex.Message);
         }
     }
 
-
-    private string FormatOrgTime(DateTime? utc)
+    private string FormatTime(DateTime? utcTime)
     {
-        if (!utc.HasValue)
-            return "--:--";
-
-        try
-        {
-            var tz =
-                TimeZoneInfo.FindSystemTimeZoneById(orgTimeZone);
-
-            var local =
-                TimeZoneInfo.ConvertTimeFromUtc(
-                    DateTime.SpecifyKind(
-                        utc.Value,
-                        DateTimeKind.Utc),
-                    tz);
-
-            return local.ToString("hh:mm tt");
-        }
-        catch
-        {
-            return utc.Value.ToString("hh:mm tt");
-        }
-    }
-
-    private string FormatOrgDateTime(DateTime? utc)
-    {
-        if (!utc.HasValue)
+        if (!utcTime.HasValue)
             return "--";
 
-        try
-        {
-            var tz =
-                TimeZoneInfo.FindSystemTimeZoneById(orgTimeZone);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(
+                utcTime.Value,
+                DateTimeKind.Utc),
+            orgTimeZone);
 
-            var local =
-                TimeZoneInfo.ConvertTimeFromUtc(
-                    DateTime.SpecifyKind(
-                        utc.Value,
-                        DateTimeKind.Utc),
-                    tz);
-
-            return local.ToString("dd MMM yyyy hh:mm tt");
-        }
-        catch
-        {
-            return utc.Value
-                .ToString("dd MMM yyyy hh:mm tt");
-        }
+        return localTime.ToString("dd MMM yyyy hh:mm tt");
     }
 
-
-    private void ClearMessage()
+    private string FormatType(string type)
     {
-        message = null;
+        return type switch
+        {
+            AttendanceCorrectionTypes.MissingCheckIn => "Missing Check-In",
+            AttendanceCorrectionTypes.MissingCheckOut => "Missing Check-Out",
+            AttendanceCorrectionTypes.WrongCheckIn => "Wrong Check-In",
+            AttendanceCorrectionTypes.WrongCheckOut => "Wrong Check-Out",
+            AttendanceCorrectionTypes.FullCorrection => "Full Correction",
+            _ => type
+        };
     }
 
-    private string GetStatusClass(string status) => status switch
+    private string GetStatusClass(string? status)
     {
-        "Approved" => "bg-success",
-        "Rejected" => "bg-danger",
-        "Cancelled" => "bg-secondary",
-        "Pending" => "bg-warning text-dark",
-        _ => "bg-dark"
-    };
+        return status switch
+        {
+            AttendanceCorrectionStatuses.Pending
+                => "bg-warning text-dark",
 
+            AttendanceCorrectionStatuses.Approved
+                => "bg-success",
+
+            AttendanceCorrectionStatuses.Rejected
+                => "bg-danger",
+
+            _ => "bg-secondary"
+        };
+    }
 }

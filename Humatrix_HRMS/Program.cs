@@ -72,7 +72,7 @@ builder.Services.AddScoped<WorkFromHomeService>();
 
 builder.Services.AddScoped<AttendanceCorrectionService>();
 builder.Services.AddHostedService<AttendanceBackgroundService>();
-
+builder.Services.AddScoped<AttendanceCalculationService>();
 
 builder.Services.AddScoped<OfficeLocationService>();
 //builder.Services.AddScoped<AttendanceService>();  

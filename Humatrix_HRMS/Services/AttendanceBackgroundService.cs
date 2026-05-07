@@ -5,19 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services
 {
-    /// <summary>
-    /// Runs on a 1-hour cycle.
-    ///
-    /// AutoCheckout:
-    ///   If an employee never checked out, we force checkout at scheduled shift end
-    ///   once the overtime window (shift end + 4 h + 30 min grace) has passed.
-    ///   SystemCheckOut is ALWAYS set to the scheduled shift end so OvertimeService
-    ///   has a stable reference even for auto-checked-out records.
-    ///
-    /// MarkAbsents:
-    ///   For yesterday's date, any active employee with no attendance record,
-    ///   no approved leave, and no approved WFH is marked Absent.
-    /// </summary>
     public class AttendanceBackgroundService : BackgroundService
     {
         private readonly IServiceProvider _serviceProvider;
@@ -281,9 +268,7 @@ namespace Humatrix_HRMS.Services
             }
         }
 
-        // =========================================================================
-        // HELPERS
-        // =========================================================================
+       
         private DateTime GetOrgNow(string timeZoneId)
         {
             try

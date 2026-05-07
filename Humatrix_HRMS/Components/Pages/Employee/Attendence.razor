@@ -7,7 +7,7 @@
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
-@attribute [Authorize(Roles = "Employee")]
+@attribute [Authorize(Roles = "Employee,HR")]
 
 @inject AttendanceService AttendanceService
 @inject IJSRuntime JS
@@ -167,11 +167,13 @@
                                         </td>
 
                                         <td class="text-center font-monospace small">
-                                            @(att.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "--:--")
+                                            @* @(att.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "--:--") *@
+                                            @TimeHelper.FormatOrgTime(att.CheckIn)
                                         </td>
 
                                         <td class="text-center font-monospace small">
-                                            @(att.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "--:--")
+                                            @* @(att.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "--:--") *@
+                                            @TimeHelper.FormatOrgTime(att.CheckOut)
                                         </td>
 
                                         <td>

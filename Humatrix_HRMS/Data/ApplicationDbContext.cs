@@ -40,6 +40,7 @@ namespace Humatrix_HRMS.Data
 
         public DbSet<AttendanceCorrectionRequest> AttendanceCorrectionRequests { get; set; }
 
+        public DbSet<AttendanceAuditLog> AttendanceAuditLogs { get; set; }
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }

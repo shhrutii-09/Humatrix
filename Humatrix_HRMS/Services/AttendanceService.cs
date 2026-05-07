@@ -62,7 +62,7 @@ namespace Humatrix_HRMS.Services
 
             var hasCorrection = await _context.AttendanceCorrectionRequests
       .AnyAsync(r => r.EmployeeId == employee.EmployeeId &&
-                r.Date == DateOnly.FromDateTime(today) &&
+                r.WorkDate.Date == today.Date &&
                 (r.Status == "Pending" || r.Status == "Approved"));
 
             if (hasCorrection)
@@ -102,7 +102,7 @@ namespace Humatrix_HRMS.Services
 
             // ── Duplicate check ──────────────────────────────────────────────────
             var attendance = await _context.Attendances
-                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.WorkDate == today);
+                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.WorkDate.Date == today.Date);
 
             if (attendance?.CheckIn != null)
                 throw new Exception("Already checked in today");
@@ -181,7 +181,7 @@ namespace Humatrix_HRMS.Services
                 var attendance = await _context.Attendances
                     .Include(a => a.Employee)
                         .ThenInclude(e => e.Shift)
-                    .FirstOrDefaultAsync(a => a.UserId == user.Id && a.WorkDate == today);
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id && a.WorkDate.Date == today.Date);
 
                 if (attendance == null || attendance.CheckIn == null)
                     throw new Exception("You must check in first");
@@ -213,6 +213,8 @@ namespace Humatrix_HRMS.Services
                 attendance.IsManual = false;
 
                 var shift = attendance.Employee?.Shift;
+
+
 
                 // ── Total hours ──────────────────────────────────────────────────
                 var totalHours = (utcNow - attendance.CheckIn.Value).TotalHours;
@@ -315,7 +317,7 @@ namespace Humatrix_HRMS.Services
 
             return await _context.Attendances
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.WorkDate == today);
+                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.WorkDate.Date == today.Date);
         }
 
         // =========================================================================
@@ -442,12 +444,40 @@ namespace Humatrix_HRMS.Services
             bool isHR = await _userManager.IsInRoleAsync(currentUser, "HR");
             bool isOrgAdmin = await _userManager.IsInRoleAsync(currentUser, "OrgAdmin");
 
+            var hrUsers = await _userManager.GetUsersInRoleAsync("HR");
+            var hrUserIds = hrUsers
+                .Where(u => u.OrganizationId == orgId)
+                .Select(u => u.Id)
+                .ToHashSet();
+
+            var orgAdminUsers = await _userManager.GetUsersInRoleAsync("OrgAdmin");
+            var orgAdminUserIds = orgAdminUsers
+                .Where(u => u.OrganizationId == orgId)
+                .Select(u => u.Id)
+                .ToHashSet();
+
             if (isHR && !isOrgAdmin)
             {
                 if (currentEmployee?.DepartmentId != null)
-                    query = query.Where(a => a.Employee != null && a.Employee.DepartmentId == currentEmployee.DepartmentId);
+                {
+                    query = query.Where(a =>
+                        a.Employee != null &&
+                        a.Employee.DepartmentId == currentEmployee.DepartmentId &&
+
+                        // Exclude HR users
+                        (a.UserId == null || !hrUserIds.Contains(a.UserId)) &&
+
+                        // Exclude OrgAdmins
+                        (a.UserId == null || !orgAdminUserIds.Contains(a.UserId)) &&
+
+                        // Exclude self
+                        a.UserId != currentUser.Id
+                    );
+                }
                 else
+                {
                     return new List<AttendanceListDto>();
+                }
             }
 
             if (departmentId.HasValue)
@@ -540,12 +570,39 @@ namespace Humatrix_HRMS.Services
                 .AsNoTracking()
                 .Where(e => e.OrganizationId == orgId && e.Status == "Active");
 
+            var hrUsers = await _userManager.GetUsersInRoleAsync("HR");
+            var hrUserIds = hrUsers
+                .Where(u => u.OrganizationId == orgId)
+                .Select(u => u.Id)
+                .ToHashSet();
+
+            var orgAdminUsers = await _userManager.GetUsersInRoleAsync("OrgAdmin");
+            var orgAdminUserIds = orgAdminUsers
+                .Where(u => u.OrganizationId == orgId)
+                .Select(u => u.Id)
+                .ToHashSet();
+
             if (isHR && !isOrgAdmin)
             {
                 if (currentEmployee?.DepartmentId != null)
-                    empQuery = empQuery.Where(e => e.DepartmentId == currentEmployee.DepartmentId);
+                {
+                    empQuery = empQuery.Where(e =>
+                        e.DepartmentId == currentEmployee.DepartmentId &&
+
+                        // Exclude HR users
+                        (e.UserId == null || !hrUserIds.Contains(e.UserId)) &&
+
+                        // Exclude OrgAdmins
+                        (e.UserId == null || !orgAdminUserIds.Contains(e.UserId)) &&
+
+                        // Exclude self
+                        e.UserId != currentUser.Id
+                    );
+                }
                 else
+                {
                     return new List<AttendanceListDto>();
+                }
             }
 
             if (departmentId.HasValue)
@@ -672,9 +729,7 @@ namespace Humatrix_HRMS.Services
             return date.Date == today ? "Not Started" : AttendanceStatuses.Absent;
         }
 
-        // =========================================================================
-        // HELPERS
-        // =========================================================================
+       
         private TimeZoneInfo GetOrgTimezone(string? timeZoneId)
         {
             try { return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId ?? "UTC"); }

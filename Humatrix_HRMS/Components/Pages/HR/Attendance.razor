@@ -1,6 +1,11 @@
 ﻿@page "/admin/attendance"
 @rendermode InteractiveServer
 
+@using Humatrix_HRMS.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext DbContext
+@inject CurrentUserService CurrentUserService
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
@@ -224,10 +229,43 @@
     private bool isOrgAdmin;
     private bool isLoading;
 
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+
+    private async Task LoadOrgTimezone()
+    {
+        var user = await CurrentUserService.GetUserAsync();
+
+        if (user?.OrganizationId == null)
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+            return;
+        }
+
+        var org = await DbContext.Organizations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.OrganizationId == user.OrganizationId);
+
+        try
+        {
+            orgTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+                org?.TimeZoneId ?? "UTC");
+        }
+        catch
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
+    }
+
+
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var authState =
+            await AuthStateProvider.GetAuthenticationStateAsync();
+
         isOrgAdmin = authState.User.IsInRole("OrgAdmin");
+
+        await LoadOrgTimezone();
 
         if (isOrgAdmin)
             departments = await DeptService.GetAllAsync();
@@ -273,12 +311,40 @@
         }
     }
 
+    // private string FormatTime(DateTime? utcTime)
+    // {
+    //     return utcTime.HasValue
+    //         ? utcTime.Value.ToLocalTime().ToString("hh:mm tt")
+    //         : "--:--";
+    // }
     private string FormatTime(DateTime? utcTime)
     {
-        return utcTime.HasValue
-            ? utcTime.Value.ToLocalTime().ToString("hh:mm tt")
-            : "--:--";
+        if (!utcTime.HasValue)
+            return "--:--";
+
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(
+                utcTime.Value,
+                DateTimeKind.Utc),
+            orgTimeZone);
+
+        return localTime.ToString("dd MMM yyyy hh:mm tt");
     }
+    // private string FormatTime(DateTime? time)
+    // {
+    //     if (!time.HasValue)
+    //         return "--";
+
+    //     return time.Value.ToString("hh:mm tt");
+    // }
+    // private string FormatTime(DateTime? utcTime)
+    // {
+    //     if (!utcTime.HasValue) return "--";
+
+    //     3. Convert UTC from DB to the Org's Local Time
+    //     var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime.Value, orgTimeZone);
+    //     return localTime.ToString("hh:mm tt");
+    // }
 
     private string GetStatusClass(string? status)
     {

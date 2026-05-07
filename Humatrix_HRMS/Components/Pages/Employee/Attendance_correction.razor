@@ -1,529 +1,341 @@
 ﻿@page "/employee/attendance-correction"
 @rendermode InteractiveServer
 
-@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext DbContext
+@inject CurrentUserService CurrentUserService
+@using Humatrix_HRMS.DTOs.AttendanceCorrections
+@using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
-@attribute [Authorize(Roles = "Employee")]
+@attribute [Authorize(Roles = "Employee,HR,OrgAdmin")]
 
 @inject AttendanceCorrectionService CorrectionService
 
-<PageTitle>Attendance Correction</PageTitle>
+<PageTitle>Attendance Correction | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
     <!-- HEADER -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
-
-        <div>
-            <h2 class="fw-semibold mb-1">
-                Attendance Correction
-            </h2>
-
-            <p class="text-muted mb-0 small">
-                Request correction for missing or incorrect attendance records.
-            </p>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Attendance Correction</h2>
 
         <button class="btn btn-outline-secondary shadow-sm"
                 @onclick="LoadRequests">
-
-            <i class="bi bi-arrow-clockwise me-2"></i>
-            Refresh
-
+            <i class="bi bi-arrow-clockwise"></i>
+            REFRESH
         </button>
-
     </div>
 
-    <!-- ALERT -->
-    @if (!string.IsNullOrWhiteSpace(message))
-    {
-        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show border-0 shadow-sm mb-4">
-
-            <div class="d-flex align-items-center">
-
-                <i class="bi @(isError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2"></i>
-
-                <span>@message</span>
-
-            </div>
-
-            <button type="button"
-                    class="btn-close"
-                    @onclick="ClearMessage">
-            </button>
-
+    <!-- CREATE REQUEST -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white border-0 pt-4 px-4">
+            <h5 class="fw-normal mb-0">Submit Correction Request</h5>
         </div>
-    }
 
-    <div class="row g-4">
+        <div class="card-body p-4">
 
-        <!-- FORM -->
-        <div class="col-lg-4">
-
-            <div class="custom-card p-4">
-
-                <div class="d-flex align-items-center mb-4">
-                    <div class="icon-box me-3">
-                        <i class="bi bi-pencil-square"></i>
-                    </div>
-
-                    <div>
-                        <h5 class="fw-bold mb-0">
-                            Raise Request
-                        </h5>
-
-                        <small class="text-muted">
-                            Submit attendance correction
-                        </small>
-                    </div>
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger">
+                    @errorMessage
                 </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(successMessage))
+            {
+                <div class="alert alert-success">
+                    @successMessage
+                </div>
+            }
+
+            <div class="row g-3">
 
                 <!-- DATE -->
-                <div class="mb-3">
-
-                    <label class="form-label-custom">
-                        Date
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">
+                        Work Date
                     </label>
 
-                    <InputDate class="form-control form-control-custom"
-                               @bind-Value="requestDto.Date" />
+                    <InputDate class="form-control"
+                               @bind-Value="model.WorkDate" />
+                </div>
 
+                <!-- TYPE -->
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">
+                        Request Type
+                    </label>
+
+                    <select class="form-select"
+                            @bind="model.RequestType">
+
+                        <option value="">Select Request Type</option>
+
+                        <option value="@AttendanceCorrectionTypes.MissingCheckIn">
+                            Missing Check-In
+                        </option>
+
+                        <option value="@AttendanceCorrectionTypes.MissingCheckOut">
+                            Missing Check-Out
+                        </option>
+
+                        <option value="@AttendanceCorrectionTypes.WrongCheckIn">
+                            Wrong Check-In
+                        </option>
+
+                        <option value="@AttendanceCorrectionTypes.WrongCheckOut">
+                            Wrong Check-Out
+                        </option>
+
+                        <option value="@AttendanceCorrectionTypes.FullCorrection">
+                            Full Correction
+                        </option>
+
+                    </select>
                 </div>
 
                 <!-- CHECK IN -->
-                <div class="mb-3">
-
-                    <label class="form-label-custom">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">
                         Requested Check-In
                     </label>
 
-                    <input type="time"
-                           class="form-control form-control-custom"
-                           value="@requestedInText"
-                           @onchange="HandleCheckInChange" />
+                    <input type="datetime-local" @bind="model.RequestedCheckIn" class="form-control" />"
 
+                    @* <InputDateTime class="form-control"
+                                   @bind-Value="model.RequestedCheckIn" /> *@
                 </div>
 
                 <!-- CHECK OUT -->
-                <div class="mb-3">
-
-                    <label class="form-label-custom">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-muted">
                         Requested Check-Out
                     </label>
+                    <input type="datetime-local" @bind="model.RequestedCheckOut" class="form-control" />"
 
-                    <input type="time"
-                           class="form-control form-control-custom"
-                           value="@requestedOutText"
-                           @onchange="HandleCheckOutChange" />
-
+                    @* <InputDateTime class="form-control"
+                                   @bind-Value="model.RequestedCheckOut" /> *@
                 </div>
 
                 <!-- REASON -->
-                <div class="mb-4">
-
-                    <label class="form-label-custom">
+                <div class="col-12">
+                    <label class="form-label small fw-bold text-muted">
                         Reason
                     </label>
 
-                    <textarea class="form-control form-control-custom"
+                    <textarea class="form-control"
                               rows="4"
-                              maxlength="500"
-                              placeholder="Enter proper reason..."
-                              @bind="requestDto.Reason">
+                              @bind="model.Reason">
                     </textarea>
-
-                    <div class="small text-muted mt-1 text-end">
-                        @(requestDto.Reason?.Length ?? 0)/500
-                    </div>
-
                 </div>
 
-                <!-- SUBMIT -->
-                <div class="d-grid">
-
-                    <button class="btn submit-btn"
-                            @onclick="HandleSubmit"
+                <!-- BUTTON -->
+                <div class="col-12">
+                    <button class="btn btn-primary shadow-sm"
+                            style="background-color:#5c4ac7;border:none;"
+                            @onclick="SubmitRequest"
                             disabled="@isSubmitting">
 
                         @if (isSubmitting)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
-                            <span>Submitting...</span>
-                        }
-                        else
-                        {
-                            <span>
-                                <i class="bi bi-send-check me-2"></i>
-                                Submit Request
-                            </span>
                         }
 
+                        SUBMIT REQUEST
                     </button>
-
                 </div>
 
             </div>
 
         </div>
+    </div>
 
-        <!-- HISTORY -->
-        <div class="col-lg-8">
+    <!-- REQUEST HISTORY -->
+    <div class="card shadow-sm border-0">
 
-            <div class="custom-card overflow-hidden">
+        <div class="card-header bg-white border-0 pt-4 px-4">
+            <h5 class="fw-normal mb-0">My Correction Requests</h5>
+        </div>
 
-                <div class="table-header px-4 py-3 border-bottom">
+        <div class="table-responsive">
 
-                    <div class="d-flex justify-content-between align-items-center">
+            <table class="table table-hover align-middle mb-0">
 
-                        <div>
-                            <h5 class="fw-bold mb-0">
-                                My Requests
-                            </h5>
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4 text-muted small">DATE</th>
+                        <th class="text-muted small">TYPE</th>
+                        <th class="text-muted small">REQUESTED IN</th>
+                        <th class="text-muted small">REQUESTED OUT</th>
+                        <th class="text-muted small">STATUS</th>
+                        <th class="text-muted small">REMARKS</th>
+                    </tr>
+                </thead>
 
-                            <small class="text-muted">
-                                Attendance correction history
-                            </small>
-                        </div>
+                <tbody>
 
-                        <span class="request-count">
-                            @requests.Count
-                        </span>
+                    @if (isLoading)
+                    {
+                        <tr>
+                            <td colspan="6"
+                                class="text-center py-5 text-muted">
 
-                    </div>
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                Loading requests...
 
-                </div>
-
-                <div class="table-responsive">
-
-                    <table class="table table-custom align-middle mb-0">
-
-                        <thead>
+                            </td>
+                        </tr>
+                    }
+                    else if (requests.Any())
+                    {
+                        @foreach (var item in requests)
+                        {
                             <tr>
-                                <th class="ps-4">DATE</th>
-                                <th>CHECK-IN</th>
-                                <th>CHECK-OUT</th>
-                                <th>STATUS</th>
-                                <th>REASON</th>
-                                <th class="text-end pe-4">ACTION</th>
+
+                                <td class="ps-4 fw-semibold">
+                                    @item.WorkDate.ToString("dd MMM yyyy")
+                                </td>
+
+                                <td>
+                                    @FormatType(item.RequestType)
+                                </td>
+
+                                <td class="font-monospace">
+                                    @FormatTime(item.RequestedCheckIn)
+                                </td>
+
+                                <td class="font-monospace">
+                                    @FormatTime(item.RequestedCheckOut)
+                                </td>
+
+                                <td>
+                                    <span class="badge rounded-pill @GetStatusClass(item.Status)">
+                                        @item.Status
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @(string.IsNullOrWhiteSpace(item.HRRemarks)
+                                        ? "-"
+                                        : item.HRRemarks)
+                                </td>
+
                             </tr>
-                        </thead>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6"
+                                class="text-center py-5 text-muted">
 
-                        <tbody>
+                                No correction requests found.
 
-                            @if (!requests.Any())
-                            {
-                                <tr>
-                                    <td colspan="6"
-                                        class="text-center py-5">
+                            </td>
+                        </tr>
+                    }
 
-                                        <div class="empty-state">
+                </tbody>
 
-                                            <i class="bi bi-inbox fs-1 d-block mb-3 text-muted"></i>
-
-                                            <h6 class="fw-semibold text-muted">
-                                                No requests found
-                                            </h6>
-
-                                            <small class="text-muted">
-                                                Your attendance correction requests will appear here.
-                                            </small>
-
-                                        </div>
-
-                                    </td>
-                                </tr>
-                            }
-                            else
-                            {
-                                @foreach (var req in requests)
-                                {
-                                    <tr>
-
-                                        <td class="ps-4">
-
-                                            <div class="fw-semibold">
-                                                @req.Date.ToString("dd MMM yyyy")
-                                            </div>
-
-                                            <small class="text-muted">
-                                                @req.Date.DayOfWeek
-                                            </small>
-
-                                        </td>
-
-                                        <td>
-                                            @(req.RequestedCheckIn?.ToString("hh:mm tt") ?? "--")
-                                        </td>
-
-                                        <td>
-                                            @(req.RequestedCheckOut?.ToString("hh:mm tt") ?? "--")
-                                        </td>
-
-                                        <td>
-
-                                            <span class="badge status-badge @GetStatusClass(req.Status)">
-                                                @req.Status
-                                            </span>
-
-                                        </td>
-
-                                        <td style="max-width:260px;">
-
-                                            <div class="reason-text"
-                                                 title="@req.Reason">
-
-                                                @req.Reason
-
-                                            </div>
-
-                                            @if (!string.IsNullOrWhiteSpace(req.RejectionReason))
-                                            {
-                                                <div class="small text-danger mt-1">
-                                                    @req.RejectionReason
-                                                </div>
-                                            }
-
-                                        </td>
-
-                                        <td class="text-end pe-4">
-
-                                            @if (req.Status == "Pending")
-                                            {
-                                                <button class="btn btn-sm btn-outline-danger"
-                                                        title="Cancel Request"
-                                                        @onclick="() => CancelRequest(req.CorrectionRequestId)">
-
-                                                    <i class="bi bi-x-circle"></i>
-
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted small">
-                                                    --
-                                                </span>
-                                            }
-
-                                        </td>
-
-                                    </tr>
-                                }
-                            }
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-            </div>
+            </table>
 
         </div>
-
     </div>
 
 </div>
 
-<style>
-
-    body {
-        background-color: #f7f8fc;
-    }
-
-    .custom-card {
-        background: #fff;
-        border: 1px solid #e9ecef;
-        border-radius: 16px;
-        box-shadow: 0 4px 14px rgba(0,0,0,.04);
-    }
-
-    .icon-box {
-        width: 46px;
-        height: 46px;
-        border-radius: 12px;
-        background: rgba(92,74,199,.12);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #5c4ac7;
-        font-size: 1.1rem;
-    }
-
-    .form-label-custom {
-        font-size: .72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: #6c757d;
-        margin-bottom: .45rem;
-        display: block;
-        letter-spacing: .5px;
-    }
-
-    .form-control-custom {
-        border-radius: 10px;
-        border: 1px solid #dfe3ea;
-        padding: .7rem .85rem;
-        box-shadow: none !important;
-    }
-
-        .form-control-custom:focus {
-            border-color: #5c4ac7;
-        }
-
-    .submit-btn {
-        background: #5c4ac7;
-        border: none;
-        color: white;
-        border-radius: 10px;
-        padding: .8rem;
-        font-weight: 600;
-        transition: .2s ease;
-    }
-
-        .submit-btn:hover {
-            background: #4d3db2;
-            color: white;
-        }
-
-        .submit-btn:disabled {
-            opacity: .8;
-        }
-
-    .table-header {
-        background: #fafafe;
-    }
-
-    .request-count {
-        background: #5c4ac7;
-        color: white;
-        border-radius: 50px;
-        padding: .35rem .75rem;
-        font-size: .8rem;
-        font-weight: 600;
-    }
-
-    .table-custom thead th {
-        background: #fcfcfd;
-        font-size: .72rem;
-        color: #6c757d;
-        letter-spacing: .7px;
-        border-bottom: 1px solid #ececec;
-        padding: 14px 10px;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-
-    .table-custom td {
-        padding: 16px 10px;
-        border-bottom: 1px solid #f1f3f6;
-        vertical-align: middle;
-    }
-
-    .table-custom tbody tr:hover {
-        background: #fafbff;
-    }
-
-    .status-badge {
-        font-size: .72rem;
-        padding: .5rem .7rem;
-        border-radius: 50px;
-        font-weight: 600;
-    }
-
-    .reason-text {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .empty-state {
-        padding: 30px 0;
-    }
-
-</style>
-
 @code {
 
-    private List<CorrectionRequestDto> requests = new();
+    private List<AttendanceCorrectionListDto> requests = new();
 
-    private CreateCorrectionRequestDto requestDto = new()
+    private CreateAttendanceCorrectionDto model = new()
     {
-        Date = DateOnly.FromDateTime(DateTime.Today)
+        WorkDate = DateTime.Today
     };
+    private async Task LoadOrgTimezone()
+    {
+        var user = await CurrentUserService.GetUserAsync();
 
-    private string requestedInText = "";
-    private string requestedOutText = "";
+        if (user?.OrganizationId == null)
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+            return;
+        }
 
+        var org = await DbContext.Organizations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.OrganizationId == user.OrganizationId);
+
+        try
+        {
+            orgTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+                org?.TimeZoneId ?? "UTC");
+        }
+        catch
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
+    }
+    private bool isLoading;
     private bool isSubmitting;
-    private bool isError;
 
-    private string? message;
+    private string? errorMessage;
+    private string? successMessage;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadOrgTimezone();
+
         await LoadRequests();
     }
 
     private async Task LoadRequests()
     {
-        requests = await CorrectionService.GetMyRequestsAsync();
-    }
+        isLoading = true;
 
-    private void HandleCheckInChange(ChangeEventArgs e)
-    {
-        requestedInText = e.Value?.ToString() ?? "";
-    }
-
-    private void HandleCheckOutChange(ChangeEventArgs e)
-    {
-        requestedOutText = e.Value?.ToString() ?? "";
-    }
-
-    private async Task HandleSubmit()
-    {
         try
         {
-            isSubmitting = true;
+            requests = await CorrectionService.GetMyRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
 
-            isError = false;
+    private async Task SubmitRequest()
+    {
+        errorMessage = null;
+        successMessage = null;
 
-            message = null;
+        isSubmitting = true;
 
-            requestDto.RequestedCheckIn = null;
-            requestDto.RequestedCheckOut = null;
+        try
+        {
+            await CorrectionService.CreateRequestAsync(model);
 
-            if (!string.IsNullOrWhiteSpace(requestedInText))
+            successMessage =
+                "Attendance correction request submitted successfully.";
+
+            model = new CreateAttendanceCorrectionDto()
             {
-                requestDto.RequestedCheckIn =
-                    TimeSpan.Parse(requestedInText);
-            }
-
-            if (!string.IsNullOrWhiteSpace(requestedOutText))
-            {
-                requestDto.RequestedCheckOut =
-                    TimeSpan.Parse(requestedOutText);
-            }
-
-            await CorrectionService.RaiseRequestAsync(requestDto);
-
-            message = "Attendance correction request submitted successfully.";
-
-            requestDto = new CreateCorrectionRequestDto
-            {
-                Date = DateOnly.FromDateTime(DateTime.Today)
+                WorkDate = DateTime.Today
             };
-
-            requestedInText = "";
-            requestedOutText = "";
 
             await LoadRequests();
         }
         catch (Exception ex)
         {
-            isError = true;
-            message = ex.Message;
+            errorMessage = ex.Message;
         }
         finally
         {
@@ -531,36 +343,58 @@
         }
     }
 
-    private async Task CancelRequest(Guid id)
+    // private string FormatTime(DateTime? value)
+    // {
+    //     if (value == null)
+    //         return "--";
+
+    //     return value.Value.ToLocalTime()
+    //         .ToString("dd MMM yyyy hh:mm tt");
+    // }
+
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+
+    private string FormatTime(DateTime? utcTime)
     {
-        try
-        {
-            isError = false;
+        if (!utcTime.HasValue)
+            return "--:--";
 
-            await CorrectionService.CancelRequestAsync(id);
+        var localTime = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(
+                utcTime.Value,
+                DateTimeKind.Utc),
+            orgTimeZone);
 
-            message = "Request cancelled successfully.";
-
-            await LoadRequests();
-        }
-        catch (Exception ex)
-        {
-            isError = true;
-            message = ex.Message;
-        }
+        return localTime.ToString("dd MMM yyyy hh:mm tt");
     }
 
-    private void ClearMessage()
+    private string FormatType(string type)
     {
-        message = null;
+        return type switch
+        {
+            AttendanceCorrectionTypes.MissingCheckIn => "Missing Check-In",
+            AttendanceCorrectionTypes.MissingCheckOut => "Missing Check-Out",
+            AttendanceCorrectionTypes.WrongCheckIn => "Wrong Check-In",
+            AttendanceCorrectionTypes.WrongCheckOut => "Wrong Check-Out",
+            AttendanceCorrectionTypes.FullCorrection => "Full Correction",
+            _ => type
+        };
     }
 
-    private string GetStatusClass(string status) => status switch
+    private string GetStatusClass(string? status)
     {
-        "Approved" => "bg-success",
-        "Rejected" => "bg-danger",
-        "Pending" => "bg-warning text-dark",
-        "Cancelled" => "bg-secondary",
-        _ => "bg-dark"
-    };
+        return status switch
+        {
+            AttendanceCorrectionStatuses.Pending
+                => "bg-warning text-dark",
+
+            AttendanceCorrectionStatuses.Approved
+                => "bg-success",
+
+            AttendanceCorrectionStatuses.Rejected
+                => "bg-danger",
+
+            _ => "bg-secondary"
+        };
+    }
 }

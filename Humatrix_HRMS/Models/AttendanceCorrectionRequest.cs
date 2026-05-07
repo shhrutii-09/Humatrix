@@ -1,50 +1,59 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using Humatrix_HRMS.Data;
 
 namespace Humatrix_HRMS.Models
 {
-    /// <summary>
-    /// Employee attendance correction request.
-    /// All timestamps stored in UTC.
-    /// Business date stored separately as DateOnly.
-    /// </summary>
     public class AttendanceCorrectionRequest
     {
-        [Key]
-        public Guid CorrectionRequestId { get; set; } = Guid.NewGuid();
+        public Guid AttendanceCorrectionRequestId { get; set; }
+
+        public Guid OrganizationId { get; set; }
 
         public Guid EmployeeId { get; set; }
 
         [ForeignKey(nameof(EmployeeId))]
-        public Employee Employee { get; set; } = null!;
+        public Employee Employee { get; set; }
 
         public Guid? AttendanceId { get; set; }
 
         [ForeignKey(nameof(AttendanceId))]
         public Attendance? Attendance { get; set; }
 
-        // Business date ONLY
-        public DateOnly Date { get; set; }
+        // Requested date
+        public DateTime WorkDate { get; set; }
 
-        // Stored in UTC
+        // Request Type
+        public string RequestType { get; set; } = null!;
+        // MissingCheckIn
+        // MissingCheckOut
+        // WrongCheckIn
+        // WrongCheckOut
+        // FullCorrection
+
+        // Existing values
+        public DateTime? ExistingCheckIn { get; set; }
+        public DateTime? ExistingCheckOut { get; set; }
+
+        // Requested values
         public DateTime? RequestedCheckIn { get; set; }
-
-        // Stored in UTC
         public DateTime? RequestedCheckOut { get; set; }
 
-        public string Reason { get; set; } = string.Empty;
+        // Employee reason
+        public string Reason { get; set; } = null!;
 
-        // Pending | Approved | Rejected | Cancelled
+        // HR action
         public string Status { get; set; } = "Pending";
+        // Pending / Approved / Rejected
 
-        public Guid? ReviewedBy { get; set; }
+        public string? HRRemarks { get; set; }
 
-        // Stored in UTC
+        public Guid? ReviewedByEmployeeId { get; set; }
+
         public DateTime? ReviewedAt { get; set; }
 
-        public string? RejectionReason { get; set; }
+        // System flags
+        public bool IsApplied { get; set; } = false;
 
-        // Stored in UTC
-        public DateTime AppliedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
