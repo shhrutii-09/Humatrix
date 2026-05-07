@@ -60,6 +60,14 @@ namespace Humatrix_HRMS.Services
             var tz = GetOrgTimezone(org.TimeZoneId);
             var today = TimeHelper.GetOrgDate(org.TimeZoneId);
 
+            var hasCorrection = await _context.AttendanceCorrectionRequests
+      .AnyAsync(r => r.EmployeeId == employee.EmployeeId &&
+                r.Date == DateOnly.FromDateTime(today) &&
+                (r.Status == "Pending" || r.Status == "Approved"));
+
+            if (hasCorrection)
+                throw new Exception("Action blocked: An attendance correction is already pending or approved for today.");
+
             // ── Blocking conditions ──────────────────────────────────────────────
             var isHoliday = await _context.Holidays.AnyAsync(h =>
                 h.OrganizationId == orgId &&

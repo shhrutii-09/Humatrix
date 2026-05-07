@@ -44,159 +44,67 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Organization not found");
 
             var tz = GetOrgTimezone(employee.Organization.TimeZoneId);
+            var orgToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
 
-            var orgToday = DateOnly.FromDateTime(
-                TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
-
-            // =========================================================
-            // VALIDATIONS
-            // =========================================================
-
-            if (dto.Date > orgToday)
-                throw new Exception("Future dates are not allowed");
-
+            // Validations
+            if (dto.Date > orgToday) throw new Exception("Future dates are not allowed");
             if ((orgToday.DayNumber - dto.Date.DayNumber) > MaxCorrectionDays)
                 throw new Exception($"Only last {MaxCorrectionDays} days are allowed");
+            if (string.IsNullOrWhiteSpace(dto.Reason) || dto.Reason.Trim().Length < 5)
+                throw new Exception("Please enter a proper reason (min 5 chars)");
 
-            if (string.IsNullOrWhiteSpace(dto.Reason))
-                throw new Exception("Reason is required");
-
-            if (dto.Reason.Trim().Length < 5)
-                throw new Exception("Please enter proper reason");
-
-            if (!dto.RequestedCheckIn.HasValue &&
-                !dto.RequestedCheckOut.HasValue)
-            {
+            if (!dto.RequestedCheckIn.HasValue && !dto.RequestedCheckOut.HasValue)
                 throw new Exception("Please enter check-in or check-out time");
-            }
 
-            if (dto.RequestedCheckIn.HasValue &&
-                dto.RequestedCheckOut.HasValue &&
-                dto.RequestedCheckIn >= dto.RequestedCheckOut)
-            {
-                throw new Exception("Check-in must be before check-out");
-            }
-
-            // =========================================================
-            // HOLIDAY CHECK
-            // =========================================================
-
-            var isHoliday = await _context.Holidays.AnyAsync(h =>
-                h.OrganizationId == employee.OrganizationId &&
-                DateOnly.FromDateTime(h.Date) == dto.Date &&
-                !h.IsOptional);
-
-            if (isHoliday)
-                throw new Exception("Cannot request correction on holiday");
-
-            // =========================================================
-            // LEAVE CHECK
-            // =========================================================
-
-            var onLeave = await _context.LeaveRequests.AnyAsync(l =>
-                l.EmployeeId == employee.EmployeeId &&
-                l.Status == "Approved" &&
-                DateOnly.FromDateTime(l.FromDate) <= dto.Date &&
-                DateOnly.FromDateTime(l.ToDate) >= dto.Date);
-
-            if (onLeave)
-                throw new Exception("You are on approved leave");
-
-            // =========================================================
-            // WFH CHECK
-            // =========================================================
-
-            var onWfh = await _context.WorkFromHomeRequests.AnyAsync(w =>
-                w.EmployeeId == employee.EmployeeId &&
-                w.Status == "Approved" &&
-                DateOnly.FromDateTime(w.Date) == dto.Date);
-
-            if (onWfh)
-                throw new Exception("Approved WFH exists for this date");
-
-            // =========================================================
-            // DUPLICATE CHECK
-            // =========================================================
-
-            var duplicate = await _context.AttendanceCorrectionRequests.AnyAsync(r =>
-                r.EmployeeId == employee.EmployeeId &&
-                r.Date == dto.Date &&
-                r.Status == "Pending");
-
-            if (duplicate)
-                throw new Exception("Pending request already exists");
-
-            // =========================================================
-            // LOCAL TIME → UTC
-            // =========================================================
-
+            // Overnight Shift Rollover Logic
             DateTime? utcCheckIn = null;
             DateTime? utcCheckOut = null;
 
             if (dto.RequestedCheckIn.HasValue)
             {
-                var localCheckIn = new DateTime(
-                    dto.Date.Year,
-                    dto.Date.Month,
-                    dto.Date.Day,
-                    dto.RequestedCheckIn.Value.Hours,
-                    dto.RequestedCheckIn.Value.Minutes,
-                    0,
-                    DateTimeKind.Unspecified);
-
+                var localCheckIn = dto.Date.ToDateTime(TimeOnly.FromTimeSpan(dto.RequestedCheckIn.Value));
                 utcCheckIn = TimeZoneInfo.ConvertTimeToUtc(localCheckIn, tz);
             }
 
             if (dto.RequestedCheckOut.HasValue)
             {
-                var localCheckOut = new DateTime(
-                    dto.Date.Year,
-                    dto.Date.Month,
-                    dto.Date.Day,
-                    dto.RequestedCheckOut.Value.Hours,
-                    dto.RequestedCheckOut.Value.Minutes,
-                    0,
-                    DateTimeKind.Unspecified);
+                var localCheckOut = dto.Date.ToDateTime(TimeOnly.FromTimeSpan(dto.RequestedCheckOut.Value));
+
+                // FIX: If checkout time is earlier than checkin, it belongs to the next day
+                if (dto.RequestedCheckIn.HasValue && dto.RequestedCheckOut.Value < dto.RequestedCheckIn.Value)
+                {
+                    localCheckOut = localCheckOut.AddDays(1);
+                }
 
                 utcCheckOut = TimeZoneInfo.ConvertTimeToUtc(localCheckOut, tz);
             }
 
-            // =========================================================
-            // EXISTING ATTENDANCE
-            // =========================================================
+            // Checks (Holiday, Leave, WFH, Duplicate)
+            var isHoliday = await _context.Holidays.AnyAsync(h => h.OrganizationId == employee.OrganizationId && DateOnly.FromDateTime(h.Date) == dto.Date && !h.IsOptional);
+            if (isHoliday) throw new Exception("Cannot request correction on holiday");
 
-            var existingAttendance = await _context.Attendances
-                .FirstOrDefaultAsync(a =>
-                    a.EmployeeId == employee.EmployeeId &&
-                    DateOnly.FromDateTime(a.WorkDate) == dto.Date);
+            var onLeave = await _context.LeaveRequests.AnyAsync(l => l.EmployeeId == employee.EmployeeId && l.Status == "Approved" && DateOnly.FromDateTime(l.FromDate) <= dto.Date && DateOnly.FromDateTime(l.ToDate) >= dto.Date);
+            if (onLeave) throw new Exception("You are on approved leave");
 
-            // =========================================================
-            // CREATE REQUEST
-            // =========================================================
+            var duplicate = await _context.AttendanceCorrectionRequests.AnyAsync(r => r.EmployeeId == employee.EmployeeId && r.Date == dto.Date && r.Status == "Pending");
+            if (duplicate) throw new Exception("A pending request already exists for this date");
+
+            var existingAttendance = await _context.Attendances.FirstOrDefaultAsync(a => a.EmployeeId == employee.EmployeeId && DateOnly.FromDateTime(a.WorkDate) == dto.Date);
 
             var request = new AttendanceCorrectionRequest
             {
                 CorrectionRequestId = Guid.NewGuid(),
-
                 EmployeeId = employee.EmployeeId,
-
                 AttendanceId = existingAttendance?.AttendanceId,
-
                 Date = dto.Date,
-
                 RequestedCheckIn = utcCheckIn,
-
                 RequestedCheckOut = utcCheckOut,
-
                 Reason = dto.Reason.Trim(),
-
                 Status = "Pending",
-
                 AppliedAt = DateTime.UtcNow
             };
 
             _context.AttendanceCorrectionRequests.Add(request);
-
             await _context.SaveChangesAsync();
         }
 
@@ -286,157 +194,65 @@ namespace Humatrix_HRMS.Services
         // =========================================================
         public async Task ReviewRequestAsync(ReviewCorrectionDto dto)
         {
-            var user = await _currentUser.GetUserAsync()
-                ?? throw new Exception("Unauthorized");
-
-            var reviewer = await _context.Employees
-                .Include(e => e.Organization)
-                .FirstOrDefaultAsync(e => e.UserId == user.Id)
+            var user = await _currentUser.GetUserAsync() ?? throw new Exception("Unauthorized");
+            var reviewer = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id)
                 ?? throw new Exception("Reviewer profile not found");
 
             using var transaction = await _context.Database.BeginTransactionAsync();
-
             try
             {
                 var request = await _context.AttendanceCorrectionRequests
-                    .Include(r => r.Employee)
-                        .ThenInclude(e => e.Department)
-                    .Include(r => r.Employee)
-                        .ThenInclude(e => e.Organization)
-                    .Include(r => r.Employee)
-                        .ThenInclude(e => e.Shift)
+                    .Include(r => r.Employee).ThenInclude(e => e.Shift)
+                    .Include(r => r.Employee).ThenInclude(e => e.Organization)
                     .Include(r => r.Attendance)
-                    .FirstOrDefaultAsync(r =>
-                        r.CorrectionRequestId == dto.CorrectionRequestId)
+                    .FirstOrDefaultAsync(r => r.CorrectionRequestId == dto.CorrectionRequestId)
                     ?? throw new Exception("Request not found");
 
-                if (request.Status != "Pending")
-                    throw new Exception("Request already reviewed");
-
-                if (request.Employee.OrganizationId != reviewer.OrganizationId)
-                    throw new Exception("Access denied");
-
-                var roles = await _userManager.GetRolesAsync(user);
-
-                bool isOrgAdmin = roles.Contains("OrgAdmin");
-                bool isHR = roles.Contains("HR");
-
-                if (isHR && !isOrgAdmin)
-                {
-                    if (request.Employee.DepartmentId != reviewer.DepartmentId)
-                    {
-                        throw new Exception("You can only review your department requests");
-                    }
-                }
-
-                // =====================================================
-                // REJECT
-                // =====================================================
+                if (request.Status != "Pending") throw new Exception("Request already reviewed");
 
                 if (!dto.Approve)
                 {
-                    if (string.IsNullOrWhiteSpace(dto.RejectionReason))
-                        throw new Exception("Rejection reason required");
-
                     request.Status = "Rejected";
-                    request.RejectionReason = dto.RejectionReason.Trim();
+                    request.RejectionReason = dto.RejectionReason;
                     request.ReviewedBy = reviewer.EmployeeId;
                     request.ReviewedAt = DateTime.UtcNow;
-
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
-
                     return;
                 }
 
-                // =====================================================
-                // FORCE UTC KIND
-                // =====================================================
-
-                DateTime? correctedCheckIn = request.RequestedCheckIn.HasValue
-                    ? DateTime.SpecifyKind(request.RequestedCheckIn.Value, DateTimeKind.Utc)
-                    : null;
-
-                DateTime? correctedCheckOut = request.RequestedCheckOut.HasValue
-                    ? DateTime.SpecifyKind(request.RequestedCheckOut.Value, DateTimeKind.Utc)
-                    : null;
-
-                Attendance? attendance = request.Attendance;
-
-                // =====================================================
-                // CREATE NEW ATTENDANCE
-                // =====================================================
-
+                var attendance = request.Attendance;
                 if (attendance == null)
                 {
                     attendance = new Attendance
                     {
                         AttendanceId = Guid.NewGuid(),
-
                         UserId = request.Employee.UserId,
-
                         EmployeeId = request.EmployeeId,
-
                         OrganizationId = request.Employee.OrganizationId,
-
                         WorkDate = request.Date.ToDateTime(TimeOnly.MinValue),
-
-                        CheckIn = correctedCheckIn,
-
-                        CheckOut = correctedCheckOut,
-
-                        ActualCheckOut = correctedCheckOut,
-
-                        IsManual = true,
-
-                        IsPresent = true
                     };
-
                     _context.Attendances.Add(attendance);
-
-                    request.AttendanceId = attendance.AttendanceId;
-                }
-                else
-                {
-                    if (correctedCheckIn.HasValue)
-                    {
-                        attendance.CheckIn = correctedCheckIn;
-                    }
-
-                    if (correctedCheckOut.HasValue)
-                    {
-                        attendance.CheckOut = correctedCheckOut;
-                        attendance.ActualCheckOut = correctedCheckOut;
-                    }
-
-                    attendance.IsManual = true;
                 }
 
-                // =====================================================
-                // RECALCULATE
-                // =====================================================
-
-                ApplyAttendanceCalculation(attendance, request.Employee);
-
-                attendance.UpdatedBy = reviewer.EmployeeId;
-
+                attendance.CheckIn = request.RequestedCheckIn;
+                attendance.CheckOut = request.RequestedCheckOut;
+                attendance.ActualCheckOut = request.RequestedCheckOut;
+                attendance.IsManual = true;
                 attendance.IsPresent = attendance.CheckIn.HasValue;
 
+                // Apply logic & calculate SystemCheckOut
+                ApplyAttendanceCalculation(attendance, request.Employee);
+
                 request.Status = "Approved";
-
                 request.ReviewedBy = reviewer.EmployeeId;
-
                 request.ReviewedAt = DateTime.UtcNow;
+                request.AttendanceId = attendance.AttendanceId;
 
                 await _context.SaveChangesAsync();
-
                 await transaction.CommitAsync();
             }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            catch { await transaction.RollbackAsync(); throw; }
         }
 
         // =========================================================
@@ -484,100 +300,40 @@ namespace Humatrix_HRMS.Services
         // =========================================================
         // PRIVATE — CALCULATE ATTENDANCE
         // =========================================================
-        private void ApplyAttendanceCalculation(
-    Attendance attendance,
-    Employee employee)
+       private void ApplyAttendanceCalculation(Attendance attendance, Employee employee)
         {
-            if (!attendance.CheckIn.HasValue ||
-                !attendance.CheckOut.HasValue)
-            {
-                attendance.Status = AttendanceStatuses.Absent;
-                return;
-            }
-
-            // FORCE UTC
-            var checkInUtc = DateTime.SpecifyKind(
-                attendance.CheckIn.Value,
-                DateTimeKind.Utc);
-
-            var checkOutUtc = DateTime.SpecifyKind(
-                attendance.CheckOut.Value,
-                DateTimeKind.Utc);
-
-            var totalHours =
-                (checkOutUtc - checkInUtc).TotalHours;
-
-            if (totalHours <= 0 || totalHours > 24)
-                throw new Exception("Invalid attendance hours");
-
-            attendance.TotalHours =
-                Math.Round(totalHours, 2);
-
             var shift = employee.Shift;
-
-            if (shift == null)
+            if (shift == null || !attendance.CheckIn.HasValue || !attendance.CheckOut.HasValue)
             {
-                attendance.Status = AttendanceStatuses.Present;
+                attendance.Status = attendance.CheckIn.HasValue ? AttendanceStatuses.Present : AttendanceStatuses.Absent;
                 return;
             }
 
-            // =========================================================
-            // OVERTIME
-            // =========================================================
+            var tz = GetOrgTimezone(employee.Organization?.TimeZoneId);
+            var checkInLocal = TimeZoneInfo.ConvertTimeFromUtc(attendance.CheckIn.Value, tz);
+            var checkOutLocal = TimeZoneInfo.ConvertTimeFromUtc(attendance.CheckOut.Value, tz);
 
-            if (totalHours > shift.MinimumHoursForFullDay)
-            {
-                attendance.OvertimeHours =
-                    Math.Round(totalHours - shift.MinimumHoursForFullDay, 2);
+            // 1. Total Hours
+            attendance.TotalHours = Math.Round((attendance.CheckOut.Value - attendance.CheckIn.Value).TotalHours, 2);
 
-                attendance.NeedsOvertimeApproval =
-                    attendance.OvertimeHours > 0;
-            }
+            // 2. Set SystemCheckOut (Critical for OvertimeService)
+            var shiftEndLocal = checkInLocal.Date.Add(shift.EndTime);
+            if (shift.EndTime < shift.StartTime) shiftEndLocal = shiftEndLocal.AddDays(1);
+            attendance.SystemCheckOut = TimeZoneInfo.ConvertTimeToUtc(shiftEndLocal, tz);
+
+            // 3. Status Logic (Late / Early Exit / Half Day)
+            var lateThreshold = shift.StartTime.Add(TimeSpan.FromMinutes(shift.LateAllowanceMinutes));
+            bool isLate = checkInLocal.TimeOfDay > lateThreshold;
+            bool leftEarly = checkOutLocal < shiftEndLocal;
+
+            if (attendance.TotalHours < shift.MinimumHoursForHalfDay)
+                attendance.Status = AttendanceStatuses.ShortHours;
+            else if (attendance.TotalHours < shift.MinimumHoursForFullDay)
+                attendance.Status = AttendanceStatuses.HalfDay;
+            else if (leftEarly)
+                attendance.Status = AttendanceStatuses.EarlyExit;
             else
-            {
-                attendance.OvertimeHours = 0;
-                attendance.NeedsOvertimeApproval = false;
-            }
-
-            // =========================================================
-            // LATE CHECK
-            // =========================================================
-
-            var tz = GetOrgTimezone(
-                employee.Organization?.TimeZoneId);
-
-            var localCheckIn =
-                TimeZoneInfo.ConvertTimeFromUtc(checkInUtc, tz);
-
-            var lateLimit =
-                shift.StartTime.Add(
-                    TimeSpan.FromMinutes(
-                        shift.LateAllowanceMinutes));
-
-            bool isLate =
-                localCheckIn.TimeOfDay > lateLimit;
-
-            // =========================================================
-            // STATUS
-            // =========================================================
-
-            if (totalHours < shift.MinimumHoursForHalfDay)
-            {
-                attendance.Status =
-                    AttendanceStatuses.ShortHours;
-            }
-            else if (totalHours < shift.MinimumHoursForFullDay)
-            {
-                attendance.Status =
-                    AttendanceStatuses.HalfDay;
-            }
-            else
-            {
-                attendance.Status =
-                    isLate
-                    ? AttendanceStatuses.Late
-                    : AttendanceStatuses.Present;
-            }
+                attendance.Status = isLate ? AttendanceStatuses.Late : AttendanceStatuses.Present;
         }
 
         // =========================================================
