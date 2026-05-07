@@ -136,7 +136,7 @@ namespace Humatrix_HRMS.Services
         }
 
         public async Task<(Organization Organization, int EmployeeCount, int HRCount, int DepartmentCount)>
-            GetOrganizationDetailsAsync(Guid orgId)
+     GetOrganizationDetailsAsync(Guid orgId)
         {
             using var _context = _contextFactory.CreateDbContext();
 
@@ -147,8 +147,13 @@ namespace Humatrix_HRMS.Services
             if (org == null)
                 throw new Exception("Organization not found");
 
-            var employeeCount = await _context.Users
-                .CountAsync(x => x.OrganizationId == orgId);
+            // FIX: Only count users who have the "Employee" role
+            var employeeCount = await (from user in _context.Users
+                                       join userRole in _context.UserRoles on user.Id equals userRole.UserId
+                                       join role in _context.Roles on userRole.RoleId equals role.Id
+                                       where user.OrganizationId == orgId && role.Name == "Employee"
+                                       select user)
+                                       .CountAsync();
 
             var hrCount = await (from user in _context.Users
                                  join userRole in _context.UserRoles on user.Id equals userRole.UserId

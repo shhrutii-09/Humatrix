@@ -44,5 +44,13 @@ namespace Humatrix_HRMS.Models
 
         [ForeignKey("OrganizationId")]
         public Organization? Organization { get; set; }   // ← Add this navigation property
+
+        [ForeignKey("DepartmentId")]
+        public Department? Department { get; set; }
+
+
+        // ADD THIS SECTION BELOW
+        [ForeignKey("DesignationId")]
+        public Designation? Designation { get; set; }
     }
 }

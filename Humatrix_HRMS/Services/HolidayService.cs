@@ -57,5 +57,24 @@ namespace Humatrix_HRMS.Services
             _context.Holidays.Remove(holiday);
             await _context.SaveChangesAsync();
         }
+
+        public async Task UpdateAsync(Holiday holiday)
+        {
+            var user = await _currentUser.GetUserAsync()
+                ?? throw new Exception("Unauthorized");
+
+            var existing = await _context.Holidays
+                .FirstOrDefaultAsync(h => h.HolidayId == holiday.HolidayId &&
+                                         h.OrganizationId == user.OrganizationId);
+
+            if (existing == null) throw new Exception("Holiday not found");
+
+            // Update fields
+            existing.Name = holiday.Name;
+            existing.Date = holiday.Date;
+            existing.IsOptional = holiday.IsOptional;
+
+            await _context.SaveChangesAsync();
+        }
     }
 }

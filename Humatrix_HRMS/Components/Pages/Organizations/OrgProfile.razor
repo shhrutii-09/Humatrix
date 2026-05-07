@@ -8,13 +8,11 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Authorization
-@using static Humatrix_HRMS.Components.Pages.Organizations.Location
-@using static Humatrix_HRMS.Components.Pages.Employee.Attendence
 
 @attribute [Authorize(Roles = "OrgAdmin")]
+
 @inject OfficeLocationService LocationService
 @inject IJSRuntime JS
-
 @inject OrganizationService OrgService
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
@@ -44,7 +42,6 @@
     else
     {
         <div class="row g-4">
-
             <!-- LEFT SIDE -->
             <div class="col-lg-8">
                 <div class="card border-0 shadow-sm">
@@ -53,9 +50,7 @@
                         <EditForm Model="orgModel" OnValidSubmit="UpdateOrganization">
                             <DataAnnotationsValidator />
 
-                            <h5 class="text-muted border-bottom pb-2 mb-3">
-                                Organization Details
-                            </h5>
+                            <h5 class="text-muted border-bottom pb-2 mb-3">Organization Details</h5>
 
                             <div class="mb-3">
                                 <label class="small fw-bold">Organization Name</label>
@@ -76,49 +71,37 @@
                                 <label class="small fw-bold">Address</label>
                                 <InputText class="form-control" @bind-Value="orgModel.Address" />
                             </div>
-                            <hr class="my-4" />
 
-                            <h5 class="text-muted border-bottom pb-2 mb-3">
-                                Office Location
-                            </h5>
-
+                            <h5 class="text-muted border-bottom pb-2 mb-3 mt-4">Office Location</h5>
                             <div class="row g-3">
-
                                 <div class="col-md-6">
                                     <label class="small fw-bold">Office Name</label>
                                     <InputText class="form-control" @bind-Value="locationModel.Name" />
                                 </div>
-
-                                @* <div class="col-md-3">
+                                <div class="col-md-3">
                                     <label class="small fw-bold">Latitude</label>
                                     <InputNumber class="form-control" @bind-Value="locationModel.Latitude" />
                                 </div>
-
                                 <div class="col-md-3">
                                     <label class="small fw-bold">Longitude</label>
                                     <InputNumber class="form-control" @bind-Value="locationModel.Longitude" />
-                                </div> *@
-
+                                </div>
                                 <div class="col-md-4">
                                     <label class="small fw-bold">Allowed Radius (meters)</label>
                                     <InputNumber class="form-control" @bind-Value="locationModel.RadiusInMeters" />
                                 </div>
-
                                 <div class="col-md-8 d-flex align-items-end">
                                     <button type="button"
-                                            class="btn btn-outline-primary me-2"
+                                            class="btn btn-outline-primary"
                                             @onclick="DetectLocation"
                                             disabled="@isDetectingLocation">
-
                                         @if (isDetectingLocation)
                                         {
                                             <span class="spinner-border spinner-border-sm me-2"></span>
                                         }
-
                                         📍 Detect Location
                                     </button>
                                 </div>
-
                             </div>
 
                             @if (locationModel.Latitude != 0 && locationModel.Longitude != 0)
@@ -127,7 +110,6 @@
                                     <p class="text-muted small">
                                         📍 Current Location: <strong>@locationModel.Latitude, @locationModel.Longitude</strong>
                                     </p>
-
                                     <a class="btn btn-outline-primary btn-sm"
                                        href="https://www.google.com/maps?q=@locationModel.Latitude,@locationModel.Longitude"
                                        target="_blank">
@@ -136,13 +118,11 @@
                                 </div>
                             }
 
-                            <div class="mt-4 d-flex gap-2">
-                                <button class="btn btn-success px-4" disabled="@isSaving">
-                                    @(isSaving ? "Saving..." : "SAVE CHANGES")
+                            <div class="mt-5 pt-3 border-top d-flex gap-2">
+                                <button type="submit" class="btn btn-success px-5" disabled="@isSaving">
+                                    @(isSaving ? "Saving..." : "SAVE ALL CHANGES")
                                 </button>
-
-                                <button type="button" class="btn btn-outline-primary"
-                                        @onclick="ShowPasswordModal">
+                                <button type="button" class="btn btn-outline-secondary" @onclick="ShowPasswordModal">
                                     CHANGE PASSWORD
                                 </button>
                             </div>
@@ -156,8 +136,6 @@
             <div class="col-lg-4">
                 <div class="card border-0 shadow-sm text-center">
                     <div class="card-body p-4">
-
-                        <!-- Avatar -->
                         <div class="avatar-lg bg-light rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center"
                              style="width: 100px; height: 100px; font-size: 2rem; color: #5c4ac7; border: 2px solid #5c4ac7;">
                             @(string.IsNullOrEmpty(adminEmail) ? "A" : adminEmail[0].ToString().ToUpper())
@@ -165,40 +143,25 @@
 
                         <h5 class="mb-1">@orgModel.Name</h5>
                         <p class="text-muted small">Organization Admin</p>
-
                         <hr />
-
                         <p class="small text-muted mb-1">ADMIN EMAIL</p>
                         <p class="fw-bold">@adminEmail</p>
-
-                        @* <button class="btn btn-warning w-100 mt-3"
-                                @onclick="ShowChangeAdmin">
-                            CHANGE ADMIN
-                        </button> *@
-
                     </div>
                 </div>
 
-                <!-- STATS -->
                 <div class="card border-0 shadow-sm mt-4">
                     <div class="card-body p-4">
-
-                        <h6 class="text-muted mb-3 uppercase-tracking">
-                            ORGANIZATION OVERVIEW
-                        </h6>
-
+                        <h6 class="text-muted mb-3 uppercase-tracking">ORGANIZATION OVERVIEW</h6>
                         <p><strong>Employees:</strong> @employeeCount</p>
                         <p><strong>HRs:</strong> @hrCount</p>
                         <p><strong>Departments:</strong> @deptCount</p>
-
                     </div>
                 </div>
             </div>
-
         </div>
     }
 
-    <!-- STATUS -->
+    <!-- STATUS MESSAGES -->
     @if (!string.IsNullOrEmpty(statusMessage))
     {
         <div class="alert alert-success mt-4">@statusMessage</div>
@@ -209,76 +172,30 @@
     }
 </div>
 
-<!-- CHANGE ADMIN MODAL -->
-@* @if (showAdminModal)
-{
-    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title">Change Admin</h5>
-                    <button class="btn-close" @onclick="CloseAdminModal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <InputText class="form-control"
-                               @bind-Value="newAdminEmail"
-                               placeholder="Enter new admin email" />
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-light" @onclick="CloseAdminModal">Cancel</button>
-                    <button class="btn btn-primary"
-                            style="background-color:#5c4ac7"
-                            @onclick="ChangeAdmin">
-                        Submit
-                    </button>
-                </div>
-
-            </div>
-        </div>
-    </div>
-} *@
-
 <!-- PASSWORD MODAL -->
 @if (showPasswordModal)
 {
-    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);">
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
-
                 <div class="modal-header bg-light">
                     <h5 class="modal-title">Change Password</h5>
-                    <button class="btn-close" @onclick="ClosePasswordModal"></button>
+                    <button type="button" class="btn-close" @onclick="ClosePasswordModal"></button>
                 </div>
-
                 <div class="modal-body">
                     @if (hasPassword)
                     {
-                        <input type="password" class="form-control mb-2"
-                               placeholder="Current Password"
-                               @bind="currentPwd" />
+                        <input type="password" class="form-control mb-2" placeholder="Current Password" @bind="currentPwd" />
                     }
-
-                    <input type="password" class="form-control mb-2"
-                           placeholder="New Password"
-                           @bind="newPwd" />
-
-                    <input type="password" class="form-control"
-                           placeholder="Confirm Password"
-                           @bind="confirmPwd" />
+                    <input type="password" class="form-control mb-2" placeholder="New Password" @bind="newPwd" />
+                    <input type="password" class="form-control" placeholder="Confirm Password" @bind="confirmPwd" />
                 </div>
-
                 <div class="modal-footer">
-                    <button class="btn btn-light" @onclick="ClosePasswordModal">Cancel</button>
-                    <button class="btn btn-primary"
-                            style="background-color:#5c4ac7"
-                            @onclick="ChangePassword">
+                    <button type="button" class="btn btn-light" @onclick="ClosePasswordModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" style="background-color:#5c4ac7" @onclick="ChangePassword">
                         Update
                     </button>
                 </div>
-
             </div>
         </div>
     </div>
@@ -302,31 +219,13 @@
 </style>
 
 @code {
-
     private Organization orgModel = new();
     private string? adminEmail;
-
-    private int employeeCount;
-    private int hrCount;
-    private int deptCount;
-
-    private bool isLoading = true;
-    private bool isSaving = false;
-
-    private bool showPasswordModal = false;
-
-    private string newAdminEmail = "";
-
-    private string currentPwd = "";
-    private string newPwd = "";
-    private string confirmPwd = "";
-
-    private bool hasPassword;
-
-    private string? statusMessage;
-    private string? errorMessage;
+    private int employeeCount, hrCount, deptCount;
+    private bool isLoading = true, isSaving = false, showPasswordModal = false, isDetectingLocation = false, hasPassword;
+    private string currentPwd = "", newPwd = "", confirmPwd = "";
+    private string? statusMessage, errorMessage;
     private OfficeLocationDto locationModel = new();
-    private bool isDetectingLocation = false;
     private ApplicationUser? currentUser;
 
     protected override async Task OnInitializedAsync()
@@ -343,26 +242,19 @@
             }
 
             currentUser = user;
-
             using var db = DbFactory.CreateDbContext();
-
             var orgId = user.OrganizationId.Value;
 
-            orgModel = await db.Organizations
-                .FirstAsync(x => x.OrganizationId == orgId);
-
+            orgModel = await db.Organizations.FirstAsync(x => x.OrganizationId == orgId);
             adminEmail = await OrgService.GetOrganizationAdminEmailAsync(orgId);
-
             var stats = await OrgService.GetOrganizationDetailsAsync(orgId);
 
             employeeCount = stats.EmployeeCount;
             hrCount = stats.HRCount;
             deptCount = stats.DepartmentCount;
-
             hasPassword = await UserManager.HasPasswordAsync(user);
 
             var location = await LocationService.GetAsync();
-
             if (location != null)
             {
                 locationModel = new OfficeLocationDto
@@ -375,12 +267,8 @@
                 };
             }
         }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-        }
-
-        isLoading = false;
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { isLoading = false; }
     }
 
     private async Task UpdateOrganization()
@@ -388,19 +276,20 @@
         try
         {
             isSaving = true;
+            errorMessage = null;
+            statusMessage = null;
+
             await OrgService.UpdateOrganizationAsync(orgModel);
 
-            statusMessage = "Organization updated successfully!";
-            errorMessage = null;
+            if (!string.IsNullOrWhiteSpace(locationModel.Name))
+            {
+                await LocationService.SaveAsync(locationModel);
+            }
+
+            statusMessage = "Organization and Location updated successfully!";
         }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-        }
-        finally
-        {
-            isSaving = false;
-        }
+        catch (Exception ex) { errorMessage = "Update failed: " + ex.Message; }
+        finally { isSaving = false; }
     }
 
     private async Task DetectLocation()
@@ -408,59 +297,37 @@
         try
         {
             isDetectingLocation = true;
-
             var loc = await JS.InvokeAsync<LocationResult>("getLocation");
-
             locationModel.Latitude = loc.Latitude;
             locationModel.Longitude = loc.Longitude;
         }
-        catch (Exception ex)
-        {
-            errorMessage = "Location error: " + ex.Message;
-        }
-        finally
-        {
-            isDetectingLocation = false;
-        }
+        catch (Exception ex) { errorMessage = "Location error: " + ex.Message; }
+        finally { isDetectingLocation = false; }
     }
-    
-  
 
     private void ShowPasswordModal() => showPasswordModal = true;
     private void ClosePasswordModal() => showPasswordModal = false;
 
     private async Task ChangePassword()
     {
-        if (newPwd != confirmPwd)
-        {
-            errorMessage = "Passwords do not match.";
-            return;
-        }
+        if (newPwd != confirmPwd) { errorMessage = "Passwords do not match."; return; }
 
         try
         {
-            IdentityResult result;
-
-            if (hasPassword)
-                result = await UserManager.ChangePasswordAsync(currentUser!, currentPwd, newPwd);
-            else
-                result = await UserManager.AddPasswordAsync(currentUser!, newPwd);
+            IdentityResult result = hasPassword
+                ? await UserManager.ChangePasswordAsync(currentUser!, currentPwd, newPwd)
+                : await UserManager.AddPasswordAsync(currentUser!, newPwd);
 
             if (result.Succeeded)
             {
                 statusMessage = "Password updated successfully!";
                 showPasswordModal = false;
-
                 currentPwd = newPwd = confirmPwd = "";
             }
-            else
-            {
-                errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
-            }
+            else { errorMessage = string.Join(", ", result.Errors.Select(e => e.Description)); }
         }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-        }
+        catch (Exception ex) { errorMessage = ex.Message; }
     }
+
+    public class LocationResult { public double Latitude { get; set; } public double Longitude { get; set; } }
 }

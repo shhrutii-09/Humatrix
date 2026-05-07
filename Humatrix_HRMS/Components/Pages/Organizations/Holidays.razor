@@ -15,8 +15,8 @@
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-normal">Holiday Calendar</h2>
-
+        @* <h2 class="fw-normal">Holiday Calendar</h2> *@
+        <h2 class="fw-normal">@(isEditing ? "Edit Holiday" : "Add Holiday")</h2>
         <button class="btn btn-primary" @onclick="Open">
             + Add Holiday
         </button>
@@ -58,10 +58,14 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => Delete(h.HolidayId)">
-                                        Delete
-                                    </button>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(h)">
+                                            Edit
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(h.HolidayId)">
+                                            Delete
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         }
@@ -132,43 +136,57 @@
 </div>
 
 @code {
-
     private List<Holiday> holidays = new();
     private Holiday model = new();
-
     private bool showModal = false;
     private string? error;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await Load();
-    }
+    // Add this to track if we are editing
+    private bool isEditing = false;
 
-    private async Task Load()
-    {
-        holidays = await HolidayService.GetAllAsync();
-    }
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => holidays = await HolidayService.GetAllAsync();
 
     private void Open()
     {
-        model = new Holiday
-        {
-            Date = DateTime.Today
-        };
+        model = new Holiday { Date = DateTime.Today };
+        isEditing = false; // Reset state
         showModal = true;
         error = null;
     }
 
-    private void Close()
+    private void Edit(Holiday h)
     {
-        showModal = false;
+        // Create a shallow copy so changes don't show in the table until Saved
+        model = new Holiday
+        {
+            HolidayId = h.HolidayId,
+            Name = h.Name,
+            Date = h.Date,
+            IsOptional = h.IsOptional,
+            OrganizationId = h.OrganizationId
+        };
+        isEditing = true;
+        showModal = true;
+        error = null;
     }
+
+    private void Close() => showModal = false;
 
     private async Task Save()
     {
         try
         {
-            await HolidayService.CreateAsync(model);
+            if (isEditing)
+            {
+                await HolidayService.UpdateAsync(model);
+            }
+            else
+            {
+                await HolidayService.CreateAsync(model);
+            }
+
             showModal = false;
             await Load();
         }

@@ -1,9 +1,12 @@
 ﻿@page "/employee/attendance"
 @rendermode InteractiveServer
+
 @using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+
 @attribute [Authorize(Roles = "Employee")]
 
 @inject AttendanceService AttendanceService
@@ -28,19 +31,22 @@
     }
 
     <div class="row g-4">
+
         <!-- LEFT PANEL -->
         <div class="col-xl-4 col-md-6">
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-body text-center p-5">
+
                     <i class="bi bi-clock-history text-primary display-4 mb-3"></i>
 
-                    <h4 class="fw-bold mb-1">@DateTime.Now.ToString("hh:mm tt")</h4>
-                    <p class="text-muted small mb-4">@DateTime.Now.ToString("dddd, MMMM dd")</p>
+                    <!-- ✅ LIVE CLOCK -->
+                    <h4 class="fw-bold mb-1">@currentTime.ToString("hh:mm tt")</h4>
+                    <p class="text-muted small mb-4">@currentTime.ToString("dddd, MMMM dd")</p>
 
-                    @if (!string.IsNullOrEmpty(message) && isCheckedIn)
+                    @if (!string.IsNullOrEmpty(message))
                     {
-                        <div class="badge bg-success-subtle text-success p-2 mb-4 w-100">
-                            <i class="bi bi-check-circle-fill me-1"></i> @message
+                        <div class="badge @(isCheckedIn ? "bg-success-subtle text-success" : "bg-light text-dark") p-2 mb-4 w-100">
+                            <i class="bi bi-info-circle me-1"></i> @message
                         </div>
                     }
 
@@ -49,7 +55,8 @@
                         {
                             <button class="btn btn-primary py-3 fw-bold shadow-sm"
                                     style="background-color: #5c4ac7; border: none;"
-                                    @onclick="HandleCheckIn" disabled="@isLoading">
+                                    @onclick="HandleCheckIn"
+                                    disabled="@isLoading">
                                 @if (isLoading)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2"></span>
@@ -70,12 +77,15 @@
                             </button>
                         }
                     </div>
+
                 </div>
             </div>
         </div>
 
         <!-- RIGHT PANEL -->
         <div class="col-xl-8 col-md-6">
+
+            <!-- STATS -->
             <div class="row g-3">
                 <div class="col-sm-6 col-lg-4">
                     <div class="card shadow-sm border-0 border-start border-success border-4">
@@ -83,8 +93,8 @@
                             <small class="text-muted fw-bold">PRESENT DAYS</small>
                             <h3 class="mb-0">
                                 @attendanceList.Count(x =>
-                                x.Status == "Present" ||
-                                x.Status?.Contains("Late") == true)
+                                x.Status == AttendanceStatuses.Present ||
+                                x.Status == AttendanceStatuses.Late)
                             </h3>
                         </div>
                     </div>
@@ -95,7 +105,7 @@
                         <div class="card-body">
                             <small class="text-muted fw-bold">LATE ARRIVALS</small>
                             <h3 class="mb-0">
-                                @attendanceList.Count(x => x.Status?.Contains("Late") == true)
+                                @attendanceList.Count(x => x.Status == AttendanceStatuses.Late)
                             </h3>
                         </div>
                     </div>
@@ -106,7 +116,7 @@
                         <div class="card-body">
                             <small class="text-muted fw-bold">ABSENT</small>
                             <h3 class="mb-0">
-                                @attendanceList.Count(x => x.Status == "Absent")
+                                @attendanceList.Count(x => x.Status == AttendanceStatuses.Absent)
                             </h3>
                         </div>
                     </div>
@@ -131,7 +141,7 @@
                         </thead>
 
                         <tbody>
-                            @if (attendanceList == null || !attendanceList.Any())
+                            @if (!attendanceList.Any())
                             {
                                 <tr>
                                     <td colspan="4" class="text-center py-4 text-muted">
@@ -145,7 +155,7 @@
                                                             .OrderByDescending(x => x.Date)
                                                             .Take(10))
                                 {
-                                    <tr class="@(att.Status == "Absent" ? "bg-light-danger" : "")">
+                                    <tr>
                                         <td class="ps-4 fw-bold">
                                             @att.Date.ToString("dd MMM yyyy")
 
@@ -176,6 +186,7 @@
                     </table>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
@@ -188,15 +199,30 @@
     private string? message;
     private List<AttendanceListDto> attendanceList = new();
 
+    private DateTime currentTime = DateTime.Now;
+    private Timer? timer;
+
     protected override async Task OnInitializedAsync()
     {
+        StartClock();
         await RefreshUI();
+    }
+
+    private void StartClock()
+    {
+        timer = new Timer(_ =>
+        {
+            currentTime = DateTime.Now;
+            InvokeAsync(StateHasChanged);
+        }, null, 0, 1000);
     }
 
     private async Task RefreshUI()
     {
         try
         {
+            error = null;
+
             var status = await AttendanceService.GetTodayStatusAsync();
 
             if (status != null)
@@ -204,9 +230,12 @@
                 isCheckedIn = status.CheckIn != null;
                 isCheckedOut = status.CheckOut != null;
 
-                message = isCheckedIn
-                    ? $"Checked in at {status.CheckIn?.ToLocalTime():hh:mm tt}"
-                    : "Not checked in yet";
+                if (isCheckedOut)
+                    message = $"Checked out at {status.CheckOut?.ToLocalTime():hh:mm tt}";
+                else if (isCheckedIn)
+                    message = $"Checked in at {status.CheckIn?.ToLocalTime():hh:mm tt}";
+                else
+                    message = "Ready to start your day?";
             }
             else
             {
@@ -233,7 +262,6 @@
             var location = await JS.InvokeAsync<LocationDto>("getLocation");
             await AttendanceService.CheckInAsync(location.Latitude, location.Longitude);
 
-            message = "Checked in successfully";
             await RefreshUI();
         }
         catch (Exception ex)
@@ -256,7 +284,6 @@
             var location = await JS.InvokeAsync<LocationDto>("getLocation");
             await AttendanceService.CheckOutAsync(location.Latitude, location.Longitude);
 
-            message = "Checked out successfully";
             await RefreshUI();
         }
         catch (Exception ex)
@@ -271,13 +298,18 @@
 
     private string GetStatusClass(string status) => status switch
     {
-        "Present" => "bg-success",
-        "Late" or "Late (Active)" => "bg-warning text-dark",
-        "Half Day" => "bg-info",
-        "Short Hours" => "bg-secondary",
-        "Absent" => "bg-danger",
-        // "Checked In" => "bg-primary",
+        AttendanceStatuses.Present => "bg-success",
+        AttendanceStatuses.Late => "bg-warning text-dark",
+        AttendanceStatuses.HalfDay => "bg-info",
+        AttendanceStatuses.ShortHours => "bg-secondary",
+        AttendanceStatuses.Absent => "bg-danger",
+        AttendanceStatuses.WorkFromHome => "bg-primary",
         "Not Started" => "bg-light text-dark border",
         _ => "bg-secondary"
     };
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
 }

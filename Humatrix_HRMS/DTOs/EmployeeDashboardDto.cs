@@ -12,6 +12,8 @@
         public DateTime JoiningDate { get; set; }
 
         // Helper for the profile circle avatar
-        public string Initial => !string.IsNullOrEmpty(FullName) ? FullName[0].ToString().ToUpper() : "U";
+        public string Initial => string.IsNullOrWhiteSpace(FullName)
+                ? "U"
+                : FullName.Trim()[0].ToString().ToUpper();
     }
 }

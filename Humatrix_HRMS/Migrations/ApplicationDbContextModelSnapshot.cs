@@ -117,6 +117,9 @@ namespace Humatrix_HRMS.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("ActualCheckOut")
+                        .HasColumnType("datetime2");
+
                     b.Property<double>("ApprovedOvertimeHours")
                         .HasColumnType("float");
 
@@ -126,8 +129,14 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<DateTime?>("CheckOut")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("EmployeeId")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsAutoCheckedOut")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsManual")
                         .HasColumnType("bit");
@@ -154,8 +163,14 @@ namespace Humatrix_HRMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("SystemCheckOut")
+                        .HasColumnType("datetime2");
+
                     b.Property<double?>("TotalHours")
                         .HasColumnType("float");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uniqueidentifier");
@@ -169,9 +184,10 @@ namespace Humatrix_HRMS.Migrations
 
                     b.HasKey("AttendanceId");
 
-                    b.HasIndex("EmployeeId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("EmployeeId", "WorkDate")
+                        .IsUnique();
 
                     b.ToTable("Attendances");
                 });
@@ -188,8 +204,8 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<Guid?>("AttendanceId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
 
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
@@ -346,6 +362,10 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("EmployeeId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("DesignationId");
 
                     b.HasIndex("OrganizationId");
 
@@ -577,7 +597,7 @@ namespace Humatrix_HRMS.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("ActualCheckOut")
+                    b.Property<DateTime?>("ActualCheckOut")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("AppliedAt")
@@ -926,12 +946,14 @@ namespace Humatrix_HRMS.Migrations
                 {
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
-                        .HasForeignKey("EmployeeId");
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("Humatrix_HRMS.Data.ApplicationUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Employee");
@@ -958,6 +980,18 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Employee", b =>
                 {
+                    b.HasOne("Humatrix_HRMS.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Humatrix_HRMS.Models.Designation", "Designation")
+                        .WithMany()
+                        .HasForeignKey("DesignationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
@@ -967,6 +1001,10 @@ namespace Humatrix_HRMS.Migrations
                     b.HasOne("Humatrix_HRMS.Models.Shift", "Shift")
                         .WithMany()
                         .HasForeignKey("ShiftId");
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Designation");
 
                     b.Navigation("Organization");
 
@@ -1016,13 +1054,13 @@ namespace Humatrix_HRMS.Migrations
                     b.HasOne("Humatrix_HRMS.Models.Attendance", "Attendance")
                         .WithMany()
                         .HasForeignKey("AttendanceId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Attendance");

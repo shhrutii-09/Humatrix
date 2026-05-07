@@ -4,6 +4,7 @@ using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 
 namespace Humatrix_HRMS.Services
@@ -418,98 +419,96 @@ namespace Humatrix_HRMS.Services
 
         private async Task<string> GenerateEmployeeCodeAsync()
         {
-            var count = await _context.Employees.CountAsync();
-            return $"EMP{(count + 1).ToString("D4")}";
-        }
+            // 1. Get the underlying connection
+            var connection = _context.Database.GetDbConnection();
+            using var command = connection.CreateCommand();
 
+            // 2. IMPORTANT: Link the command to the existing EF Core transaction
+            var currentTransaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            if (currentTransaction != null)
+            {
+                command.Transaction = currentTransaction;
+            }
+
+            command.CommandText = "SELECT NEXT VALUE FOR EmployeeCodeSequence";
+
+            // 3. Ensure the connection is open
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                await _context.Database.OpenConnectionAsync();
+            }
+
+            var nextValue = await command.ExecuteScalarAsync();
+
+            // Handle potential nulls and convert to long safely
+            long value = (nextValue != DBNull.Value) ? Convert.ToInt64(nextValue) : 0;
+
+            return $"EMP{value.ToString("D4")}";
+        }
         #endregion
 
         public async Task<EmployeeDetailsDto?> GetEmployeeDetailsByIdAsync(Guid employeeId)
         {
-            if (employeeId == Guid.Empty)
-                return null;
+            // Create a new context instance from the factory
+            using var context = _contextFactory.CreateDbContext();
 
-            using var context = await _contextFactory.CreateDbContextAsync();
+            var employee = await context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Designation)
+                .Include(e => e.Shift)
+                .FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
 
-            var result = await (
-                from e in context.Employees
-                where e.EmployeeId == employeeId
+            if (employee == null) return null;
 
-                join d in context.Departments on e.DepartmentId equals d.DepartmentId into dept
-                from d in dept.DefaultIfEmpty()
+            var user = await _userManager.FindByIdAsync(employee.UserId);
+            var roles = await _userManager.GetRolesAsync(user!);
+            var primaryRole = roles.FirstOrDefault() ?? "Employee";
 
-                join des in context.Designations on e.DesignationId equals des.DesignationId into desg
-                from des in desg.DefaultIfEmpty()
-
-                join s in context.Shifts on e.ShiftId equals s.ShiftId into sh
-                from s in sh.DefaultIfEmpty()
-
-                select new
-                {
-                    Employee = e,
-                    Department = d,
-                    Designation = des,
-                    Shift = s
-                }
-            ).AsNoTracking().FirstOrDefaultAsync();
-
-            if (result == null)
-                return null;
-
-            var user = await _userManager.FindByIdAsync(result.Employee.UserId);
-            if (user == null)
-                return null;
-
-            // 🔥 Attendance calculation (CURRENT MONTH)
-            var startDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
-            var endDate = startDate.AddMonths(1);
-
-            var attendance = await context.Attendances
-                .Where(a => a.EmployeeId == employeeId &&
-                            a.WorkDate >= startDate &&
-                            a.WorkDate < endDate)
-                .ToListAsync();
-
-            var totalDays = attendance.Count;
-            var presentDays = attendance.Count(a => a.IsPresent);
-
-            // ADD THIS inside your existing method (after attendance calc)
-
+            // Use 'context' instead of '_context' for all queries in this method
             var recentAttendance = await context.Attendances
                 .Where(a => a.EmployeeId == employeeId)
                 .OrderByDescending(a => a.WorkDate)
                 .Take(7)
-                .Select(a => new AttendanceListDto
+                .Select(a => new AttendanceRecordDto
                 {
                     Date = a.WorkDate,
                     CheckIn = a.CheckIn,
                     CheckOut = a.CheckOut,
-                    Status = a.IsPresent ? "Present" : "Absent"
+                    Status = a.Status
                 })
                 .ToListAsync();
 
+            var recentLeaves = await context.LeaveRequests
+                .Include(l => l.LeaveType)
+                .Where(l => l.EmployeeId == employeeId && l.Status == "Approved")
+                .OrderByDescending(l => l.FromDate)
+                .Take(5)
+                .Select(l => new LeaveRecordDto
+                {
+                    Type = l.LeaveType.Name,
+                    Date = l.FromDate
+                })
+                .ToListAsync();
+
+            var totalTrackedDays = await context.Attendances.CountAsync(a => a.EmployeeId == employeeId);
+            var presentDays = await context.Attendances.CountAsync(a => a.EmployeeId == employeeId && a.IsPresent);
+
             return new EmployeeDetailsDto
             {
-                FullName = $"{user.FirstName} {user.LastName}".Trim(),
+                EmployeeId = employee.EmployeeId,
+                FullName = $"{employee.FirstName} {employee.LastName}",
                 Email = user.Email ?? "",
-                EmployeeCode = result.Employee.EmployeeCode ?? "N/A",
-                JoiningDate = result.Employee.JoiningDate,
-                Status = result.Employee.Status ?? "Active",
-                DepartmentName = result.Department?.Name ?? "N/A",
-                DesignationName = result.Designation?.Name ?? "N/A",
-                ShiftName = result.Shift?.Name ?? "No Shift Assigned",
-
-                // ✅ dynamic attendance
-                TotalDays = totalDays,
+                EmployeeCode = employee.EmployeeCode,
+                DesignationName = employee.Designation?.Name ?? "N/A",
+                DepartmentName = employee.Department?.Name ?? "N/A",
+                ShiftName = employee.Shift?.Name ?? "General Shift",
+                JoiningDate = employee.JoiningDate,
+                Status = employee.Status,
+                Role = primaryRole,
                 PresentDays = presentDays,
-
-                    RecentAttendance = recentAttendance,
-
-                    Leaves = new List<LeaveDto>
-{
-    new LeaveDto { Date = DateTime.UtcNow.AddDays(-3), Type = "Sick Leave" },
-    new LeaveDto { Date = DateTime.UtcNow.AddDays(-10), Type = "Casual Leave" }
-}
+                TotalDays = totalTrackedDays,
+                RecentAttendance = recentAttendance,
+                Leaves = recentLeaves
             };
         }
 

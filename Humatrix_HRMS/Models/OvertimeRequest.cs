@@ -17,7 +17,7 @@ namespace Humatrix_HRMS.Models
         public DateTime Date { get; set; }
 
         public double RequestedHours { get; set; }
-        public DateTime ActualCheckOut { get; set; }
+        public DateTime? ActualCheckOut { get; set; }
 
         public string Reason { get; set; } = string.Empty;
 

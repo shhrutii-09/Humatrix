@@ -10,7 +10,8 @@ namespace Humatrix_HRMS.Models
         public string UserId { get; set; }
         public ApplicationUser User { get; set; }
 
-        public Guid? EmployeeId { get; set; }
+        //public Guid? EmployeeId { get; set; }
+        public Guid EmployeeId { get; set; }
 
         [ForeignKey("EmployeeId")]
         public Employee? Employee { get; set; }
@@ -43,5 +44,13 @@ namespace Humatrix_HRMS.Models
         public bool IsManual { get; set; } = false;
 
         public Guid? UpdatedBy { get; set; }
+
+        public DateTime? SystemCheckOut { get; set; }   // auto by system
+        public DateTime? ActualCheckOut { get; set; }   // real (manual/approved)
+        public bool IsAutoCheckedOut { get; set; } = false;
+
+        public DateTime? UpdatedAt { get; set; }
+
+        public DateTime CreatedAt { get; set; }
     }
 }

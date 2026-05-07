@@ -4,8 +4,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Humatrix_HRMS.Models
 {
     /// <summary>
-    /// When an employee forgets to check out (or has a wrong check-in),
-    /// they raise a correction request. HR reviews and approves/rejects it.
+    /// Employee attendance correction request.
+    /// All timestamps stored in UTC.
+    /// Business date stored separately as DateOnly.
     /// </summary>
     public class AttendanceCorrectionRequest
     {
@@ -13,30 +14,37 @@ namespace Humatrix_HRMS.Models
         public Guid CorrectionRequestId { get; set; } = Guid.NewGuid();
 
         public Guid EmployeeId { get; set; }
-        [ForeignKey("EmployeeId")]
+
+        [ForeignKey(nameof(EmployeeId))]
         public Employee Employee { get; set; } = null!;
 
-        // The attendance record being corrected (nullable — employee might not have
-        // checked in at all, so there is no attendance row yet for that date)
         public Guid? AttendanceId { get; set; }
-        [ForeignKey("AttendanceId")]
+
+        [ForeignKey(nameof(AttendanceId))]
         public Attendance? Attendance { get; set; }
 
-        public DateTime Date { get; set; }
+        // Business date ONLY
+        public DateOnly Date { get; set; }
 
-        // What the employee CLAIMS the correct times were
+        // Stored in UTC
         public DateTime? RequestedCheckIn { get; set; }
+
+        // Stored in UTC
         public DateTime? RequestedCheckOut { get; set; }
 
         public string Reason { get; set; } = string.Empty;
 
-        // "Pending" | "Approved" | "Rejected"
+        // Pending | Approved | Rejected | Cancelled
         public string Status { get; set; } = "Pending";
 
-        public Guid? ReviewedBy { get; set; }   // HR user id
+        public Guid? ReviewedBy { get; set; }
+
+        // Stored in UTC
         public DateTime? ReviewedAt { get; set; }
+
         public string? RejectionReason { get; set; }
 
+        // Stored in UTC
         public DateTime AppliedAt { get; set; } = DateTime.UtcNow;
     }
 }

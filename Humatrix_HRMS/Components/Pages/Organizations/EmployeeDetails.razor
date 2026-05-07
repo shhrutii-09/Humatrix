@@ -58,6 +58,15 @@
                 <div class="card shadow-sm border-0 p-4 h-100">
                     <h5 class="fw-bold mb-4 border-bottom pb-2">Employment Details</h5>
                     <div class="row g-3">
+                        <div class="d-flex align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1">@data.FullName</h3>
+                                <p class="text-muted mb-0">
+                                    @data.DesignationName — @data.DepartmentName
+                                    <span class="badge bg-info-subtle text-info ms-2">@data.Role</span>
+                                </p>
+                            </div>
+                        </div>
                         <div class="col-sm-6">
                             <label class="small text-muted d-block">Employee Code</label>
                             <span class="fw-bold">@data.EmployeeCode</span>

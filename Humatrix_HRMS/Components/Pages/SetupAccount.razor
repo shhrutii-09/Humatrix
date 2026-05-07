@@ -1,5 +1,6 @@
 ﻿@page "/setup-account"
-
+@layout LoginLayout
+@using Humatrix_HRMS.Components.Account.Shared
 @using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.Components
@@ -11,24 +12,52 @@
 @inject NavigationManager Nav
 @inject ApplicationDbContext Db
 
-<h3>Set Your Password</h3>
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger">@error</div>
-}
-<EditForm Model="model" OnValidSubmit="SetPassword" FormName="setupForm">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
+<PageTitle>Set Password | Humatrix</PageTitle>
 
-    <div>
-        
-        <label>Password</label>
-        @* 3. Use InputText for better integration with EditContext *@
-        <InputText type="password" @bind-Value="model.Password" class="form-control" />
+<div class="container-fluid vh-100 d-flex align-items-center justify-content-center bg-light">
+    <div class="row w-100 shadow-sm" style="max-width: 500px; border-radius:12px; overflow:hidden;">
+
+        @* FORM CARD *@
+        <div class="col-12 bg-white p-5">
+            <h3 class="fw-bold mb-2">Set Your Password</h3>
+            <p class="text-muted small mb-4">Please create a secure password for your account.</p>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger small">@error</div>
+            }
+
+            <EditForm Model="model" OnValidSubmit="SetPassword" FormName="setupForm">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger small" />
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">New Password</label>
+                    <InputText type="password"
+                               @bind-Value="model.Password"
+                               class="form-control bg-light border-0"
+                               placeholder="Enter password" />
+                    <ValidationMessage For="() => model.Password" />
+                </div>
+
+                <button type="submit"
+                        class="btn w-100 py-2 fw-bold mt-2"
+                        style="background-color:#5c4ac7; color:white;">
+                    SUBMIT & ACTIVATE
+                </button>
+            </EditForm>
+        </div>
     </div>
+</div>
 
-    <button type="submit">Submit</button>
-</EditForm>
+<style>
+    /* Keeps style consistent with Login page */
+    .form-control:focus {
+        box-shadow: none;
+        border: 1px solid #5c4ac7;
+        background-color: #fff !important;
+    }
+</style>
 
 @code {
     [Parameter]

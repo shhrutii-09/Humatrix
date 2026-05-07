@@ -65,10 +65,37 @@ namespace Humatrix_HRMS.Data
                 .HasPrecision(5, 2);
 
             modelBuilder.Entity<Attendance>()
-    .HasIndex(a => new { a.EmployeeId, a.WorkDate })
-    .IsUnique();
+                .HasIndex(a => new { a.EmployeeId, a.WorkDate })
+                .IsUnique();
+
+            modelBuilder.Entity<Attendance>()
+                .HasOne(a => a.Employee)
+                .WithMany()
+                .HasForeignKey(a => a.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict); 
+            modelBuilder.Entity<OvertimeRequest>()
+                .HasOne(o => o.Attendance)
+                .WithMany()
+                .HasForeignKey(o => o.AttendanceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OvertimeRequest>()
+                .HasOne(o => o.Employee)
+                .WithMany()
+                .HasForeignKey(o => o.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
+            modelBuilder.Entity<Attendance>()
+    .HasOne(a => a.User)
+    .WithMany()
+    .HasForeignKey(a => a.UserId)
+    .OnDelete(DeleteBehavior.Restrict);
         }
+
     }
+
+
 
     }
     

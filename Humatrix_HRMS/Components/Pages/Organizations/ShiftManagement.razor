@@ -6,96 +6,205 @@
 @attribute [Authorize(Roles = "OrgAdmin")]
 @inject ShiftService ShiftService
 
-<h3 class="mb-4">Shift Management</h3>
+<PageTitle>Shift Management | Humatrix HRMS</PageTitle>
 
-@if (!string.IsNullOrEmpty(message))
-{
-    <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
-        @message
-        <button type="button" class="btn-close" @onclick="() => message = null"></button>
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Shift Management</h2>
+        <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadShifts">
+            <i class="bi bi-arrow-clockwise"></i> REFRESH
+        </button>
     </div>
-}
 
-<div class="card p-4 shadow-sm mb-4">
-    <h5 class="card-title">Create New Shift</h5>
-    <EditForm Model="newShift" OnValidSubmit="HandleCreate" FormName="AddShiftForm">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" />
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show border-0 shadow-sm" role="alert">
+            <i class="bi @(isError ? "bi-exclamation-triangle" : "bi-check-circle") me-2"></i>
+            @message
+            <button type="button" class="btn-close" @onclick="() => message = null"></button>
+        </div>
+    }
 
-        <div class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Shift Name</label>
-                <InputText @bind-Value="newShift.Name" class="form-control" placeholder="e.g. Day Shift" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Start Time</label>
-                <input type="time" @bind="startTime" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">End Time</label>
-                <input type="time" @bind="endTime" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Grace (Mins)</label>
-                <InputNumber @bind-Value="newShift.LateAllowanceMinutes" class="form-control" />
-            </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-plus-circle"></i> Add Shift
-                </button>
+    <!-- STATS (Dynamic) -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-primary border-4">
+                <div class="card-body py-3">
+                    <small class="text-muted fw-bold text-uppercase">Total Shifts</small>
+                    <h3 class="mb-0">@shifts.Count</h3>
+                </div>
             </div>
         </div>
-    </EditForm>
-</div>
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-info border-4">
+                <div class="card-body py-3">
+                    <small class="text-muted fw-bold text-uppercase">Standard Full Day</small>
+                    <h3 class="mb-0">@(shifts.FirstOrDefault()?.MinimumHoursForFullDay ?? 0) <small class="fs-6 text-muted">Hrs</small></h3>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<div class="card shadow-sm">
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="ps-4">Name</th>
-                    <th>Timing</th>
-                    <th>Grace Period</th>
-                    <th>Full Day Req.</th>
-                    <th>Half Day Req.</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (shifts == null || !shifts.Any())
-                {
+    <!-- CREATE / EDIT SECTION -->
+    <div class="custom-card p-4 mb-4" style="border-left: 4px solid @(isEditing ? "#ffc107" : "#5c4ac7") !important;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold">@(isEditing ? "Edit Shift" : "Create New Shift")</h5>
+            @if (isEditing)
+            {
+                <button class="btn btn-sm btn-outline-secondary border-0" @onclick="CancelEdit">
+                    <i class="bi bi-x-circle"></i> Cancel Edit
+                </button>
+            }
+        </div>
+
+        <EditForm Model="shiftModel" OnValidSubmit="HandleSubmit" FormName="ShiftForm">
+            <DataAnnotationsValidator />
+
+            <!-- Row 1: Basic Info -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label-custom">Shift Name</label>
+                    <InputText @bind-Value="shiftModel.Name" class="form-control" placeholder="e.g. Day Shift" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label-custom">Start Time</label>
+                    <input type="time" @bind="startTime" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label-custom">End Time</label>
+                    <input type="time" @bind="endTime" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label-custom">Grace (Mins)</label>
+                    <InputNumber @bind-Value="shiftModel.LateAllowanceMinutes" class="form-control" />
+                </div>
+            </div>
+
+            <!-- Row 2: Dynamic Requirements -->
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label-custom">Full Day Requirement (Hrs)</label>
+                    <InputNumber @bind-Value="shiftModel.MinimumHoursForFullDay" class="form-control" step="0.5" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label-custom">Half Day Requirement (Hrs)</label>
+                    <InputNumber @bind-Value="shiftModel.MinimumHoursForHalfDay" class="form-control" step="0.5" />
+                </div>
+                <div class="col-md-6 text-end">
+                    <button type="submit" class="btn @(isEditing ? "btn-warning" : "btn-primary") shadow-sm px-5"
+                            style="@(isEditing ? "" : "background-color: #5c4ac7; border: none;")">
+                        <i class="bi @(isEditing ? "bi-check-circle" : "bi-plus-circle") me-2"></i>
+                        @(isEditing ? "UPDATE SHIFT" : "SAVE NEW SHIFT")
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+
+    <!-- TABLE SECTION -->
+    <div class="custom-card overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0 align-middle">
+                <thead>
                     <tr>
-                        <td colspan="5" class="text-center py-4 text-muted">No shifts defined yet.</td>
+                        <th class="ps-4">SHIFT NAME</th>
+                        <th>TIMING</th>
+                        <th>GRACE</th>
+                        <th>FULL DAY REQ.</th>
+                        <th>HALF DAY REQ.</th>
+                        <th class="text-end pe-4">ACTIONS</th>
                     </tr>
-                }
-                else
-                {
-                    @foreach (var shift in shifts)
+                </thead>
+                <tbody>
+                    @if (shifts == null || !shifts.Any())
                     {
                         <tr>
-                            <td class="ps-4 fw-bold">@shift.Name</td>
-                            <td>
-                                <span class="badge bg-info text-dark">
-                                    @DateTime.Today.Add(shift.StartTime).ToString("hh:mm tt")
-                                    -
-                                    @DateTime.Today.Add(shift.EndTime).ToString("hh:mm tt")
-                                </span>
-                            </td>
-                            <td>@shift.LateAllowanceMinutes mins</td>
-                            <td>@shift.MinimumHoursForFullDay hrs</td>
-                            <td>@shift.MinimumHoursForHalfDay hrs</td>
+                            <td colspan="6" class="text-center py-5 text-muted">No shifts defined yet.</td>
                         </tr>
                     }
-                }
-            </tbody>
-        </table>
+                    else
+                    {
+                        @foreach (var shift in shifts)
+                        {
+                            <tr class="@(editingShiftId == shift.ShiftId ? "table-active-edit" : "")">
+                                <td class="ps-4 fw-bold text-dark">@shift.Name</td>
+                                <td>
+                                    <span class="badge rounded-pill px-3 py-2" style="background-color: #f0f7ff; color: #0056b3; border: 1px solid #d0e3ff;">
+                                        @DateTime.Today.Add(shift.StartTime).ToString("hh:mm tt")
+                                        -
+                                        @DateTime.Today.Add(shift.EndTime).ToString("hh:mm tt")
+                                    </span>
+                                </td>
+                                <td><span class="text-muted small">@shift.LateAllowanceMinutes m</span></td>
+                                <td><span class="badge bg-light text-dark fw-normal border">@shift.MinimumHoursForFullDay hrs</span></td>
+                                <td><span class="badge bg-light text-dark fw-normal border">@shift.MinimumHoursForHalfDay hrs</span></td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-primary border-0" @onclick="() => StartEdit(shift)">
+                                        <i class="bi bi-pencil-square me-1"></i>Edit
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
+
+<style>
+    .custom-card {
+        background: #ffffff;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-label-custom {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #6c757d;
+        text-transform: uppercase;
+        margin-bottom: 0.4rem;
+        display: block;
+    }
+
+    .table-custom {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+        .table-custom thead th {
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #fcfcfc;
+            font-weight: 700;
+            color: #888;
+            font-size: 0.7rem;
+            letter-spacing: 0.8px;
+            padding: 14px 8px;
+        }
+
+        .table-custom td {
+            border-bottom: 1px solid #f2f2f2;
+            vertical-align: middle;
+            padding: 14px 8px;
+            font-size: 0.9rem;
+        }
+
+    .table-active-edit {
+        background-color: #fffdf5;
+    }
+</style>
 
 @code {
     private List<Shift> shifts = new();
-    private Shift newShift = new();
+    private Shift shiftModel = new();
 
-    // Form Helper variables for the HTML5 time input
+    private bool isEditing = false;
+    private Guid? editingShiftId = null;
+
     private DateTime startTime = DateTime.Today.AddHours(9);
     private DateTime endTime = DateTime.Today.AddHours(18);
 
@@ -112,40 +221,62 @@
         shifts = await ShiftService.GetAllShiftsAsync();
     }
 
-    private async Task HandleCreate()
+    private void StartEdit(Shift shift)
+    {
+        isEditing = true;
+        editingShiftId = shift.ShiftId;
+
+        // Clone values so we don't edit the list item directly until saved
+        shiftModel = new Shift
+        {
+            Name = shift.Name,
+            LateAllowanceMinutes = shift.LateAllowanceMinutes,
+            MinimumHoursForFullDay = shift.MinimumHoursForFullDay,
+            MinimumHoursForHalfDay = shift.MinimumHoursForHalfDay
+        };
+
+        startTime = DateTime.Today.Add(shift.StartTime);
+        endTime = DateTime.Today.Add(shift.EndTime);
+        message = null;
+    }
+
+    private void CancelEdit()
+    {
+        isEditing = false;
+        editingShiftId = null;
+        shiftModel = new Shift();
+        startTime = DateTime.Today.AddHours(9);
+        endTime = DateTime.Today.AddHours(18);
+    }
+
+    private async Task HandleSubmit()
     {
         try
         {
             isError = false;
             message = "";
 
-            // 1. Assign values from local helper variables
-            newShift.StartTime = startTime.TimeOfDay;
-            newShift.EndTime = endTime.TimeOfDay;
+            shiftModel.StartTime = startTime.TimeOfDay;
+            shiftModel.EndTime = endTime.TimeOfDay;
 
-            // 2. Simple validation check
-            if (string.IsNullOrWhiteSpace(newShift.Name))
+            if (isEditing && editingShiftId.HasValue)
             {
-                isError = true;
-                message = "Shift Name is required.";
-                return;
+                await ShiftService.UpdateShiftAsync(editingShiftId.Value, shiftModel);
+                message = "Shift updated successfully.";
+            }
+            else
+            {
+                await ShiftService.CreateShiftAsync(shiftModel);
+                message = "New shift created successfully.";
             }
 
-            // 3. Save to database via Service
-            await ShiftService.CreateShiftAsync(newShift);
-
-            // 4. Reset UI
-            message = $"Successfully added shift: {newShift.Name}";
-            newShift = new Shift(); // Reset Model
-            startTime = DateTime.Today.AddHours(9); // Reset Timepicker
-            endTime = DateTime.Today.AddHours(18);
-
+            CancelEdit();
             await LoadShifts();
         }
         catch (Exception ex)
         {
             isError = true;
-            message = $"Error saving shift: {ex.Message}";
+            message = ex.Message;
         }
     }
 }

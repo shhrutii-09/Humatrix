@@ -11,6 +11,7 @@
         public const string HalfDayLeave = "Half Day Leave";
 
         // ✅ ADD THIS (your system is using it somewhere)
+        public const string EarlyExit = "Early Exit";
         public const string WorkFromHome = "Work From Home";
     }
 }

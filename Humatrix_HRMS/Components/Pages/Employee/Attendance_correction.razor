@@ -1,0 +1,566 @@
+﻿@page "/employee/attendance-correction"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Employee")]
+
+@inject AttendanceCorrectionService CorrectionService
+
+<PageTitle>Attendance Correction</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+
+        <div>
+            <h2 class="fw-semibold mb-1">
+                Attendance Correction
+            </h2>
+
+            <p class="text-muted mb-0 small">
+                Request correction for missing or incorrect attendance records.
+            </p>
+        </div>
+
+        <button class="btn btn-outline-secondary shadow-sm"
+                @onclick="LoadRequests">
+
+            <i class="bi bi-arrow-clockwise me-2"></i>
+            Refresh
+
+        </button>
+
+    </div>
+
+    <!-- ALERT -->
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show border-0 shadow-sm mb-4">
+
+            <div class="d-flex align-items-center">
+
+                <i class="bi @(isError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2"></i>
+
+                <span>@message</span>
+
+            </div>
+
+            <button type="button"
+                    class="btn-close"
+                    @onclick="ClearMessage">
+            </button>
+
+        </div>
+    }
+
+    <div class="row g-4">
+
+        <!-- FORM -->
+        <div class="col-lg-4">
+
+            <div class="custom-card p-4">
+
+                <div class="d-flex align-items-center mb-4">
+                    <div class="icon-box me-3">
+                        <i class="bi bi-pencil-square"></i>
+                    </div>
+
+                    <div>
+                        <h5 class="fw-bold mb-0">
+                            Raise Request
+                        </h5>
+
+                        <small class="text-muted">
+                            Submit attendance correction
+                        </small>
+                    </div>
+                </div>
+
+                <!-- DATE -->
+                <div class="mb-3">
+
+                    <label class="form-label-custom">
+                        Date
+                    </label>
+
+                    <InputDate class="form-control form-control-custom"
+                               @bind-Value="requestDto.Date" />
+
+                </div>
+
+                <!-- CHECK IN -->
+                <div class="mb-3">
+
+                    <label class="form-label-custom">
+                        Requested Check-In
+                    </label>
+
+                    <input type="time"
+                           class="form-control form-control-custom"
+                           value="@requestedInText"
+                           @onchange="HandleCheckInChange" />
+
+                </div>
+
+                <!-- CHECK OUT -->
+                <div class="mb-3">
+
+                    <label class="form-label-custom">
+                        Requested Check-Out
+                    </label>
+
+                    <input type="time"
+                           class="form-control form-control-custom"
+                           value="@requestedOutText"
+                           @onchange="HandleCheckOutChange" />
+
+                </div>
+
+                <!-- REASON -->
+                <div class="mb-4">
+
+                    <label class="form-label-custom">
+                        Reason
+                    </label>
+
+                    <textarea class="form-control form-control-custom"
+                              rows="4"
+                              maxlength="500"
+                              placeholder="Enter proper reason..."
+                              @bind="requestDto.Reason">
+                    </textarea>
+
+                    <div class="small text-muted mt-1 text-end">
+                        @(requestDto.Reason?.Length ?? 0)/500
+                    </div>
+
+                </div>
+
+                <!-- SUBMIT -->
+                <div class="d-grid">
+
+                    <button class="btn submit-btn"
+                            @onclick="HandleSubmit"
+                            disabled="@isSubmitting">
+
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Submitting...</span>
+                        }
+                        else
+                        {
+                            <span>
+                                <i class="bi bi-send-check me-2"></i>
+                                Submit Request
+                            </span>
+                        }
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- HISTORY -->
+        <div class="col-lg-8">
+
+            <div class="custom-card overflow-hidden">
+
+                <div class="table-header px-4 py-3 border-bottom">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <div>
+                            <h5 class="fw-bold mb-0">
+                                My Requests
+                            </h5>
+
+                            <small class="text-muted">
+                                Attendance correction history
+                            </small>
+                        </div>
+
+                        <span class="request-count">
+                            @requests.Count
+                        </span>
+
+                    </div>
+
+                </div>
+
+                <div class="table-responsive">
+
+                    <table class="table table-custom align-middle mb-0">
+
+                        <thead>
+                            <tr>
+                                <th class="ps-4">DATE</th>
+                                <th>CHECK-IN</th>
+                                <th>CHECK-OUT</th>
+                                <th>STATUS</th>
+                                <th>REASON</th>
+                                <th class="text-end pe-4">ACTION</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @if (!requests.Any())
+                            {
+                                <tr>
+                                    <td colspan="6"
+                                        class="text-center py-5">
+
+                                        <div class="empty-state">
+
+                                            <i class="bi bi-inbox fs-1 d-block mb-3 text-muted"></i>
+
+                                            <h6 class="fw-semibold text-muted">
+                                                No requests found
+                                            </h6>
+
+                                            <small class="text-muted">
+                                                Your attendance correction requests will appear here.
+                                            </small>
+
+                                        </div>
+
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var req in requests)
+                                {
+                                    <tr>
+
+                                        <td class="ps-4">
+
+                                            <div class="fw-semibold">
+                                                @req.Date.ToString("dd MMM yyyy")
+                                            </div>
+
+                                            <small class="text-muted">
+                                                @req.Date.DayOfWeek
+                                            </small>
+
+                                        </td>
+
+                                        <td>
+                                            @(req.RequestedCheckIn?.ToString("hh:mm tt") ?? "--")
+                                        </td>
+
+                                        <td>
+                                            @(req.RequestedCheckOut?.ToString("hh:mm tt") ?? "--")
+                                        </td>
+
+                                        <td>
+
+                                            <span class="badge status-badge @GetStatusClass(req.Status)">
+                                                @req.Status
+                                            </span>
+
+                                        </td>
+
+                                        <td style="max-width:260px;">
+
+                                            <div class="reason-text"
+                                                 title="@req.Reason">
+
+                                                @req.Reason
+
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(req.RejectionReason))
+                                            {
+                                                <div class="small text-danger mt-1">
+                                                    @req.RejectionReason
+                                                </div>
+                                            }
+
+                                        </td>
+
+                                        <td class="text-end pe-4">
+
+                                            @if (req.Status == "Pending")
+                                            {
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        title="Cancel Request"
+                                                        @onclick="() => CancelRequest(req.CorrectionRequestId)">
+
+                                                    <i class="bi bi-x-circle"></i>
+
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small">
+                                                    --
+                                                </span>
+                                            }
+
+                                        </td>
+
+                                    </tr>
+                                }
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<style>
+
+    body {
+        background-color: #f7f8fc;
+    }
+
+    .custom-card {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 16px;
+        box-shadow: 0 4px 14px rgba(0,0,0,.04);
+    }
+
+    .icon-box {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        background: rgba(92,74,199,.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #5c4ac7;
+        font-size: 1.1rem;
+    }
+
+    .form-label-custom {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #6c757d;
+        margin-bottom: .45rem;
+        display: block;
+        letter-spacing: .5px;
+    }
+
+    .form-control-custom {
+        border-radius: 10px;
+        border: 1px solid #dfe3ea;
+        padding: .7rem .85rem;
+        box-shadow: none !important;
+    }
+
+        .form-control-custom:focus {
+            border-color: #5c4ac7;
+        }
+
+    .submit-btn {
+        background: #5c4ac7;
+        border: none;
+        color: white;
+        border-radius: 10px;
+        padding: .8rem;
+        font-weight: 600;
+        transition: .2s ease;
+    }
+
+        .submit-btn:hover {
+            background: #4d3db2;
+            color: white;
+        }
+
+        .submit-btn:disabled {
+            opacity: .8;
+        }
+
+    .table-header {
+        background: #fafafe;
+    }
+
+    .request-count {
+        background: #5c4ac7;
+        color: white;
+        border-radius: 50px;
+        padding: .35rem .75rem;
+        font-size: .8rem;
+        font-weight: 600;
+    }
+
+    .table-custom thead th {
+        background: #fcfcfd;
+        font-size: .72rem;
+        color: #6c757d;
+        letter-spacing: .7px;
+        border-bottom: 1px solid #ececec;
+        padding: 14px 10px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .table-custom td {
+        padding: 16px 10px;
+        border-bottom: 1px solid #f1f3f6;
+        vertical-align: middle;
+    }
+
+    .table-custom tbody tr:hover {
+        background: #fafbff;
+    }
+
+    .status-badge {
+        font-size: .72rem;
+        padding: .5rem .7rem;
+        border-radius: 50px;
+        font-weight: 600;
+    }
+
+    .reason-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .empty-state {
+        padding: 30px 0;
+    }
+
+</style>
+
+@code {
+
+    private List<CorrectionRequestDto> requests = new();
+
+    private CreateCorrectionRequestDto requestDto = new()
+    {
+        Date = DateOnly.FromDateTime(DateTime.Today)
+    };
+
+    private string requestedInText = "";
+    private string requestedOutText = "";
+
+    private bool isSubmitting;
+    private bool isError;
+
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRequests();
+    }
+
+    private async Task LoadRequests()
+    {
+        requests = await CorrectionService.GetMyRequestsAsync();
+    }
+
+    private void HandleCheckInChange(ChangeEventArgs e)
+    {
+        requestedInText = e.Value?.ToString() ?? "";
+    }
+
+    private void HandleCheckOutChange(ChangeEventArgs e)
+    {
+        requestedOutText = e.Value?.ToString() ?? "";
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            isSubmitting = true;
+
+            isError = false;
+
+            message = null;
+
+            requestDto.RequestedCheckIn = null;
+            requestDto.RequestedCheckOut = null;
+
+            if (!string.IsNullOrWhiteSpace(requestedInText))
+            {
+                requestDto.RequestedCheckIn =
+                    TimeSpan.Parse(requestedInText);
+            }
+
+            if (!string.IsNullOrWhiteSpace(requestedOutText))
+            {
+                requestDto.RequestedCheckOut =
+                    TimeSpan.Parse(requestedOutText);
+            }
+
+            await CorrectionService.RaiseRequestAsync(requestDto);
+
+            message = "Attendance correction request submitted successfully.";
+
+            requestDto = new CreateCorrectionRequestDto
+            {
+                Date = DateOnly.FromDateTime(DateTime.Today)
+            };
+
+            requestedInText = "";
+            requestedOutText = "";
+
+            await LoadRequests();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task CancelRequest(Guid id)
+    {
+        try
+        {
+            isError = false;
+
+            await CorrectionService.CancelRequestAsync(id);
+
+            message = "Request cancelled successfully.";
+
+            await LoadRequests();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+    }
+
+    private void ClearMessage()
+    {
+        message = null;
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Approved" => "bg-success",
+        "Rejected" => "bg-danger",
+        "Pending" => "bg-warning text-dark",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-dark"
+    };
+}

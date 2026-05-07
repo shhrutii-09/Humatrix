@@ -1,0 +1,347 @@
+﻿@page "/employee/overtime"
+@rendermode InteractiveServer
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.DTOs
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Employee,HR,OrgAdmin")]
+@inject OvertimeService OvertimeService
+@inject AttendanceService AttendanceService
+
+<PageTitle>My Overtime | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-normal">Overtime Requests</h2>
+        <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadData">
+            <i class="bi bi-arrow-clockwise"></i> REFRESH
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show border-0 shadow-sm">
+            @message
+            <button type="button" class="btn-close" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    <div class="row g-4">
+
+        <!-- ══════════════════════════════════════════════
+             LEFT PANEL — Days eligible to claim OT
+        ══════════════════════════════════════════════ -->
+        <div class="col-lg-5">
+            <div class="custom-card p-4 h-100">
+                <h5 class="fw-bold mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Claimable Overtime</h5>
+                <p class="text-muted small mb-3">
+                    Days where you worked beyond shift hours.
+                    Enter the time you actually left to raise a request.
+                </p>
+
+                @if (eligibleRecords == null || !eligibleRecords.Any())
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-check2-circle fs-2"></i>
+                        <p class="mt-2 mb-0">No pending overtime to claim.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var record in eligibleRecords)
+                        {
+                            <div class="list-group-item border-0 px-0 mb-2">
+                                <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light border shadow-sm">
+                                    <div>
+                                        <div class="fw-bold">@record.Date.ToString("ddd, MMM dd yyyy")</div>
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle mt-1">
+                                            Worked: @(record.TotalHours?.ToString("F2")) hrs
+                                        </span>
+                                    </div>
+                                    @if (selectedRecord?.AttendanceId == record.AttendanceId)
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="() => selectedRecord = null">
+                                            Cancel
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-primary px-3"
+                                                @onclick="() => SelectRecord(record)">
+                                            CLAIM
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Claim form — shown inline when a record is selected -->
+                @if (selectedRecord != null)
+                {
+                    <div class="mt-3 p-3 border rounded bg-white shadow-sm border-primary">
+                        <h6 class="fw-bold text-primary mb-3">
+                            Claim Overtime — @selectedRecord.Date.ToString("ddd, MMM dd")
+                        </h6>
+
+                        <div class="mb-3">
+                            <label class="form-label-custom">Shift / System Checkout</label>
+                            <input class="form-control bg-light"
+                                   value="@(selectedRecord.CheckOut?.ToLocalTime().ToString("hh:mm tt"))"
+                                   readonly />
+                            <div class="form-text">This is when your shift officially ended.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label-custom">Actual Time You Left <span class="text-danger">*</span></label>
+                            <!--
+                                Use a time input. The value is stored as a local DateTime so the
+                                service can convert it to UTC correctly.
+                            -->
+                            <input type="time"
+                                   class="form-control"
+                                   @bind="actualCheckOutTime" />
+                            <div class="form-text">Must be after the shift checkout shown above.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label-custom">Reason <span class="text-danger">*</span></label>
+                            <textarea class="form-control"
+                                      rows="3"
+                                      placeholder="What task/project kept you working longer?"
+                                      @bind="requestReason"></textarea>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary"
+                                    disabled="@isSubmitting"
+                                    @onclick="HandleSubmit">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                SUBMIT REQUEST
+                            </button>
+                            <button class="btn btn-link btn-sm text-muted"
+                                    @onclick="() => selectedRecord = null">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════
+             RIGHT PANEL — Request history
+        ══════════════════════════════════════════════ -->
+        <div class="col-lg-7">
+            <div class="custom-card overflow-hidden">
+                <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">My Overtime History</h5>
+                    <span class="badge bg-secondary">@myRequests.Count total</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-custom table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">DATE</th>
+                                <th>REQ. HOURS</th>
+                                <th>ACTUAL OUT</th>
+                                <th>STATUS</th>
+                                <th class="pe-4">REASON</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!myRequests.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="text-center py-5 text-muted">
+                                        No overtime requests yet.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var req in myRequests)
+                                {
+                                    <tr>
+                                        <td class="ps-4 fw-bold">@req.Date.ToString("dd MMM yyyy")</td>
+                                        <td>
+                                            <span class="badge bg-warning text-dark">
+                                                @req.RequestedHours.ToString("F2") hrs
+                                            </span>
+                                        </td>
+                                        <td class="font-monospace small">
+                                            @req.ActualCheckOut?.ToLocalTime().ToString("hh:mm tt")
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetStatusClass(req.Status)">
+                                                @req.Status
+                                            </span>
+                                        </td>
+                                        <td class="text-muted small pe-4 text-truncate"
+                                            style="max-width:200px;"
+                                            title="@req.Reason">
+                                            @req.Reason
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .custom-card {
+        background: #ffffff;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,.05);
+    }
+
+    .form-label-custom {
+        font-size: .75rem;
+        font-weight: 700;
+        color: #6c757d;
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: .3rem;
+    }
+
+    .table-custom thead th {
+        background-color: #fcfcfc;
+        font-size: .7rem;
+        color: #888;
+        letter-spacing: .8px;
+        padding: 14px 8px;
+    }
+
+    .table-custom td {
+        border-bottom: 1px solid #f2f2f2;
+        padding: 12px 8px;
+        font-size: .9rem;
+    }
+
+    .bg-info-subtle {
+        background-color: #e0f7fa !important;
+    }
+</style>
+
+@code {
+    // ── State ────────────────────────────────────────────────────────────────────
+    private List<AttendanceListDto> eligibleRecords = new();
+    private List<OvertimeRequest> myRequests = new();
+    private AttendanceListDto? selectedRecord;
+
+    // Form fields
+    private DateTime actualCheckOutTime = DateTime.Now;
+    private string requestReason = string.Empty;
+
+    private string? message;
+    private bool isError;
+    private bool isSubmitting;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        message = null;
+        selectedRecord = null;
+
+        // Attendance records where NeedsOvertimeApproval=true and no request raised yet
+        var allAttendance = await AttendanceService.GetMyAttendanceAsync();
+
+        eligibleRecords = allAttendance
+            .Where(a =>
+                a.NeedsOvertimeApproval == true &&
+                (a.OvertimeStatus == null || a.OvertimeStatus == "Rejected") &&
+                a.Date < DateTime.Today)
+            .OrderByDescending(a => a.Date)
+            .ToList();
+
+        // Full request history (new method on OvertimeService)
+        myRequests = await OvertimeService.GetMyRequestsAsync();
+    }
+
+    // ── Select a record to claim OT ───────────────────────────────────────────
+    private void SelectRecord(AttendanceListDto record)
+    {
+        selectedRecord = record;
+        requestReason = string.Empty;
+
+        // Pre-fill actual checkout = recorded checkout (employee can adjust upward)
+        actualCheckOutTime = record.CheckOut.HasValue
+            ? record.CheckOut.Value.ToLocalTime()
+            : DateTime.Now;
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+    private async Task HandleSubmit()
+    {
+        if (selectedRecord == null) return;
+
+        if (string.IsNullOrWhiteSpace(requestReason))
+        {
+            isError = true;
+            message = "Please provide a reason for the overtime request.";
+            return;
+        }
+
+        try
+        {
+            isSubmitting = true;
+            isError = false;
+            message = null;
+
+            // Build a full UTC DateTime for the actual checkout.
+            // actualCheckOutTime is a local (client) DateTime; the service converts to UTC
+            // using the org timezone — so we pass it as-is (unspecified kind is treated
+            // as org-local inside the service).
+            var workDate = selectedRecord.Date;
+            var actualLocal = new DateTime(
+                workDate.Year, workDate.Month, workDate.Day,
+                actualCheckOutTime.Hour, actualCheckOutTime.Minute, 0,
+                DateTimeKind.Unspecified);
+
+            var dto = new CreateOvertimeRequestDto
+            {
+                AttendanceId = selectedRecord.AttendanceId ?? Guid.Empty,
+                ActualCheckOut = actualLocal, // service converts to UTC
+                Reason = requestReason
+            };
+
+            await OvertimeService.RaiseRequestAsync(dto);
+
+            message = "Overtime request submitted successfully.";
+            selectedRecord = null;
+            requestReason = string.Empty;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Approved" => "bg-success",
+        "Rejected" => "bg-danger",
+        _ => "bg-warning text-dark"
+    };
+}

@@ -20,7 +20,8 @@
             <small class="text-muted">Review and manage employee leave requests</small>
         </div>
 
-        <select class="form-select w-auto" @bind="selectedStatus">
+        @* Changed to @onchange to properly handle async state *@
+        <select class="form-select w-auto" @onchange="HandleStatusChange">
             <option value="">All Requests</option>
             <option value="Pending">Pending Only</option>
             <option value="Approved">Approved</option>
@@ -59,7 +60,8 @@
                     {
                         <tr>
                             <td colspan="7" class="text-center py-4">
-                                <div class="spinner-border"></div>
+                                <div class="spinner-border text-primary"></div>
+                                <div class="mt-2"><small class="text-muted">Loading requests...</small></div>
                             </td>
                         </tr>
                     }
@@ -76,48 +78,38 @@
                         @foreach (var l in leaves.OrderBy(x => x.Status != "Pending"))
                         {
                             <tr class="@(l.Status == "Pending" ? "table-warning" : "")">
-
                                 <td>
                                     <div class="fw-semibold">@l.EmployeeName</div>
                                     <small class="text-muted">@l.Reason</small>
                                 </td>
-
                                 <td>@l.Department</td>
                                 <td>@l.LeaveTypeName</td>
-
                                 <td>
                                     <small>
                                         @l.FromDate.ToString("dd MMM") →
                                         @l.ToDate.ToString("dd MMM")
                                     </small>
                                 </td>
-
                                 <td>@l.TotalDays</td>
-
                                 <td>
                                     <span class="badge @GetStatusClass(l.Status)">
                                         @l.Status
                                     </span>
                                 </td>
-
                                 <td class="text-end">
-
                                     @if (l.Status == "Pending")
                                     {
                                         <div class="d-flex justify-content-end gap-2">
-
                                             <button class="btn btn-sm btn-success"
                                                     disabled="@actionLoading"
                                                     @onclick="() => ConfirmApprove(l.LeaveRequestId)">
                                                 Approve
                                             </button>
-
                                             <button class="btn btn-sm btn-outline-danger"
                                                     disabled="@actionLoading"
                                                     @onclick="() => OpenReject(l)">
                                                 Reject
                                             </button>
-
                                         </div>
                                     }
                                     else if (l.Status == "Rejected")
@@ -126,65 +118,55 @@
                                             @l.RejectionReason
                                         </small>
                                     }
-
                                 </td>
-
                             </tr>
                         }
                     }
                 </tbody>
             </table>
-
         </div>
     </div>
 
     <!-- REJECT MODAL -->
     @if (showRejectModal)
     {
-        <div class="modal fade show d-block">
+        <div class="modal fade show d-block" tabindex="-1">
             <div class="modal-dialog">
                 <div class="modal-content shadow">
-
                     <div class="modal-header">
                         <h5 class="modal-title">Reject Leave</h5>
                         <button class="btn-close" @onclick="CloseReject"></button>
                     </div>
-
                     <div class="modal-body">
                         <label class="form-label">Reason</label>
                         <textarea class="form-control"
                                   rows="3"
                                   @bind="rejectReason"></textarea>
                     </div>
-
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" @onclick="CloseReject">
-                            Cancel
-                        </button>
-
+                        <button class="btn btn-secondary" @onclick="CloseReject">Cancel</button>
                         <button class="btn btn-danger"
                                 disabled="@actionLoading"
                                 @onclick="ConfirmReject">
                             Reject
                         </button>
                     </div>
-
                 </div>
             </div>
         </div>
-
         <div class="modal-backdrop fade show"></div>
     }
-
 </div>
 
 <style>
     .badge-success {
         background: #198754;
+        color: white;
     }
 
     .badge-danger {
         background: #dc3545;
+        color: white;
     }
 
     .badge-warning {
@@ -194,40 +176,49 @@
 </style>
 
 @code {
-
     private List<LeaveRequestDto> leaves = new();
-
     private bool loading = false;
     private bool actionLoading = false;
-
     private string? message;
     private string messageType = "success";
-
     private bool showRejectModal = false;
     private Guid selectedLeaveId;
     private string rejectReason = "";
-
-    private string? _selectedStatus;
-    private string? selectedStatus
-    {
-        get => _selectedStatus;
-        set
-        {
-            _selectedStatus = value;
-            _ = LoadData();
-        }
-    }
+    private string? selectedStatus;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
     }
 
+    private async Task HandleStatusChange(ChangeEventArgs e)
+    {
+        selectedStatus = e.Value?.ToString();
+        await LoadData();
+    }
+
     private async Task LoadData()
     {
-        loading = true;
-        leaves = await LeaveService.GetAllForHRAsync(selectedStatus);
-        loading = false;
+        // Guard to prevent multiple simultaneous loads
+        if (loading) return;
+
+        try
+        {
+            loading = true;
+            StateHasChanged(); // Ensure the UI shows the spinner immediately
+
+            leaves = await LeaveService.GetAllForHRAsync(selectedStatus);
+        }
+        catch (Exception ex)
+        {
+            message = "Error loading data: " + ex.Message;
+            messageType = "danger";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged(); // Ensure the spinner hides
+        }
     }
 
     private async Task ConfirmApprove(Guid id)
@@ -235,12 +226,9 @@
         try
         {
             actionLoading = true;
-
             await LeaveService.UpdateStatusAsync(id, "Approved");
-
             message = "Leave approved successfully";
             messageType = "success";
-
             await LoadData();
         }
         catch (Exception ex)
@@ -261,10 +249,7 @@
         showRejectModal = true;
     }
 
-    private void CloseReject()
-    {
-        showRejectModal = false;
-    }
+    private void CloseReject() => showRejectModal = false;
 
     private async Task ConfirmReject()
     {
@@ -278,16 +263,9 @@
         try
         {
             actionLoading = true;
-
-            await LeaveService.UpdateStatusAsync(
-                selectedLeaveId,
-                "Rejected",
-                rejectReason
-            );
-
+            await LeaveService.UpdateStatusAsync(selectedLeaveId, "Rejected", rejectReason);
             message = "Leave rejected";
             messageType = "warning";
-
             showRejectModal = false;
             await LoadData();
         }

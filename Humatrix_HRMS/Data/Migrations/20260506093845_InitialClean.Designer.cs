@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260429064856_systemJobIDK")]
-    partial class systemJobIDK
+    [Migration("20260506093845_InitialClean")]
+    partial class InitialClean
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -120,17 +120,23 @@ namespace Humatrix_HRMS.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("ActualCheckOut")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double>("ApprovedOvertimeHours")
+                        .HasColumnType("float");
+
                     b.Property<DateTime?>("CheckIn")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("CheckOut")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("EmployeeId")
+                    b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsAutoCheckedOut")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsManual")
                         .HasColumnType("bit");
@@ -144,6 +150,9 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<double?>("Longitude")
                         .HasColumnType("float");
 
+                    b.Property<bool>("NeedsOvertimeApproval")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -153,6 +162,9 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("SystemCheckOut")
+                        .HasColumnType("datetime2");
 
                     b.Property<double?>("TotalHours")
                         .HasColumnType("float");
@@ -164,11 +176,15 @@ namespace Humatrix_HRMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<DateTime>("WorkDate")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("AttendanceId");
 
-                    b.HasIndex("EmployeeId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("EmployeeId", "WorkDate")
+                        .IsUnique();
 
                     b.ToTable("Attendances");
                 });
@@ -343,6 +359,10 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("EmployeeId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("OrganizationId");
 
                     b.HasIndex("ShiftId");
 
@@ -557,9 +577,60 @@ namespace Humatrix_HRMS.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("OrganizationId");
 
                     b.ToTable("Organizations");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.OvertimeRequest", b =>
+                {
+                    b.Property<Guid>("OvertimeRequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ActualCheckOut")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("AppliedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("AttendanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("RequestedHours")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("OvertimeRequestId");
+
+                    b.HasIndex("AttendanceId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("OvertimeRequests");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Shift", b =>
@@ -870,12 +941,14 @@ namespace Humatrix_HRMS.Migrations
                 {
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
-                        .HasForeignKey("EmployeeId");
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("Humatrix_HRMS.Data.ApplicationUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Employee");
@@ -902,9 +975,25 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Employee", b =>
                 {
+                    b.HasOne("Humatrix_HRMS.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Humatrix_HRMS.Models.Shift", "Shift")
                         .WithMany()
                         .HasForeignKey("ShiftId");
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Organization");
 
                     b.Navigation("Shift");
                 });
@@ -945,6 +1034,25 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("LeaveType");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.OvertimeRequest", b =>
+                {
+                    b.HasOne("Humatrix_HRMS.Models.Attendance", "Attendance")
+                        .WithMany()
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Attendance");
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.UserInvite", b =>
