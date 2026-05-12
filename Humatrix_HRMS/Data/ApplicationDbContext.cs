@@ -40,7 +40,10 @@ namespace Humatrix_HRMS.Data
 
         public DbSet<AttendanceCorrectionRequest> AttendanceCorrectionRequests { get; set; }
 
-        public DbSet<AttendanceAuditLog> AttendanceAuditLogs { get; set; }
+        //public DbSet<CorrectionAuditLog> AttendanceAuditLogs { get; set; }
+
+        public DbSet<CorrectionAuditLog> CorrectionAuditLogs { get; set; }
+
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }
@@ -86,17 +89,70 @@ namespace Humatrix_HRMS.Data
                 .HasForeignKey(o => o.EmployeeId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+    .HasOne(x => x.Employee)
+    .WithMany()
+    .HasForeignKey(x => x.EmployeeId)
+    .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+     .HasOne(x => x.Attendance)
+     .WithMany(a => a.CorrectionRequests)
+     .HasForeignKey(x => x.AttendanceId)
+     .OnDelete(DeleteBehavior.SetNull);
+
+
+            modelBuilder.Entity<CorrectionAuditLog>()
+     .HasOne(x => x.AttendanceCorrectionRequest)
+     .WithMany(x => x.AuditLogs)
+     .HasForeignKey(x => x.AttendanceCorrectionRequestId)
+     .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasIndex(x => new
+                {
+                    x.EmployeeId,
+                    x.WorkDate,
+                    x.Status
+                });
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+    .HasIndex(x => x.OrganizationId);
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasIndex(x => x.SubmittedAt);
+
 
             modelBuilder.Entity<Attendance>()
     .HasOne(a => a.User)
     .WithMany()
     .HasForeignKey(a => a.UserId)
     .OnDelete(DeleteBehavior.Restrict);
+
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+    .HasOne(x => x.Organization)
+    .WithMany()
+    .HasForeignKey(x => x.OrganizationId)
+    .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasOne(x => x.ReviewedByEmployee)
+                .WithMany()
+                .HasForeignKey(x => x.ReviewedByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasOne(x => x.InitiatedByHrEmployee)
+                .WithMany()
+                .HasForeignKey(x => x.InitiatedByHrEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CorrectionAuditLog>()
+    .HasOne(x => x.ActorEmployee)
+    .WithMany()
+    .HasForeignKey(x => x.ActorEmployeeId)
+    .OnDelete(DeleteBehavior.Restrict);
         }
-
     }
-
-
-
-    }
+}
     

@@ -11,10 +11,16 @@ namespace Humatrix_HRMS.Services
         private readonly ApplicationDbContext _context;
         private readonly CurrentUserService _currentUser;
 
-        public LeaveService(ApplicationDbContext context, CurrentUserService currentUser)
+        private readonly HRPolicyValidationService _policy;
+
+        public LeaveService(
+            ApplicationDbContext context,
+            CurrentUserService currentUser,
+            HRPolicyValidationService policy)
         {
             _context = context;
             _currentUser = currentUser;
+            _policy = policy;
         }
 
         // =========================
@@ -29,11 +35,10 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync(e => e.UserId == user.Id)
                 ?? throw new Exception("Employee not found");
 
-            var workWeek = await _context.WorkWeeks
-                .FirstOrDefaultAsync(w => w.OrganizationId == employee.OrganizationId)
-                ?? throw new Exception("Please contact HR: Work week not configured");
+            var orgId = employee.OrganizationId;
 
-            var today = DateTime.UtcNow.Date; // ✅ single consistent reference
+            // ── FIX: use org-timezone today, not UTC ──────────────────────────────────
+            var today = await _policy.GetOrgTodayAsync(orgId);
 
             if (request.FromDate.Date < today)
                 throw new Exception("Cannot apply leave for past dates");
@@ -50,7 +55,7 @@ namespace Humatrix_HRMS.Services
 
             if (leaveType.MinNoticeRequiredDays > 0)
             {
-                var daysUntilLeave = (request.FromDate.Date - today).Days; // ✅ consistent
+                var daysUntilLeave = (request.FromDate.Date - today).Days;
                 if (daysUntilLeave < leaveType.MinNoticeRequiredDays)
                     throw new Exception(
                         $"This leave type requires at least {leaveType.MinNoticeRequiredDays} day(s) advance notice");
@@ -62,9 +67,11 @@ namespace Humatrix_HRMS.Services
             if (request.IsHalfDay && !leaveType.AllowHalfDay)
                 throw new Exception("This leave type does not support half-day");
 
+            var workWeek = await _policy.GetWorkWeekAsync(orgId);
+
             var holidays = await _context.Holidays
                 .Where(h =>
-                    h.OrganizationId == employee.OrganizationId &&
+                    h.OrganizationId == orgId &&
                     !h.IsOptional &&
                     h.Date.Date >= request.FromDate.Date &&
                     h.Date.Date <= request.ToDate.Date)
@@ -76,26 +83,33 @@ namespace Humatrix_HRMS.Services
                 : CountWorkingDays(request.FromDate.Date, request.ToDate.Date, holidays, workWeek);
 
             if (totalDays == 0)
-                throw new Exception("No working days in the selected range");
+                throw new Exception("No working days in the selected range (all days are holidays or non-working)");
 
-            var overlap = await _context.LeaveRequests.AnyAsync(l =>
-                l.EmployeeId == employee.EmployeeId &&
-                l.Status != "Rejected" &&
-                l.Status != "Cancelled" &&
-                request.FromDate.Date <= l.ToDate.Date &&
-                request.ToDate.Date >= l.FromDate.Date);
+            // ── Leave overlap (existing leave requests) ───────────────────────────────
+            await _policy.AssertNoLeaveConflictAsync(employee.EmployeeId, request.FromDate, request.ToDate);
 
-            if (overlap)
-                throw new Exception("You already have a leave request overlapping the selected dates");
+            // ── WFH conflict across the leave range ───────────────────────────────────
+            // Check every working day in range for an existing WFH request
+            for (var d = request.FromDate.Date; d <= request.ToDate.Date; d = d.AddDays(1))
+            {
+                if (!DateHelper.IsWorkingDay(d, workWeek)) continue;
+                if (holidays.Contains(d)) continue;
 
+                var wfhConflict = await _policy.GetWfhConflictAsync(employee.EmployeeId, d);
+                if (wfhConflict != null)
+                    throw new Exception(
+                        $"Conflict: A WFH request ({wfhConflict.Status}) exists for {d:dd MMM}. " +
+                        $"Cancel the WFH request before applying leave.");
+            }
+
+            // ── Balance check ─────────────────────────────────────────────────────────
             var balance = await GetOrCreateBalanceAsync(employee.EmployeeId, request.LeaveTypeId);
-
             decimal effectiveRemaining = balance.Remaining + balance.CarriedForward;
+
             if (effectiveRemaining < totalDays)
                 throw new Exception(
                     $"Insufficient leave balance. Available: {effectiveRemaining} day(s), Requested: {totalDays} day(s)");
 
-            // ✅ Transaction wraps balance update + request insert together
             using var tx = await _context.Database.BeginTransactionAsync();
 
             balance.Pending += totalDays;

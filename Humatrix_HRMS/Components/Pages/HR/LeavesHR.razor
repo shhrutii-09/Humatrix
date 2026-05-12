@@ -1,197 +1,215 @@
 ﻿@page "/hr/leaves"
 @rendermode InteractiveServer
-
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-
-@attribute [Authorize(Roles = "HR")]
-
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
 @inject LeaveService LeaveService
 
-<PageTitle>HR Leave Approval | Humatrix</PageTitle>
+<PageTitle>Leave Approvals | HR | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-semibold mb-0">Leave Approvals</h2>
+            <h4 class="fw-bold mb-0">Leave Approvals</h4>
             <small class="text-muted">Review and manage employee leave requests</small>
         </div>
-
-        @* Changed to @onchange to properly handle async state *@
-        <select class="form-select w-auto" @onchange="HandleStatusChange">
-            <option value="">All Requests</option>
-            <option value="Pending">Pending Only</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-        </select>
+        <div class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm w-auto shadow-sm"
+                    @onchange="HandleFilterChange">
+                <option value="">All Requests</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm shadow-sm"
+                    @onclick="LoadData" disabled="@loading">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
     </div>
 
-    <!-- ALERT -->
+    <!-- ALERT BANNER -->
     @if (!string.IsNullOrEmpty(message))
     {
-        <div class="alert alert-@messageType alert-dismissible fade show">
-            @message
+        <div class="alert alert-@messageType alert-dismissible shadow-sm border-0 d-flex gap-2">
+            <i class="bi bi-@(messageType == "danger" ? "exclamation-triangle-fill" : "check-circle-fill") mt-1"></i>
+            <div class="flex-grow-1">@message</div>
             <button class="btn-close" @onclick="() => message = null"></button>
         </div>
     }
 
-    <!-- TABLE -->
+    <!-- TABLE CARD -->
     <div class="card border-0 shadow-sm">
-        <div class="card-body p-0">
+        <div class="card-header bg-white border-bottom py-3 px-4">
+            <span class="text-muted small fw-bold">
+                @if (loading)
+                {
+                    <text>Loading...</text>
+                }
+                else
+                {
 
-            <table class="table align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Employee</th>
-                        <th>Department</th>
-                        <th>Type</th>
-                        <th>Dates</th>
-                        <th>Days</th>
-                        <th>Status</th>
-                        <th class="text-end" style="width:220px;"></th>
-                    </tr>
-                </thead>
+                    <text>@leaves.Count RESULT(S)</text>
+                }
+            </span>
+        </div>
 
-                <tbody>
-                    @if (loading)
-                    {
+        @if (loading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <p class="text-muted small mt-2">Loading requests...</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
                         <tr>
-                            <td colspan="7" class="text-center py-4">
-                                <div class="spinner-border text-primary"></div>
-                                <div class="mt-2"><small class="text-muted">Loading requests...</small></div>
-                            </td>
+                            <th class="ps-4 text-muted small fw-bold border-0">EMPLOYEE</th>
+                            <th class="text-muted small fw-bold border-0">DEPT</th>
+                            <th class="text-muted small fw-bold border-0">TYPE</th>
+                            <th class="text-muted small fw-bold border-0">DATES</th>
+                            <th class="text-muted small fw-bold border-0">DAYS</th>
+                            <th class="text-muted small fw-bold border-0">STATUS</th>
+                            <th class="text-end text-muted small fw-bold border-0 pe-4">ACTION</th>
                         </tr>
-                    }
-                    else if (leaves.Count == 0)
-                    {
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
-                                No leave requests found
-                            </td>
-                        </tr>
-                    }
-                    else
-                    {
-                        @foreach (var l in leaves.OrderBy(x => x.Status != "Pending"))
+                    </thead>
+                    <tbody>
+                        @if (!leaves.Any())
                         {
-                            <tr class="@(l.Status == "Pending" ? "table-warning" : "")">
-                                <td>
-                                    <div class="fw-semibold">@l.EmployeeName</div>
-                                    <small class="text-muted">@l.Reason</small>
-                                </td>
-                                <td>@l.Department</td>
-                                <td>@l.LeaveTypeName</td>
-                                <td>
-                                    <small>
-                                        @l.FromDate.ToString("dd MMM") →
-                                        @l.ToDate.ToString("dd MMM")
-                                    </small>
-                                </td>
-                                <td>@l.TotalDays</td>
-                                <td>
-                                    <span class="badge @GetStatusClass(l.Status)">
-                                        @l.Status
-                                    </span>
-                                </td>
-                                <td class="text-end">
-                                    @if (l.Status == "Pending")
-                                    {
-                                        <div class="d-flex justify-content-end gap-2">
-                                            <button class="btn btn-sm btn-success"
-                                                    disabled="@actionLoading"
-                                                    @onclick="() => ConfirmApprove(l.LeaveRequestId)">
-                                                Approve
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger"
-                                                    disabled="@actionLoading"
-                                                    @onclick="() => OpenReject(l)">
-                                                Reject
-                                            </button>
-                                        </div>
-                                    }
-                                    else if (l.Status == "Rejected")
-                                    {
-                                        <small class="text-danger">
-                                            @l.RejectionReason
-                                        </small>
-                                    }
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
+                                    No leave requests found.
                                 </td>
                             </tr>
                         }
-                    }
-                </tbody>
-            </table>
-        </div>
+                        else
+                        {
+                            @foreach (var l in leaves.OrderBy(x => x.Status != "Pending").ThenByDescending(x => x.AppliedAt))
+                            {
+                                <tr class="@(l.Status == "Pending" ? "table-warning" : "")">
+                                    <td class="ps-4">
+                                        <div class="fw-semibold">@l.EmployeeName</div>
+                                        <small class="text-muted">@l.Reason</small>
+                                    </td>
+                                    <td class="text-muted small">@l.Department</td>
+                                    <td>@l.LeaveTypeName</td>
+                                    <td class="small">
+                                        <i class="bi bi-calendar3 me-1 text-muted"></i>
+                                        @l.FromDate.ToString("dd MMM") – @l.ToDate.ToString("dd MMM yyyy")
+                                    </td>
+                                    <td><span class="fw-semibold">@l.TotalDays</span></td>
+                                    <td>
+                                        <span class="badge rounded-pill @GetStatusClass(l.Status)">
+                                            @l.Status
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        @if (l.Status == "Pending")
+                                        {
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <button class="btn btn-sm btn-success"
+                                                        disabled="@actionLoading"
+                                                        @onclick="() => Approve(l.LeaveRequestId)">
+                                                    <i class="bi bi-check-circle me-1"></i>Approve
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        disabled="@actionLoading"
+                                                        @onclick="() => OpenRejectModal(l)">
+                                                    <i class="bi bi-x-circle me-1"></i>Reject
+                                                </button>
+                                            </div>
+                                        }
+                                        else if (l.Status == "Rejected" && !string.IsNullOrEmpty(l.RejectionReason))
+                                        {
+                                            <small class="text-muted" title="@l.RejectionReason">
+                                                <i class="bi bi-chat-text me-1"></i>@TruncateText(l.RejectionReason, 40)
+                                            </small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
 
-    <!-- REJECT MODAL -->
-    @if (showRejectModal)
-    {
-        <div class="modal fade show d-block" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content shadow">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Reject Leave</h5>
-                        <button class="btn-close" @onclick="CloseReject"></button>
+</div>
+
+<!-- REJECT MODAL -->
+@if (showRejectModal && selectedLeave != null)
+{
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-x-circle-fill text-danger me-2"></i>Reject Leave Request
+                    </h5>
+                    <button class="btn-close" @onclick="CloseRejectModal"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <div class="p-3 bg-light rounded small mb-3">
+                        <strong>@selectedLeave.EmployeeName</strong> —
+                        @selectedLeave.LeaveTypeName,
+                        @selectedLeave.FromDate.ToString("dd MMM") – @selectedLeave.ToDate.ToString("dd MMM yyyy")
+                        (@selectedLeave.TotalDays days)
                     </div>
-                    <div class="modal-body">
-                        <label class="form-label">Reason</label>
-                        <textarea class="form-control"
-                                  rows="3"
-                                  @bind="rejectReason"></textarea>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" @onclick="CloseReject">Cancel</button>
-                        <button class="btn btn-danger"
-                                disabled="@actionLoading"
-                                @onclick="ConfirmReject">
-                            Reject
-                        </button>
-                    </div>
+                    <label class="form-label small fw-bold text-uppercase text-muted">
+                        Rejection Reason <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control @(showRejectValidation && string.IsNullOrWhiteSpace(rejectReason) ? "is-invalid" : "")"
+                              rows="3"
+                              placeholder="Explain why this leave is being rejected..."
+                              @bind="rejectReason"></textarea>
+                    @if (showRejectValidation && string.IsNullOrWhiteSpace(rejectReason))
+                    {
+                        <div class="invalid-feedback">Rejection reason is required.</div>
+                    }
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-secondary" @onclick="CloseRejectModal" disabled="@actionLoading">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ConfirmReject" disabled="@actionLoading">
+                        @if (actionLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Reject Leave
+                    </button>
                 </div>
             </div>
         </div>
-        <div class="modal-backdrop fade show"></div>
-    }
-</div>
-
-<style>
-    .badge-success {
-        background: #198754;
-        color: white;
-    }
-
-    .badge-danger {
-        background: #dc3545;
-        color: white;
-    }
-
-    .badge-warning {
-        background: #ffc107;
-        color: black;
-    }
-</style>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
 
 @code {
+
+    // ── State ────────────────────────────────────────────────────────────────────
     private List<LeaveRequestDto> leaves = new();
-    private bool loading = false;
-    private bool actionLoading = false;
+    private LeaveRequestDto? selectedLeave;
+
+    private bool loading;
+    private bool actionLoading;
+    private bool showRejectModal;
+    private bool showRejectValidation;
     private string? message;
     private string messageType = "success";
-    private bool showRejectModal = false;
-    private Guid selectedLeaveId;
-    private string rejectReason = "";
     private string? selectedStatus;
+    private string rejectReason = string.Empty;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadData();
-    }
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync() => await LoadData();
 
-    private async Task HandleStatusChange(ChangeEventArgs e)
+    private async Task HandleFilterChange(ChangeEventArgs e)
     {
         selectedStatus = e.Value?.ToString();
         await LoadData();
@@ -199,35 +217,34 @@
 
     private async Task LoadData()
     {
-        // Guard to prevent multiple simultaneous loads
         if (loading) return;
+        loading = true;
+        message = null;
 
         try
         {
-            loading = true;
-            StateHasChanged(); // Ensure the UI shows the spinner immediately
-
             leaves = await LeaveService.GetAllForHRAsync(selectedStatus);
         }
         catch (Exception ex)
         {
-            message = "Error loading data: " + ex.Message;
+            message = ex.Message;
             messageType = "danger";
         }
         finally
         {
             loading = false;
-            StateHasChanged(); // Ensure the spinner hides
         }
     }
 
-    private async Task ConfirmApprove(Guid id)
+    // ── Actions ──────────────────────────────────────────────────────────────────
+    private async Task Approve(Guid id)
     {
+        actionLoading = true;
+        message = null;
         try
         {
-            actionLoading = true;
             await LeaveService.UpdateStatusAsync(id, "Approved");
-            message = "Leave approved successfully";
+            message = "Leave approved successfully.";
             messageType = "success";
             await LoadData();
         }
@@ -242,37 +259,39 @@
         }
     }
 
-    private void OpenReject(LeaveRequestDto l)
+    private void OpenRejectModal(LeaveRequestDto l)
     {
-        selectedLeaveId = l.LeaveRequestId;
-        rejectReason = "";
+        selectedLeave = l;
+        rejectReason = string.Empty;
+        showRejectValidation = false;
         showRejectModal = true;
     }
 
-    private void CloseReject() => showRejectModal = false;
+    private void CloseRejectModal()
+    {
+        showRejectModal = false;
+        selectedLeave = null;
+    }
 
     private async Task ConfirmReject()
     {
-        if (string.IsNullOrWhiteSpace(rejectReason))
-        {
-            message = "Rejection reason is required";
-            messageType = "danger";
-            return;
-        }
+        showRejectValidation = true;
+        if (string.IsNullOrWhiteSpace(rejectReason) || selectedLeave == null) return;
 
+        actionLoading = true;
         try
         {
-            actionLoading = true;
-            await LeaveService.UpdateStatusAsync(selectedLeaveId, "Rejected", rejectReason);
-            message = "Leave rejected";
+            await LeaveService.UpdateStatusAsync(selectedLeave.LeaveRequestId, "Rejected", rejectReason);
+            message = $"Leave rejected for {selectedLeave.EmployeeName}.";
             messageType = "warning";
-            showRejectModal = false;
+            CloseRejectModal();
             await LoadData();
         }
         catch (Exception ex)
         {
             message = ex.Message;
             messageType = "danger";
+            CloseRejectModal();
         }
         finally
         {
@@ -280,10 +299,17 @@
         }
     }
 
-    private string GetStatusClass(string status) => status switch
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+    private static string GetStatusClass(string? status) => status switch
     {
-        "Approved" => "badge-success",
-        "Rejected" => "badge-danger",
-        _ => "badge-warning"
+        "Approved" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "Rejected" => "bg-danger",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-light text-dark"
     };
+
+    private static string TruncateText(string? text, int max) =>
+        string.IsNullOrEmpty(text) ? "" :
+        text.Length <= max ? text : text[..max] + "…";
 }

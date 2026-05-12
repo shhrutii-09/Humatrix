@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260509100346_attendanceModuleSolving")]
+    partial class attendanceModuleSolving
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -138,29 +141,17 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<bool>("IsAutoCheckedOut")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsHrCorrected")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("IsManual")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsPresent")
                         .HasColumnType("bit");
 
-                    b.Property<DateTime?>("LastModifiedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("LastModifiedByEmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<double?>("Latitude")
                         .HasColumnType("float");
 
                     b.Property<double?>("Longitude")
                         .HasColumnType("float");
-
-                    b.Property<string>("ModificationReason")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("NeedsOvertimeApproval")
                         .HasColumnType("bit");
@@ -204,36 +195,60 @@ namespace Humatrix_HRMS.Migrations
                     b.ToTable("Attendances");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.AttendanceAuditLog", b =>
+                {
+                    b.Property<Guid>("AuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("AttendanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NewValues")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValues")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("AuditId");
+
+                    b.HasIndex("AttendanceId");
+
+                    b.ToTable("AttendanceAuditLogs");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.AttendanceCorrectionRequest", b =>
                 {
                     b.Property<Guid>("AttendanceCorrectionRequestId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime?>("AppliedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ApprovedCheckIn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ApprovedCheckOut")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ApprovedStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("AttachmentPath")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<Guid?>("AttendanceId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("CorrectionType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -241,12 +256,17 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("HrNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                    b.Property<DateTime?>("ExistingCheckIn")
+                        .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("InitiatedByHrEmployeeId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime?>("ExistingCheckOut")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HRRemarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HrNote")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsApplied")
                         .HasColumnType("bit");
@@ -260,47 +280,37 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<DateTime?>("OriginalCheckOut")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("OriginalStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<double?>("OriginalTotalHours")
-                        .HasColumnType("float");
-
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RejectionReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime?>("RequestedCheckIn")
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RequestedCheckIn")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("RequestedCheckOut")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("RequestedStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("ReviewedByEmployeeId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("SubmittedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("WorkDate")
@@ -310,77 +320,9 @@ namespace Humatrix_HRMS.Migrations
 
                     b.HasIndex("AttendanceId");
 
-                    b.HasIndex("InitiatedByHrEmployeeId");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("ReviewedByEmployeeId");
-
-                    b.HasIndex("SubmittedAt");
-
-                    b.HasIndex("EmployeeId", "WorkDate", "Status");
+                    b.HasIndex("EmployeeId");
 
                     b.ToTable("AttendanceCorrectionRequests");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.CorrectionAuditLog", b =>
-                {
-                    b.Property<Guid>("CorrectionAuditLogId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<Guid?>("ActorEmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ActorName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid>("AttendanceCorrectionRequestId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("NewCheckIn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("NewCheckOut")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("NewStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<DateTime>("OccurredAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("PreviousCheckIn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("PreviousCheckOut")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PreviousStatus")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("CorrectionAuditLogId");
-
-                    b.HasIndex("ActorEmployeeId");
-
-                    b.HasIndex("AttendanceCorrectionRequestId");
-
-                    b.ToTable("CorrectionAuditLogs");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Department", b =>
@@ -1108,62 +1050,32 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.AttendanceAuditLog", b =>
+                {
+                    b.HasOne("Humatrix_HRMS.Models.Attendance", "Attendance")
+                        .WithMany()
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Attendance");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.AttendanceCorrectionRequest", b =>
                 {
                     b.HasOne("Humatrix_HRMS.Models.Attendance", "Attendance")
-                        .WithMany("CorrectionRequests")
-                        .HasForeignKey("AttendanceId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .WithMany()
+                        .HasForeignKey("AttendanceId");
 
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "InitiatedByHrEmployee")
-                        .WithMany()
-                        .HasForeignKey("InitiatedByHrEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
-                        .WithMany()
-                        .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "ReviewedByEmployee")
-                        .WithMany()
-                        .HasForeignKey("ReviewedByEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Attendance");
 
                     b.Navigation("Employee");
-
-                    b.Navigation("InitiatedByHrEmployee");
-
-                    b.Navigation("Organization");
-
-                    b.Navigation("ReviewedByEmployee");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.CorrectionAuditLog", b =>
-                {
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "ActorEmployee")
-                        .WithMany()
-                        .HasForeignKey("ActorEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Humatrix_HRMS.Models.AttendanceCorrectionRequest", "AttendanceCorrectionRequest")
-                        .WithMany("AuditLogs")
-                        .HasForeignKey("AttendanceCorrectionRequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ActorEmployee");
-
-                    b.Navigation("AttendanceCorrectionRequest");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Employee", b =>
@@ -1325,16 +1237,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.Attendance", b =>
-                {
-                    b.Navigation("CorrectionRequests");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.AttendanceCorrectionRequest", b =>
-                {
-                    b.Navigation("AuditLogs");
                 });
 #pragma warning restore 612, 618
         }

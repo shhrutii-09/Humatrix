@@ -1,303 +1,350 @@
-﻿@page "/employee/attendance-correction"
+﻿@page "/employee/corrections"
 @rendermode InteractiveServer
-
-@using Humatrix_HRMS.Data
-@using Microsoft.EntityFrameworkCore
-
-@inject ApplicationDbContext DbContext
-@inject CurrentUserService CurrentUserService
-@using Humatrix_HRMS.DTOs.AttendanceCorrections
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Helpers
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "Employee,HR")]
 
-@attribute [Authorize(Roles = "Employee,HR,OrgAdmin")]
-
+@* FIX: Inject IDbContextFactory instead of ApplicationDbContext directly.
+   Blazor Server circuits are long-lived; injecting a scoped DbContext and
+   using it across multiple async render cycles causes stale-tracked-entity bugs.
+   IDbContextFactory creates a fresh context per query. *@
 @inject AttendanceCorrectionService CorrectionService
+@inject CurrentUserService CurrentUserService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
-<PageTitle>Attendance Correction | Humatrix HRMS</PageTitle>
+<PageTitle>Attendance Corrections | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-normal">Attendance Correction</h2>
-
-        <button class="btn btn-outline-secondary shadow-sm"
-                @onclick="LoadRequests">
-            <i class="bi bi-arrow-clockwise"></i>
-            REFRESH
+        <div>
+            <h4 class="fw-bold mb-0">Attendance Corrections</h4>
+            <small class="text-muted">Request corrections for missed or incorrect check-in / check-out</small>
+        </div>
+        <button class="btn btn-primary shadow-sm"
+                style="background:#5c4ac7;border:none;"
+                @onclick="OpenSubmitModal"
+                disabled="@isLoading">
+            <i class="bi bi-plus-circle me-2"></i>New Request
         </button>
     </div>
 
-    <!-- CREATE REQUEST -->
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-header bg-white border-0 pt-4 px-4">
-            <h5 class="fw-normal mb-0">Submit Correction Request</h5>
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible shadow-sm border-0 d-flex align-items-center gap-2">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>@successMessage</span>
+            <button class="btn-close ms-auto" @onclick="() => successMessage = null"></button>
         </div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible shadow-sm border-0 d-flex align-items-center gap-2">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>@errorMessage</span>
+            <button class="btn-close ms-auto" @onclick="() => errorMessage = null"></button>
+        </div>
+    }
 
-        <div class="card-body p-4">
-
-            @if (!string.IsNullOrWhiteSpace(errorMessage))
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-bold">My Correction Requests</h6>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="LoadRequests">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+        <div class="table-responsive">
+            @if (isLoading)
             {
-                <div class="alert alert-danger">
-                    @errorMessage
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="text-muted small mt-2">Loading requests...</p>
                 </div>
             }
-
-            @if (!string.IsNullOrWhiteSpace(successMessage))
+            else if (!requests.Any())
             {
-                <div class="alert alert-success">
-                    @successMessage
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
+                    No correction requests yet.
                 </div>
             }
+            else
+            {
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4 text-muted small fw-bold">DATE</th>
+                            <th class="text-muted small fw-bold">TYPE</th>
+                            <th class="text-center text-muted small fw-bold">ORIGINAL IN</th>
+                            <th class="text-center text-muted small fw-bold">ORIGINAL OUT</th>
+                            <th class="text-center text-muted small fw-bold">REQUESTED IN</th>
+                            <th class="text-center text-muted small fw-bold">REQUESTED OUT</th>
+                            <th class="text-muted small fw-bold">STATUS</th>
+                            <th class="text-muted small fw-bold">SUBMITTED</th>
+                            <th class="text-muted small fw-bold">ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in requests)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-semibold">@req.WorkDate.ToString("dd MMM yyyy")</td>
+                                <td>
+                                    <span class="badge bg-light text-dark fw-normal border">
+                                        @FormatCorrectionType(req.CorrectionType)
+                                    </span>
+                                </td>
+                                <td class="text-center font-monospace small text-muted">@FormatTime(req.OriginalCheckIn)</td>
+                                <td class="text-center font-monospace small text-muted">@FormatTime(req.OriginalCheckOut)</td>
+                                <td class="text-center font-monospace small">@FormatTime(req.RequestedCheckIn)</td>
+                                <td class="text-center font-monospace small">@FormatTime(req.RequestedCheckOut)</td>
+                                <td>
+                                    <span class="badge rounded-pill @GetStatusClass(req.Status)">@req.Status</span>
+                                </td>
+                                <td class="small text-muted">@req.SubmittedAt.ToString("dd MMM, hh:mm tt")</td>
+                                <td>
+                                    @* FIX: CanCancel comes from the DTO (set in service).
+                                       No need to re-check status here — keeps logic in one place. *@
+                                    @if (req.CanCancel)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => ConfirmCancel(req.AttendanceCorrectionRequestId)">
+                                            <i class="bi bi-x-circle me-1"></i>Cancel
+                                        </button>
+                                    }
+                                    @if (!string.IsNullOrEmpty(req.HrNote) || !string.IsNullOrEmpty(req.RejectionReason))
+                                    {
+                                        <span class="ms-1 text-muted"
+                                              title="@(req.RejectionReason ?? req.HrNote)">
+                                            <i class="bi bi-chat-text"></i>
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
 
-            <div class="row g-3">
-
-                <!-- DATE -->
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">
-                        Work Date
-                    </label>
-
-                    <InputDate class="form-control"
-                               @bind-Value="model.WorkDate" />
+<!-- ── SUBMIT MODAL ────────────────────────────────────────────────────────── -->
+@if (showSubmitModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Submit Attendance Correction</h5>
+                    <button type="button" class="btn-close" @onclick="CloseSubmitModal"></button>
                 </div>
+                <div class="modal-body p-4">
+                    @if (!string.IsNullOrEmpty(modalError))
+                    {
+                        <div class="alert alert-danger border-0 shadow-sm">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@modalError
+                        </div>
+                    }
 
-                <!-- TYPE -->
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">
-                        Request Type
-                    </label>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Work Date <span class="text-danger">*</span></label>
+                        <InputDate @bind-Value="submitDto.WorkDate" class="form-control" />
+                        <div class="form-text">Cannot be a future date or older than 30 days.</div>
+                    </div>
 
-                    <select class="form-select"
-                            @bind="model.RequestType">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Correction Type <span class="text-danger">*</span></label>
+                        @* FIX: Use @bind:after to reset time fields when type changes,
+                           preventing stale times from a previous selection being sent. *@
+                        <select class="form-select"
+                                value="@submitDto.CorrectionType"
+                                @onchange="OnCorrectionTypeChanged">
+                            <option value="">-- Select --</option>
+                            <option value="@CorrectionTypes.ForgotCheckIn">Forgot to Check In</option>
+                            <option value="@CorrectionTypes.ForgotCheckOut">Forgot to Check Out</option>
+                            <option value="@CorrectionTypes.WrongTime">Wrong Time (In / Out)</option>
+                            <option value="@CorrectionTypes.AbsentButWorked">Absent but Worked</option>
+                            <option value="@CorrectionTypes.OvertimeCorrection">Overtime Correction</option>
+                        </select>
+                    </div>
 
-                        <option value="">Select Request Type</option>
+                    @* FIX: Time inputs — use @bind:event="oninput" so the value is
+                       captured immediately on every keystroke, not just on blur.
+                       This prevents the "fields reset when clicking elsewhere" bug
+                       caused by Blazor's default onchange binding conflicting with
+                       the browser's native time-picker focus cycle.
 
-                        <option value="@AttendanceCorrectionTypes.MissingCheckIn">
-                            Missing Check-In
-                        </option>
+                       We bind to TimeOnly? fields. TimeOnly is the correct type for
+                       <input type="time"> in .NET 8 Blazor — not TimeSpan, not string.
+                       In HandleSubmit we call .ToTimeSpan() to get the TimeSpan needed
+                       by DateTime.Add(). *@
+                    @if (ShowCheckInField)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Requested Check-In Time
+                                @if (CorrectionTypes.RequiresCheckIn.Contains(submitDto.CorrectionType ?? ""))
+                                {
+                                    <span class="text-danger">*</span>
+                                }
+                            </label>
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="hh:mm AM/PM"
+                                   @bind="requestedCheckInText" />
+                            @* <input type="time"
+                                   class="form-control"
+                                   value="@(requestedCheckInTime?.ToString("HH:mm"))"
+                                   @onchange="e => requestedCheckInTime = ParseTimeOnly(e.Value?.ToString())" /> *@
+                            <div class="form-text">24-hour format — e.g. 09:00, 14:30</div>
+                        </div>
+                    }
 
-                        <option value="@AttendanceCorrectionTypes.MissingCheckOut">
-                            Missing Check-Out
-                        </option>
+                    @if (ShowCheckOutField)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Requested Check-Out Time
+                                @if (CorrectionTypes.RequiresCheckOut.Contains(submitDto.CorrectionType ?? ""))
+                                {
+                                    <span class="text-danger">*</span>
+                                }
+                            </label>
+                            @* <input type="time"
+                                   class="form-control"
+                                   value="@(requestedCheckOutTime?.ToString("HH:mm"))"
+                                   @onchange="e => requestedCheckOutTime = ParseTimeOnly(e.Value?.ToString())" /> *@
 
-                        <option value="@AttendanceCorrectionTypes.WrongCheckIn">
-                            Wrong Check-In
-                        </option>
+                            <input type="text"
+                                   class="form-control"
+                                   placeholder="hh:mm AM/PM"
+                                   @bind="requestedCheckOutText" />
+                               
+                               </div>
+                    }
 
-                        <option value="@AttendanceCorrectionTypes.WrongCheckOut">
-                            Wrong Check-Out
-                        </option>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Reason <span class="text-danger">*</span></label>
+                        <textarea @bind="submitDto.Reason" class="form-control" rows="3"
+                                  placeholder="Provide a detailed reason (min. 10 characters)..."></textarea>
+                    </div>
 
-                        <option value="@AttendanceCorrectionTypes.FullCorrection">
-                            Full Correction
-                        </option>
-
-                    </select>
+                    <div class="alert alert-info border-0 small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Times must be entered in your organisation's local time. The system converts them automatically.
+                    </div>
                 </div>
-
-                <!-- CHECK IN -->
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">
-                        Requested Check-In
-                    </label>
-
-                    <input type="datetime-local" @bind="model.RequestedCheckIn" class="form-control" />"
-
-                    @* <InputDateTime class="form-control"
-                                   @bind-Value="model.RequestedCheckIn" /> *@
-                </div>
-
-                <!-- CHECK OUT -->
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold text-muted">
-                        Requested Check-Out
-                    </label>
-                    <input type="datetime-local" @bind="model.RequestedCheckOut" class="form-control" />"
-
-                    @* <InputDateTime class="form-control"
-                                   @bind-Value="model.RequestedCheckOut" /> *@
-                </div>
-
-                <!-- REASON -->
-                <div class="col-12">
-                    <label class="form-label small fw-bold text-muted">
-                        Reason
-                    </label>
-
-                    <textarea class="form-control"
-                              rows="4"
-                              @bind="model.Reason">
-                    </textarea>
-                </div>
-
-                <!-- BUTTON -->
-                <div class="col-12">
-                    <button class="btn btn-primary shadow-sm"
-                            style="background-color:#5c4ac7;border:none;"
-                            @onclick="SubmitRequest"
+                <div class="modal-footer border-0">
+                    <button class="btn btn-outline-secondary" @onclick="CloseSubmitModal">Cancel</button>
+                    <button class="btn btn-primary px-4"
+                            style="background:#5c4ac7;border:none;"
+                            @onclick="HandleSubmit"
                             disabled="@isSubmitting">
-
                         @if (isSubmitting)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-
-                        SUBMIT REQUEST
+                        Submit Request
                     </button>
                 </div>
-
             </div>
-
         </div>
     </div>
+}
 
-    <!-- REQUEST HISTORY -->
-    <div class="card shadow-sm border-0">
-
-        <div class="card-header bg-white border-0 pt-4 px-4">
-            <h5 class="fw-normal mb-0">My Correction Requests</h5>
-        </div>
-
-        <div class="table-responsive">
-
-            <table class="table table-hover align-middle mb-0">
-
-                <thead class="bg-light">
-                    <tr>
-                        <th class="ps-4 text-muted small">DATE</th>
-                        <th class="text-muted small">TYPE</th>
-                        <th class="text-muted small">REQUESTED IN</th>
-                        <th class="text-muted small">REQUESTED OUT</th>
-                        <th class="text-muted small">STATUS</th>
-                        <th class="text-muted small">REMARKS</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    @if (isLoading)
-                    {
-                        <tr>
-                            <td colspan="6"
-                                class="text-center py-5 text-muted">
-
+<!-- ── CANCEL CONFIRM MODAL ────────────────────────────────────────────────── -->
+@if (cancelRequestId.HasValue)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-body p-4 text-center">
+                    <i class="bi bi-exclamation-triangle-fill text-warning fs-2 mb-3 d-block"></i>
+                    <h5 class="fw-bold">Cancel Correction Request?</h5>
+                    <p class="text-muted">This action cannot be undone.</p>
+                    <div class="d-flex justify-content-center gap-3 mt-4">
+                        <button class="btn btn-outline-secondary px-4"
+                                @onclick="() => cancelRequestId = null"
+                                disabled="@isCancelling">
+                            Keep Request
+                        </button>
+                        @* FIX: disabled during async cancel to prevent double-click. *@
+                        <button class="btn btn-danger px-4"
+                                @onclick="HandleCancel"
+                                disabled="@isCancelling">
+                            @if (isCancelling)
+                            {
                                 <span class="spinner-border spinner-border-sm me-2"></span>
-                                Loading requests...
-
-                            </td>
-                        </tr>
-                    }
-                    else if (requests.Any())
-                    {
-                        @foreach (var item in requests)
-                        {
-                            <tr>
-
-                                <td class="ps-4 fw-semibold">
-                                    @item.WorkDate.ToString("dd MMM yyyy")
-                                </td>
-
-                                <td>
-                                    @FormatType(item.RequestType)
-                                </td>
-
-                                <td class="font-monospace">
-                                    @FormatTime(item.RequestedCheckIn)
-                                </td>
-
-                                <td class="font-monospace">
-                                    @FormatTime(item.RequestedCheckOut)
-                                </td>
-
-                                <td>
-                                    <span class="badge rounded-pill @GetStatusClass(item.Status)">
-                                        @item.Status
-                                    </span>
-                                </td>
-
-                                <td>
-                                    @(string.IsNullOrWhiteSpace(item.HRRemarks)
-                                        ? "-"
-                                        : item.HRRemarks)
-                                </td>
-
-                            </tr>
-                        }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="6"
-                                class="text-center py-5 text-muted">
-
-                                No correction requests found.
-
-                            </td>
-                        </tr>
-                    }
-
-                </tbody>
-
-            </table>
-
+                            }
+                            Yes, Cancel It
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-
-</div>
+}
 
 @code {
-
-    private List<AttendanceCorrectionListDto> requests = new();
-
-    private CreateAttendanceCorrectionDto model = new()
-    {
-        WorkDate = DateTime.Today
-    };
-    private async Task LoadOrgTimezone()
-    {
-        var user = await CurrentUserService.GetUserAsync();
-
-        if (user?.OrganizationId == null)
-        {
-            orgTimeZone = TimeZoneInfo.Utc;
-            return;
-        }
-
-        var org = await DbContext.Organizations
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.OrganizationId == user.OrganizationId);
-
-        try
-        {
-            orgTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
-                org?.TimeZoneId ?? "UTC");
-        }
-        catch
-        {
-            orgTimeZone = TimeZoneInfo.Utc;
-        }
-    }
+    private List<CorrectionRequestListDto> requests = new();
     private bool isLoading;
     private bool isSubmitting;
-
-    private string? errorMessage;
+    private bool isCancelling;  // FIX: separate flag prevents double-click on cancel
+    private bool showSubmitModal;
     private string? successMessage;
+    private string? errorMessage;
+    private string? modalError;
+    private Guid? cancelRequestId;
+
+    private SubmitCorrectionRequestDto submitDto = new();
+
+    // FIX: TimeOnly? is the correct type for <input type="time"> in .NET 8 Blazor.
+    // We do NOT use @bind directly on these — instead we bind via value/@onchange
+    // (see markup above) to avoid the "field resets on blur" problem caused by
+    // Blazor's default onchange cycle conflicting with native time-picker behaviour.
+    // private TimeOnly? requestedCheckInTime;
+    // private TimeOnly? requestedCheckOutTime;
+    private string? requestedCheckInText;
+    private string? requestedCheckOutText;
+
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadOrgTimezone();
-
+        submitDto.WorkDate = TimeHelper.GetOrgDate(orgTimeZone);
         await LoadRequests();
+    }
+
+    private async Task LoadOrgTimezone()
+    {
+        try
+        {
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null) return;
+
+            // FIX: create a short-lived context for this query only.
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tzId = await db.Organizations
+                .AsNoTracking()
+                .Where(o => o.OrganizationId == user.OrganizationId)
+                .Select(o => o.TimeZoneId)
+                .FirstOrDefaultAsync();
+            orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
+        }
+        catch { /* fallback to UTC */ }
     }
 
     private async Task LoadRequests()
     {
         isLoading = true;
-
+        errorMessage = null;
         try
         {
             requests = await CorrectionService.GetMyRequestsAsync();
@@ -312,89 +359,193 @@
         }
     }
 
-    private async Task SubmitRequest()
+    // ── Submit modal ──────────────────────────────────────────────────────────
+
+    private void OpenSubmitModal()
+    {
+        ResetForm();
+        showSubmitModal = true;
+    }
+
+    private async Task HandleSubmit()
+    {
+        modalError = null;
+        isSubmitting = true;
+        try
+        {
+            var baseDate = submitDto.WorkDate.Date;
+
+            // Convert TimeOnly → DateTime (org-local, Kind=Unspecified).
+            // AttendanceCorrectionService converts these to UTC.
+            // submitDto.RequestedCheckIn = requestedCheckInTime.HasValue
+            //     ? DateTime.SpecifyKind(baseDate.Add(requestedCheckInTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
+            //     : null;
+
+            // submitDto.RequestedCheckOut = requestedCheckOutTime.HasValue
+            //     ? DateTime.SpecifyKind(baseDate.Add(requestedCheckOutTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
+            //     : null;
+
+            submitDto.RequestedCheckIn = ParseUserDateTime(baseDate, requestedCheckInText);
+            submitDto.RequestedCheckOut = ParseUserDateTime(baseDate, requestedCheckOutText);
+
+            await CorrectionService.SubmitAsync(submitDto);
+            successMessage = "Correction request submitted successfully.";
+            showSubmitModal = false;
+            ResetForm();
+            await LoadRequests();
+        }
+        catch (CorrectionValidationException ex) { modalError = ex.Message; }
+        catch (Exception ex) { modalError = $"Unexpected error: {ex.Message}"; }
+        finally { isSubmitting = false; }
+    }
+
+    private void CloseSubmitModal() { showSubmitModal = false; ResetForm(); }
+
+    private void ResetForm()
+    {
+        submitDto = new SubmitCorrectionRequestDto { WorkDate = TimeHelper.GetOrgDate(orgTimeZone) };
+        // requestedCheckInTime = null;
+        // requestedCheckOutTime = null;
+        requestedCheckInText = null;
+        requestedCheckOutText = null;
+        modalError = null;
+    }
+
+    // FIX: When the correction type changes, clear the time fields so a previously
+    // entered time (for a different type that showed different fields) is not
+    // silently sent to the service.
+    private void OnCorrectionTypeChanged(ChangeEventArgs e)
+    {
+        submitDto.CorrectionType = e.Value?.ToString();
+        // requestedCheckInTime = null;
+        // requestedCheckOutTime = null;
+        requestedCheckInText = null;
+        requestedCheckOutText = null;
+    }
+
+    // ── Cancel flow ───────────────────────────────────────────────────────────
+
+    private void ConfirmCancel(Guid requestId)
     {
         errorMessage = null;
         successMessage = null;
+        cancelRequestId = requestId;
+    }
 
-        isSubmitting = true;
+    private async Task HandleCancel()
+    {
+        if (!cancelRequestId.HasValue) return;
+
+        isCancelling = true;
+        errorMessage = null;
+        successMessage = null;
 
         try
         {
-            await CorrectionService.CreateRequestAsync(model);
-
-            successMessage =
-                "Attendance correction request submitted successfully.";
-
-            model = new CreateAttendanceCorrectionDto()
+            await CorrectionService.CancelAsync(new CancelCorrectionDto
             {
-                WorkDate = DateTime.Today
-            };
-
+                AttendanceCorrectionRequestId = cancelRequestId.Value
+            });
+            successMessage = "Request cancelled successfully.";
+            // Reload so the table reflects the new Cancelled status immediately.
             await LoadRequests();
         }
+        catch (CorrectionValidationException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        // catch (Exception)
+        // {
+        //     errorMessage = "An unexpected error occurred. Please try again.";
+        // }
         catch (Exception ex)
         {
             errorMessage = ex.Message;
         }
         finally
         {
-            isSubmitting = false;
+            // FIX: always clear these so the confirm modal closes and the
+            // spinner stops, regardless of success or failure.
+            isCancelling = false;
+            cancelRequestId = null;
         }
     }
 
-    // private string FormatTime(DateTime? value)
-    // {
-    //     if (value == null)
-    //         return "--";
+    // ── Computed ─────────────────────────────────────────────────────────────
 
-    //     return value.Value.ToLocalTime()
-    //         .ToString("dd MMM yyyy hh:mm tt");
-    // }
+    private bool ShowCheckInField => submitDto.CorrectionType is
+        CorrectionTypes.ForgotCheckIn or CorrectionTypes.WrongTime or CorrectionTypes.AbsentButWorked;
 
-    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+    private bool ShowCheckOutField => submitDto.CorrectionType is
+        CorrectionTypes.ForgotCheckOut or CorrectionTypes.WrongTime or
+        CorrectionTypes.AbsentButWorked or CorrectionTypes.OvertimeCorrection;
 
-    private string FormatTime(DateTime? utcTime)
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// FIX: Parses a time string from the browser (HH:mm or H:mm) into TimeOnly.
+    /// Returns null on empty/invalid input instead of throwing.
+    /// Used with @onchange instead of @bind to avoid the blur-reset bug.
+    /// </summary>
+    private static TimeOnly? ParseTimeOnly(string? value)
     {
-        if (!utcTime.HasValue)
-            return "--:--";
-
-        var localTime = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(
-                utcTime.Value,
-                DateTimeKind.Utc),
-            orgTimeZone);
-
-        return localTime.ToString("dd MMM yyyy hh:mm tt");
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return TimeOnly.TryParse(value, out var t) ? t : null;
     }
 
-    private string FormatType(string type)
+    private string FormatTime(DateTime? utcTime) => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
+
+    private static string FormatCorrectionType(string? type) => type switch
     {
-        return type switch
-        {
-            AttendanceCorrectionTypes.MissingCheckIn => "Missing Check-In",
-            AttendanceCorrectionTypes.MissingCheckOut => "Missing Check-Out",
-            AttendanceCorrectionTypes.WrongCheckIn => "Wrong Check-In",
-            AttendanceCorrectionTypes.WrongCheckOut => "Wrong Check-Out",
-            AttendanceCorrectionTypes.FullCorrection => "Full Correction",
-            _ => type
-        };
-    }
+        CorrectionTypes.ForgotCheckIn => "Forgot Check-In",
+        CorrectionTypes.ForgotCheckOut => "Forgot Check-Out",
+        CorrectionTypes.WrongTime => "Wrong Time",
+        CorrectionTypes.AbsentButWorked => "Absent but Worked",
+        CorrectionTypes.OvertimeCorrection => "OT Correction",
+        CorrectionTypes.HrManualCorrection => "HR Manual",
+        _ => type ?? string.Empty
+    };
 
-    private string GetStatusClass(string? status)
+    private static string GetStatusClass(string? status) => status switch
     {
-        return status switch
+        CorrectionStatuses.Pending => "bg-warning text-dark",
+        CorrectionStatuses.Approved => "bg-success",
+        CorrectionStatuses.Rejected => "bg-danger",
+        CorrectionStatuses.Cancelled => "bg-secondary",
+        _ => "bg-light text-dark border"
+    };
+
+    private static DateTime? ParseUserDateTime(DateTime baseDate, string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        input = input.Trim()
+            .Replace(".", ":")
+            .ToUpperInvariant();
+
+        string[] formats =
         {
-            AttendanceCorrectionStatuses.Pending
-                => "bg-warning text-dark",
+        "h:mm tt",
+        "hh:mm tt",
+        "h:mmtt",
+        "hh:mmtt",
+        "H:mm",
+        "HH:mm"
+    };
 
-            AttendanceCorrectionStatuses.Approved
-                => "bg-success",
+        if (DateTime.TryParseExact(
+            input,
+            formats,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out var parsed))
+        {
+            return DateTime.SpecifyKind(
+                baseDate.Date.Add(parsed.TimeOfDay),
+                DateTimeKind.Unspecified);
+        }
 
-            AttendanceCorrectionStatuses.Rejected
-                => "bg-danger",
-
-            _ => "bg-secondary"
-        };
+        return null;
     }
 }

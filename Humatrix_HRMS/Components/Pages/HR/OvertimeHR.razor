@@ -1,10 +1,15 @@
 ﻿@page "/hr/overtime"
 @rendermode InteractiveServer
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@inject CurrentUserService CurrentUserService
+@inject ApplicationDbContext DbContext
+@using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 @inject OvertimeService OvertimeService
 @inject AuthenticationStateProvider AuthStateProvider
@@ -82,7 +87,9 @@
                                     </span>
                                 </td>
                                 <td class="font-monospace small">
-                                    @r.ActualCheckOut?.ToLocalTime().ToString("hh:mm tt")
+                                    @* @r.ActualCheckOut?.ToLocalTime().ToString("hh:mm tt") *@
+                                    @FormatTime(r.ActualCheckOut)
+
                                 </td>
                                 <td class="text-muted small text-truncate"
                                     style="max-width:180px;"
@@ -111,22 +118,59 @@
 </div>
 
 @code {
+    // private List<OvertimeRequest> requests = new();
+    // private bool loading = true;
+    // private bool actionLoading = false;
+    // private string? message;
+    // private bool isError;
+
+    // OrgAdmin sees all departments; HR sees only their own department
+    // private bool isOrgAdmin = false;
+
+    // protected override async Task OnInitializedAsync()
+    // {
+    //     var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+    //     isOrgAdmin = authState.User.IsInRole("OrgAdmin");
+    //     await LoadData();
+    // }
     private List<OvertimeRequest> requests = new();
     private bool loading = true;
     private bool actionLoading = false;
     private string? message;
     private bool isError;
-
-    // OrgAdmin sees all departments; HR sees only their own department
     private bool isOrgAdmin = false;
+
+    // FIX: Org timezone for correct time display
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         isOrgAdmin = authState.User.IsInRole("OrgAdmin");
+        await LoadOrgTimezone();
         await LoadData();
     }
 
+    private async Task LoadOrgTimezone()
+    {
+        try
+        {
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null) return;
+            var tzId = await DbContext.Organizations
+                .AsNoTracking()
+                .Where(o => o.OrganizationId == user.OrganizationId)
+                .Select(o => o.TimeZoneId)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(tzId))
+                orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
+        }
+        catch { orgTimeZone = TimeZoneInfo.Utc; }
+    }
+
+    // FIX: Replace all .ToLocalTime() with this method
+    private string FormatTime(DateTime? utcTime)
+        => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
     private async Task LoadData()
     {
         loading = true;

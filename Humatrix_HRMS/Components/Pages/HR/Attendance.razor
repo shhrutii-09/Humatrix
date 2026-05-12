@@ -3,7 +3,7 @@
 
 @using Humatrix_HRMS.Data
 @using Microsoft.EntityFrameworkCore
-
+@using Humatrix_HRMS.Helpers
 @inject ApplicationDbContext DbContext
 @inject CurrentUserService CurrentUserService
 @using Humatrix_HRMS.DTOs
@@ -123,95 +123,100 @@
                 </div>
             }
             else
-{
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
-                    <tr>
-                        <th class="ps-4 text-muted small">EMPLOYEE</th>
-                        <th class="text-muted small">DEPARTMENT</th>
-                        <th class="text-muted small text-center">CHECK IN</th>
-                        <th class="text-muted small text-center">CHECK OUT</th>
-                        <th class="text-muted small">STATUS</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @if (isLoading)
-                    {
+            {
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                                Loading attendance data...
-                            </td>
+                            <th class="ps-4 text-muted small">EMPLOYEE</th>
+                            <th class="text-muted small">DEPARTMENT</th>
+                            <th class="text-muted small text-center">CHECK IN</th>
+                            <th class="text-muted small text-center">CHECK OUT</th>
+                            <th class="text-muted small">STATUS</th>
                         </tr>
-                    }
-                    else if (attendanceList.Any())
-                    {
-                        @foreach (var item in attendanceList)
+                    </thead>
+
+                    <tbody>
+                        @if (isLoading)
                         {
-                            <tr class="@(item.Status == "Absent" ? "table-danger" : "")">
-
-                                <!-- EMPLOYEE -->
-                                <td class="ps-4">
-                                    <div class="d-flex align-items-center">
-                                        <div class="me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle fw-bold"
-                                             style="width:40px;height:40px;">
-                                            @(string.IsNullOrWhiteSpace(item.EmployeeName)
-                                                                                ? "?"
-                                                                                : item.EmployeeName[0])
-                                </div>
-
-                                        <div>
-                                            <div class="fw-bold">@item.EmployeeName</div>
-                                            <div class="small text-muted">@item.Email</div>
-                                        </div>
-                                    </div>
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    Loading attendance data...
                                 </td>
-
-                                <!-- DEPARTMENT -->
-                                <td>
-                                    <span class="badge bg-light text-dark fw-normal">
-                                        @item.Department
-                                    </span>
-
-                            @if (item.IsManual)
-                                    {
-                                        <span class="ms-1 text-primary" title="Manual Entry">
-                                            <i class="bi bi-info-circle"></i>
-                                        </span>
-                                    }
-                                </td>
-
-                                <!-- CHECK IN -->
-                                <td class="text-center font-monospace">
-                                    @FormatTime(item.CheckIn)
-                                </td>
-
-                                <!-- CHECK OUT -->
-                                <td class="text-center font-monospace">
-                                    @FormatTime(item.CheckOut)
-                                </td>
-
-                                <!-- STATUS -->
-                                <td>
-                                    <span class="badge rounded-pill @GetStatusClass(item.Status)">
-                                        @item.Status
-                                    </span>
-                                </td>
-
                             </tr>
                         }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
-                                No attendance records found.
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+                        else if (attendanceList.Any())
+                        {
+                            @foreach (var item in attendanceList)
+                            {
+                                <tr class="@(item.Status == "Absent" ? "table-danger" : "")">
+
+                                    <!-- EMPLOYEE -->
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3 bg-light text-primary d-flex align-items-center justify-content-center rounded-circle fw-bold"
+                                                 style="width:40px;height:40px;">
+                                                @(string.IsNullOrWhiteSpace(item.EmployeeName)
+                                                                                    ? "?"
+                                                                                    : item.EmployeeName[0])
+                                </div>
+                                <div>
+                                    <div class="fw-bold">@item.EmployeeName</div>
+                                    <div class="small text-muted">@item.Email</div>
+                                </div>
+                            </div>
+                        </td>
+
+                                    <!-- DEPARTMENT -->
+                                    <td>
+                                        <span class="badge bg-light text-dark fw-normal">
+                                            @item.Department
+                                        </span>
+                            @if (item.IsManual)
+                                        {
+                                            <span class="ms-1 text-primary" title="Manual Entry">
+                                                <i class="bi bi-info-circle"></i>
+                                            </span>
+                                        }
+                                    </td>
+
+                                    <!-- CHECK IN -->
+                                    @* <td class="text-center font-monospace">
+                                        @TimeHelper.FormatOrgTime(item.CheckIn)
+                                    </td>
+
+                                    <td class="text-center font-monospace">
+                                        @TimeHelper.FormatOrgTime(item.CheckOut)
+                                    </td> *@
+
+                                    <!-- CHECK IN -->
+                                    <td class="text-center font-monospace">
+                                        @FormatTime(item.CheckIn)
+                                    </td>
+
+                                    <td class="text-center font-monospace">
+                                        @FormatTime(item.CheckOut)
+                                    </td>
+                                    <!-- STATUS -->
+                                    <td>
+                                        <span class="badge rounded-pill @GetStatusClass(item.Status)">
+                                            @item.Status
+                                        </span>
+                                    </td>
+
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    No attendance records found.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             }
         </div>
     </div>
@@ -222,50 +227,47 @@
     private List<AttendanceListDto> attendanceList = new();
     private List<DepartmentDto> departments = new();
 
-    private DateTime selectedDate = DateTime.Today; // ✅ FIXED (no null bugs)
+    // FIX: Initialize to org-local date, not DateTime.Today (server date).
+    // Set properly in OnInitializedAsync after org timezone is loaded.
+    private DateTime selectedDate;
     private Guid? selectedDepartmentId;
     private string? selectedRole;
 
     private bool isOrgAdmin;
     private bool isLoading;
 
+    // FIX: Store org timezone — used for all time display conversions.
     private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+    private string orgTimeZoneId = "UTC";
 
     private async Task LoadOrgTimezone()
     {
         var user = await CurrentUserService.GetUserAsync();
+        if (user?.OrganizationId == null) return;
 
-        if (user?.OrganizationId == null)
-        {
-            orgTimeZone = TimeZoneInfo.Utc;
-            return;
-        }
-
-        var org = await DbContext.Organizations
+        var tzId = await DbContext.Organizations
             .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.OrganizationId == user.OrganizationId);
+            .Where(o => o.OrganizationId == user.OrganizationId)
+            .Select(o => o.TimeZoneId)
+            .FirstOrDefaultAsync();
 
-        try
+        if (!string.IsNullOrWhiteSpace(tzId))
         {
-            orgTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
-                org?.TimeZoneId ?? "UTC");
-        }
-        catch
-        {
-            orgTimeZone = TimeZoneInfo.Utc;
+            orgTimeZoneId = tzId;
+            orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
         }
     }
 
-
     protected override async Task OnInitializedAsync()
     {
-        var authState =
-            await AuthStateProvider.GetAuthenticationStateAsync();
-
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         isOrgAdmin = authState.User.IsInRole("OrgAdmin");
 
+        // FIX: Load org timezone FIRST so selectedDate uses org-local today.
         await LoadOrgTimezone();
+
+        // FIX: Use org-local today, not server DateTime.Today
+        selectedDate = TimeHelper.GetOrgDate(orgTimeZone);
 
         if (isOrgAdmin)
             departments = await DeptService.GetAllAsync();
@@ -279,7 +281,7 @@
     private async Task LoadData()
     {
         isLoading = true;
-        isNonWorkingDay = false; // Reset state
+        isNonWorkingDay = false;
         StateHasChanged();
 
         try
@@ -289,8 +291,6 @@
                 selectedDepartmentId == Guid.Empty ? null : selectedDepartmentId,
                 selectedRole);
 
-            // Check if the entire list is marked as Holiday or Weekend
-            // If so, we trigger the "Global UI" instead of showing the table
             if (attendanceList.Any())
             {
                 var firstStatus = attendanceList.First().Status ?? "";
@@ -311,49 +311,15 @@
         }
     }
 
-    // private string FormatTime(DateTime? utcTime)
-    // {
-    //     return utcTime.HasValue
-    //         ? utcTime.Value.ToLocalTime().ToString("hh:mm tt")
-    //         : "--:--";
-    // }
+    // FIX: All time display now uses orgTimeZone — not UTC default.
     private string FormatTime(DateTime? utcTime)
-    {
-        if (!utcTime.HasValue)
-            return "--:--";
-
-        var localTime = TimeZoneInfo.ConvertTimeFromUtc(
-            DateTime.SpecifyKind(
-                utcTime.Value,
-                DateTimeKind.Utc),
-            orgTimeZone);
-
-        return localTime.ToString("dd MMM yyyy hh:mm tt");
-    }
-    // private string FormatTime(DateTime? time)
-    // {
-    //     if (!time.HasValue)
-    //         return "--";
-
-    //     return time.Value.ToString("hh:mm tt");
-    // }
-    // private string FormatTime(DateTime? utcTime)
-    // {
-    //     if (!utcTime.HasValue) return "--";
-
-    //     3. Convert UTC from DB to the Org's Local Time
-    //     var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime.Value, orgTimeZone);
-    //     return localTime.ToString("hh:mm tt");
-    // }
+        => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
 
     private string GetStatusClass(string? status)
     {
         if (string.IsNullOrEmpty(status)) return "bg-secondary";
-
-        // Dynamic checks for Holiday and Weekend strings
         if (status.Contains("Holiday")) return "bg-info text-dark";
         if (status.Contains("Weekend")) return "bg-light text-muted border";
-
         return status switch
         {
             "Present" => "bg-success",

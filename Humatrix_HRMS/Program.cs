@@ -73,11 +73,13 @@ builder.Services.AddScoped<WorkFromHomeService>();
 builder.Services.AddScoped<AttendanceCorrectionService>();
 builder.Services.AddHostedService<AttendanceBackgroundService>();
 builder.Services.AddScoped<AttendanceCalculationService>();
+builder.Services.AddScoped<HRPolicyValidationService>();
 
 builder.Services.AddScoped<OfficeLocationService>();
 //builder.Services.AddScoped<AttendanceService>();  
-builder.Services.AddControllers();
-builder.Services.AddCascadingAuthenticationState();
+//builder.Services.AddControllers();
+//builder.Services.AddCascadingAuthenticationState();
+
 
 
 var app = builder.Build();

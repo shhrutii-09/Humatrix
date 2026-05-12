@@ -10,12 +10,17 @@ namespace Humatrix_HRMS.Services
         private readonly ApplicationDbContext _context;
         private readonly CurrentUserService _currentUser;
 
-        public WorkFromHomeService(ApplicationDbContext context, CurrentUserService currentUser)
+        private readonly HRPolicyValidationService _policy;
+
+        public WorkFromHomeService(
+            ApplicationDbContext context,
+            CurrentUserService currentUser,
+            HRPolicyValidationService policy)
         {
             _context = context;
             _currentUser = currentUser;
+            _policy = policy;
         }
-
         // ─────────────────────────────────────
         // APPLY
         // ─────────────────────────────────────
@@ -28,44 +33,17 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync(e => e.UserId == user.Id)
                 ?? throw new Exception("Employee not found");
 
-            // ✅ Derive "today" using org timezone — not server local time
-            var org = await _context.Organizations
-                .FirstOrDefaultAsync(o => o.OrganizationId == employee.OrganizationId)
-                ?? throw new Exception("Organization not found");
+            var orgId = employee.OrganizationId;
+            var orgToday = await _policy.GetOrgTodayAsync(orgId);
 
-            var tz = GetOrgTimezone(org.TimeZoneId);
-            //var orgToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
-            var orgToday = TimeHelper.GetOrgDate(org.TimeZoneId);
-
-            // WFH must be applied for today or future — not past
             if (request.Date.Date < orgToday)
                 throw new Exception("Cannot apply for past date");
 
-            var workWeek = await _context.WorkWeeks
-                .FirstOrDefaultAsync(w => w.OrganizationId == employee.OrganizationId)
-                ?? throw new Exception("Work week not configured");
+            // ── CENTRAL POLICY CHECK ──────────────────────────────────────────────────
+            // Checks: holiday, non-working day, leave conflict
+            await _policy.AssertEmployeeCanActAsync(orgId, employee.EmployeeId, request.Date, "WFH");
 
-            if (!DateHelper.IsWorkingDay(request.Date, workWeek))
-                throw new Exception("Not a working day");
-
-            var isHoliday = await _context.Holidays.AnyAsync(h =>
-                h.OrganizationId == employee.OrganizationId &&
-                h.Date.Date == request.Date.Date &&
-                !h.IsOptional);
-
-            if (isHoliday)
-                throw new Exception("Cannot apply WFH on holiday");
-
-            var leaveExists = await _context.LeaveRequests.AnyAsync(l =>
-                l.EmployeeId == employee.EmployeeId &&
-                l.Status != "Rejected" &&
-                l.Status != "Cancelled" &&
-                request.Date.Date >= l.FromDate.Date &&
-                request.Date.Date <= l.ToDate.Date);
-
-            if (leaveExists)
-                throw new Exception("Leave already applied on this date");
-
+            // ── Duplicate WFH guard ───────────────────────────────────────────────────
             var wfhExists = await _context.WorkFromHomeRequests.AnyAsync(w =>
                 w.EmployeeId == employee.EmployeeId &&
                 w.Date.Date == request.Date.Date &&
@@ -75,12 +53,13 @@ namespace Humatrix_HRMS.Services
             if (wfhExists)
                 throw new Exception("WFH already applied for this date");
 
+            // ── Existing attendance guard ─────────────────────────────────────────────
             var attendanceExists = await _context.Attendances.AnyAsync(a =>
                 a.EmployeeId == employee.EmployeeId &&
                 a.WorkDate == request.Date);
 
             if (attendanceExists)
-                throw new Exception("Attendance already marked");
+                throw new Exception("Attendance already marked for this date");
 
             request.EmployeeId = employee.EmployeeId;
             request.Status = "Pending";

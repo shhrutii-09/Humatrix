@@ -1,159 +1,190 @@
 ﻿@page "/employee/overtime"
 @rendermode InteractiveServer
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
-@using Humatrix_HRMS.DTOs
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "Employee,HR,OrgAdmin")]
 @inject OvertimeService OvertimeService
+@inject CurrentUserService CurrentUserService
+@inject ApplicationDbContext DbContext
 @inject AttendanceService AttendanceService
 
 <PageTitle>My Overtime | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
+    <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-normal">Overtime Requests</h2>
-        <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadData">
-            <i class="bi bi-arrow-clockwise"></i> REFRESH
+        <div>
+            <h4 class="fw-bold mb-0">Overtime Requests</h4>
+            <small class="text-muted">Claim overtime for days you worked beyond shift hours</small>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm shadow-sm"
+                @onclick="LoadData" disabled="@isLoading">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
         </button>
     </div>
 
+    <!-- ALERT BANNER -->
     @if (!string.IsNullOrEmpty(message))
     {
-        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show border-0 shadow-sm">
-            @message
-            <button type="button" class="btn-close" @onclick="() => message = null"></button>
+        <div class="alert alert-@(isError ? "danger" : "success") alert-dismissible shadow-sm border-0 d-flex gap-2">
+            <i class="bi bi-@(isError ? "exclamation-triangle-fill" : "check-circle-fill") mt-1"></i>
+            <div class="flex-grow-1">@message</div>
+            <button class="btn-close" @onclick="() => message = null"></button>
         </div>
     }
 
     <div class="row g-4">
 
         <!-- ══════════════════════════════════════════════
-             LEFT PANEL — Days eligible to claim OT
+             LEFT — Claimable Records
         ══════════════════════════════════════════════ -->
         <div class="col-lg-5">
-            <div class="custom-card p-4 h-100">
-                <h5 class="fw-bold mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Claimable Overtime</h5>
-                <p class="text-muted small mb-3">
-                    Days where you worked beyond shift hours.
-                    Enter the time you actually left to raise a request.
-                </p>
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom py-3 px-4">
+                    <h5 class="fw-semibold mb-0">
+                        <i class="bi bi-clock-history text-primary me-2"></i>Claimable Overtime
+                    </h5>
+                    <p class="text-muted small mb-0">
+                        Days where you worked beyond scheduled shift hours.
+                    </p>
+                </div>
+                <div class="card-body p-3">
 
-                @if (eligibleRecords == null || !eligibleRecords.Any())
-                {
-                    <div class="text-center py-4 text-muted">
-                        <i class="bi bi-check2-circle fs-2"></i>
-                        <p class="mt-2 mb-0">No pending overtime to claim.</p>
-                    </div>
-                }
-                else
-                {
-                    <div class="list-group list-group-flush">
-                        @foreach (var record in eligibleRecords)
-                        {
-                            <div class="list-group-item border-0 px-0 mb-2">
-                                <div class="d-flex justify-content-between align-items-center p-3 rounded bg-light border shadow-sm">
-                                    <div>
-                                        <div class="fw-bold">@record.Date.ToString("ddd, MMM dd yyyy")</div>
-                                        <span class="badge bg-info-subtle text-info border border-info-subtle mt-1">
-                                            Worked: @(record.TotalHours?.ToString("F2")) hrs
-                                        </span>
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary spinner-border-sm"></div>
+                            <p class="text-muted small mt-2">Loading...</p>
+                        </div>
+                    }
+                    else if (!eligibleRecords.Any())
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-check2-circle fs-2 d-block mb-2 opacity-25"></i>
+                            No pending overtime to claim.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var record in eligibleRecords)
+                            {
+                                var isSelected = selectedRecord?.AttendanceId == record.AttendanceId;
+                                <div class="list-group-item border-0 px-0 py-2">
+                                    <div class="d-flex justify-content-between align-items-center p-3 rounded border @(isSelected ? "border-primary bg-primary-subtle" : "bg-light")">
+                                        <div>
+                                            <div class="fw-semibold">@record.Date.ToString("ddd, MMM dd yyyy")</div>
+                                            <span class="badge bg-info-subtle text-info border border-info-subtle mt-1 small">
+                                                Worked: @(record.TotalHours?.ToString("F2")) hrs
+                                            </span>
+                                        </div>
+                                        @if (isSelected)
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    @onclick="() => selectedRecord = null">
+                                                Cancel
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-primary px-3"
+                                                    @onclick="() => SelectRecord(record)">
+                                                CLAIM
+                                            </button>
+                                        }
                                     </div>
-                                    @if (selectedRecord?.AttendanceId == record.AttendanceId)
-                                    {
-                                        <button class="btn btn-sm btn-outline-secondary"
-                                                @onclick="() => selectedRecord = null">
-                                            Cancel
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <button class="btn btn-sm btn-primary px-3"
-                                                @onclick="() => SelectRecord(record)">
-                                            CLAIM
-                                        </button>
-                                    }
                                 </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- CLAIM FORM — shown inline when a record is selected -->
+                    @if (selectedRecord != null)
+                    {
+                        <div class="mt-3 p-3 border border-primary rounded bg-white">
+                            <h6 class="fw-bold text-primary mb-3">
+                                <i class="bi bi-pencil-square me-2"></i>Claim — @selectedRecord.Date.ToString("ddd, MMM dd")
+                            </h6>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-uppercase text-muted">
+                                    Shift / Scheduled End
+                                </label>
+                                <input class="form-control bg-light"
+                                       value="@FormatTime(selectedRecord.CheckOut)" readonly />
+                                <div class="form-text">Your official shift end time.</div>
                             </div>
-                        }
-                    </div>
-                }
 
-                <!-- Claim form — shown inline when a record is selected -->
-                @if (selectedRecord != null)
-                {
-                    <div class="mt-3 p-3 border rounded bg-white shadow-sm border-primary">
-                        <h6 class="fw-bold text-primary mb-3">
-                            Claim Overtime — @selectedRecord.Date.ToString("ddd, MMM dd")
-                        </h6>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-uppercase text-muted">
+                                    Actual Time You Left <span class="text-danger">*</span>
+                                </label>
+                                <input type="time"
+                                       class="form-control @(showFormValidation && actualCheckOutTime == default ? "is-invalid" : "")"
+                                       @bind="actualCheckOutTime" />
+                                <div class="form-text">Must be after your scheduled shift end.</div>
+                            </div>
 
-                        <div class="mb-3">
-                            <label class="form-label-custom">Shift / System Checkout</label>
-                            <input class="form-control bg-light"
-                                   value="@(selectedRecord.CheckOut?.ToLocalTime().ToString("hh:mm tt"))"
-                                   readonly />
-                            <div class="form-text">This is when your shift officially ended.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label-custom">Actual Time You Left <span class="text-danger">*</span></label>
-                            <!--
-                                Use a time input. The value is stored as a local DateTime so the
-                                service can convert it to UTC correctly.
-                            -->
-                            <input type="time"
-                                   class="form-control"
-                                   @bind="actualCheckOutTime" />
-                            <div class="form-text">Must be after the shift checkout shown above.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label-custom">Reason <span class="text-danger">*</span></label>
-                            <textarea class="form-control"
-                                      rows="3"
-                                      placeholder="What task/project kept you working longer?"
-                                      @bind="requestReason"></textarea>
-                        </div>
-
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary"
-                                    disabled="@isSubmitting"
-                                    @onclick="HandleSubmit">
-                                @if (isSubmitting)
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-uppercase text-muted">
+                                    Reason <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control @(showFormValidation && string.IsNullOrWhiteSpace(requestReason) ? "is-invalid" : "")"
+                                          rows="3"
+                                          placeholder="What task kept you working longer?"
+                                          @bind="requestReason"></textarea>
+                                @if (showFormValidation && string.IsNullOrWhiteSpace(requestReason))
                                 {
-                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                    <div class="invalid-feedback d-block">Reason is required.</div>
                                 }
-                                SUBMIT REQUEST
-                            </button>
-                            <button class="btn btn-link btn-sm text-muted"
-                                    @onclick="() => selectedRecord = null">
-                                Cancel
-                            </button>
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary"
+                                        disabled="@isSubmitting"
+                                        @onclick="HandleSubmit">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    <i class="bi bi-send me-1"></i>Submit OT Request
+                                </button>
+                                <button class="btn btn-link btn-sm text-muted text-decoration-none"
+                                        @onclick="() => { selectedRecord = null; showFormValidation = false; }">
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                }
+                    }
+
+                </div>
             </div>
         </div>
 
         <!-- ══════════════════════════════════════════════
-             RIGHT PANEL — Request history
+             RIGHT — Request History
         ══════════════════════════════════════════════ -->
         <div class="col-lg-7">
-            <div class="custom-card overflow-hidden">
-                <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold">My Overtime History</h5>
-                    <span class="badge bg-secondary">@myRequests.Count total</span>
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-semibold">My Overtime History</h5>
+                    <span class="badge bg-secondary-subtle text-secondary">@myRequests.Count total</span>
                 </div>
                 <div class="table-responsive">
-                    <table class="table table-custom table-hover mb-0">
-                        <thead>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
                             <tr>
-                                <th class="ps-4">DATE</th>
-                                <th>REQ. HOURS</th>
-                                <th>ACTUAL OUT</th>
-                                <th>STATUS</th>
-                                <th class="pe-4">REASON</th>
+                                <th class="ps-4 text-muted small fw-bold border-0">DATE</th>
+                                <th class="text-muted small fw-bold border-0">REQ. HOURS</th>
+                                <th class="text-muted small fw-bold border-0">ACTUAL OUT</th>
+                                <th class="text-muted small fw-bold border-0">STATUS</th>
+                                <th class="text-muted small fw-bold border-0 pe-4">REASON</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -161,6 +192,7 @@
                             {
                                 <tr>
                                     <td colspan="5" class="text-center py-5 text-muted">
+                                        <i class="bi bi-clock fs-2 d-block mb-2 opacity-25"></i>
                                         No overtime requests yet.
                                     </td>
                                 </tr>
@@ -170,24 +202,24 @@
                                 @foreach (var req in myRequests)
                                 {
                                     <tr>
-                                        <td class="ps-4 fw-bold">@req.Date.ToString("dd MMM yyyy")</td>
+                                        <td class="ps-4 fw-semibold">@req.Date.ToString("dd MMM yyyy")</td>
                                         <td>
                                             <span class="badge bg-warning text-dark">
                                                 @req.RequestedHours.ToString("F2") hrs
                                             </span>
                                         </td>
                                         <td class="font-monospace small">
-                                            @req.ActualCheckOut?.ToLocalTime().ToString("hh:mm tt")
+                                            @FormatTime(req.ActualCheckOut)
                                         </td>
                                         <td>
-                                            <span class="badge @GetStatusClass(req.Status)">
+                                            <span class="badge rounded-pill @GetStatusClass(req.Status)">
                                                 @req.Status
                                             </span>
                                         </td>
-                                        <td class="text-muted small pe-4 text-truncate"
+                                        <td class="text-muted small pe-4"
                                             style="max-width:200px;"
                                             title="@req.Reason">
-                                            @req.Reason
+                                            @TruncateText(req.Reason, 50)
                                         </td>
                                     </tr>
                                 }
@@ -197,132 +229,145 @@
                 </div>
             </div>
         </div>
+
     </div>
 </div>
-
-<style>
-    .custom-card {
-        background: #ffffff;
-        border: 1px solid #e0e0e0 !important;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,.05);
-    }
-
-    .form-label-custom {
-        font-size: .75rem;
-        font-weight: 700;
-        color: #6c757d;
-        text-transform: uppercase;
-        display: block;
-        margin-bottom: .3rem;
-    }
-
-    .table-custom thead th {
-        background-color: #fcfcfc;
-        font-size: .7rem;
-        color: #888;
-        letter-spacing: .8px;
-        padding: 14px 8px;
-    }
-
-    .table-custom td {
-        border-bottom: 1px solid #f2f2f2;
-        padding: 12px 8px;
-        font-size: .9rem;
-    }
-
-    .bg-info-subtle {
-        background-color: #e0f7fa !important;
-    }
-</style>
-
 @code {
-    // ── State ────────────────────────────────────────────────────────────────────
+
     private List<AttendanceListDto> eligibleRecords = new();
     private List<OvertimeRequest> myRequests = new();
     private AttendanceListDto? selectedRecord;
 
-    // Form fields
-    private DateTime actualCheckOutTime = DateTime.Now;
+    private TimeOnly actualCheckOutTime = TimeOnly.MinValue;
     private string requestReason = string.Empty;
 
-    private string? message;
-    private bool isError;
+    private bool isLoading;
     private bool isSubmitting;
+    private bool showFormValidation;
+    private bool isError;
+    private string? message;
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────────
-    protected override async Task OnInitializedAsync() => await LoadData();
+    // FIX: Load org timezone so FormatOrgTime and time display are correct
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+    private string orgTimeZoneId = "UTC";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrgTimezone();
+        await LoadData();
+    }
+
+    private async Task LoadOrgTimezone()
+    {
+        try
+        {
+            // NOTE: Inject CurrentUserService and ApplicationDbContext in the
+            // @inject section if not already present (same pattern as other pages)
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId != null)
+            {
+                var org = await DbContext.Organizations
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.OrganizationId == user.OrganizationId);
+
+                orgTimeZoneId = org?.TimeZoneId ?? "UTC";
+                orgTimeZone = TimeHelper.GetOrgTimeZone(orgTimeZoneId);
+            }
+        }
+        catch
+        {
+            orgTimeZoneId = "UTC";
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
+    }
 
     private async Task LoadData()
     {
+        isLoading = true;
         message = null;
         selectedRecord = null;
 
-        // Attendance records where NeedsOvertimeApproval=true and no request raised yet
-        var allAttendance = await AttendanceService.GetMyAttendanceAsync();
+        try
+        {
+            var allAttendance = await AttendanceService.GetMyAttendanceAsync();
 
-        eligibleRecords = allAttendance
-            .Where(a =>
-                a.NeedsOvertimeApproval == true &&
-                (a.OvertimeStatus == null || a.OvertimeStatus == "Rejected") &&
-                a.Date < DateTime.Today)
-            .OrderByDescending(a => a.Date)
-            .ToList();
+            // FIX: Compare Date against org-local today, not DateTime.Today (server)
+            var orgToday = TimeHelper.GetOrgDate(orgTimeZoneId);
 
-        // Full request history (new method on OvertimeService)
-        myRequests = await OvertimeService.GetMyRequestsAsync();
+            eligibleRecords = allAttendance
+                .Where(a =>
+                    a.NeedsOvertimeApproval == true &&
+                    (a.OvertimeStatus == null || a.OvertimeStatus == "Rejected") &&
+                    a.Date.Date < orgToday.Date)
+                .OrderByDescending(a => a.Date)
+                .ToList();
+
+            myRequests = await OvertimeService.GetMyRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
-    // ── Select a record to claim OT ───────────────────────────────────────────
     private void SelectRecord(AttendanceListDto record)
     {
         selectedRecord = record;
         requestReason = string.Empty;
+        showFormValidation = false;
 
-        // Pre-fill actual checkout = recorded checkout (employee can adjust upward)
-        actualCheckOutTime = record.CheckOut.HasValue
-            ? record.CheckOut.Value.ToLocalTime()
-            : DateTime.Now;
+        // FIX: Convert UTC → org-local for pre-filling the time input.
+        // NEVER use .ToLocalTime() — that converts to server OS timezone.
+        if (record.CheckOut.HasValue)
+        {
+            var localCheckout = TimeHelper.ToOrgLocal(record.CheckOut.Value, orgTimeZone);
+            actualCheckOutTime = TimeOnly.FromDateTime(localCheckout);
+        }
+        else
+        {
+            // Default to current org-local time
+            var orgNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, orgTimeZone);
+            actualCheckOutTime = TimeOnly.FromDateTime(orgNow);
+        }
     }
 
-    // ── Submit ────────────────────────────────────────────────────────────────
     private async Task HandleSubmit()
     {
+        showFormValidation = true;
         if (selectedRecord == null) return;
+        if (string.IsNullOrWhiteSpace(requestReason)) return;
+        if (actualCheckOutTime == TimeOnly.MinValue) return;
 
-        if (string.IsNullOrWhiteSpace(requestReason))
-        {
-            isError = true;
-            message = "Please provide a reason for the overtime request.";
-            return;
-        }
+        isSubmitting = true;
+        isError = false;
+        message = null;
 
         try
         {
-            isSubmitting = true;
-            isError = false;
-            message = null;
-
-            // Build a full UTC DateTime for the actual checkout.
-            // actualCheckOutTime is a local (client) DateTime; the service converts to UTC
-            // using the org timezone — so we pass it as-is (unspecified kind is treated
-            // as org-local inside the service).
             var workDate = selectedRecord.Date;
+
+            // Build a local DateTime combining work date + the time entered
+            // Kind = Unspecified — OvertimeService.RaiseRequestAsync will
+            // convert it to UTC using the org timezone
             var actualLocal = new DateTime(
                 workDate.Year, workDate.Month, workDate.Day,
                 actualCheckOutTime.Hour, actualCheckOutTime.Minute, 0,
                 DateTimeKind.Unspecified);
 
-            var dto = new CreateOvertimeRequestDto
+            await OvertimeService.RaiseRequestAsync(new CreateOvertimeRequestDto
             {
                 AttendanceId = selectedRecord.AttendanceId ?? Guid.Empty,
-                ActualCheckOut = actualLocal, // service converts to UTC
+                ActualCheckOut = actualLocal,
                 Reason = requestReason
-            };
+            });
 
-            await OvertimeService.RaiseRequestAsync(dto);
-
-            message = "Overtime request submitted successfully.";
+            isError = false;
+            message = "Overtime request submitted. Pending HR review.";
             selectedRecord = null;
             requestReason = string.Empty;
             await LoadData();
@@ -338,10 +383,18 @@
         }
     }
 
-    private string GetStatusClass(string status) => status switch
+    // FIX: Pass orgTimeZone to FormatOrgTime so it displays in org-local time
+    private string FormatTime(DateTime? utcDt)
+        => TimeHelper.FormatOrgTime(utcDt, orgTimeZone);
+
+    private static string GetStatusClass(string? status) => status switch
     {
         "Approved" => "bg-success",
         "Rejected" => "bg-danger",
         _ => "bg-warning text-dark"
     };
+
+    private static string TruncateText(string? text, int max) =>
+        string.IsNullOrEmpty(text) ? "—" :
+        text.Length <= max ? text : text[..max] + "…";
 }

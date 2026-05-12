@@ -1,194 +1,233 @@
 ﻿@page "/employee/attendance"
 @rendermode InteractiveServer
-
 @using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-
+@using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "Employee,HR")]
-
 @inject AttendanceService AttendanceService
 @inject IJSRuntime JS
+@inject CurrentUserService CurrentUserService
+@inject ApplicationDbContext DbContext 
+@implements IDisposable
 
 <PageTitle>My Attendance | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2 class="fw-normal">My Attendance</h2>
-            <p class="text-muted small">Track your daily work hours and check-in history.</p>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">My Attendance</h4>
+            <small class="text-muted">Track your daily work hours and check-in history</small>
         </div>
+        <button class="btn btn-outline-secondary btn-sm shadow-sm"
+                @onclick="RefreshUI" disabled="@isLoading">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
     </div>
 
     @if (!string.IsNullOrEmpty(error))
     {
-        <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <div>@error</div>
+        <div class="alert alert-danger alert-dismissible shadow-sm border-0 d-flex align-items-start gap-2">
+            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+            <div class="flex-grow-1">@error</div>
+            <button class="btn-close ms-auto" @onclick="() => error = null"></button>
         </div>
     }
 
     <div class="row g-4">
 
-        <!-- LEFT PANEL -->
-        <div class="col-xl-4 col-md-6">
+        <!-- ── CHECK-IN CARD ──────────────────────────────────────────────── -->
+        <div class="col-xl-4 col-lg-5">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-body text-center p-5">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center p-5 text-center">
+                    <i class="bi bi-clock-history text-primary" style="font-size:2.5rem;"></i>
+                    <h3 class="fw-bold mt-3 mb-0">@currentTime.ToString("hh:mm tt")</h3>
+                    <p class="text-muted small mb-4">@currentTime.ToString("dddd, MMMM dd, yyyy")</p>
 
-                    <i class="bi bi-clock-history text-primary display-4 mb-3"></i>
-
-                    <!-- ✅ LIVE CLOCK -->
-                    <h4 class="fw-bold mb-1">@currentTime.ToString("hh:mm tt")</h4>
-                    <p class="text-muted small mb-4">@currentTime.ToString("dddd, MMMM dd")</p>
-
-                    @if (!string.IsNullOrEmpty(message))
+                    @if (!string.IsNullOrEmpty(statusBadge))
                     {
-                        <div class="badge @(isCheckedIn ? "bg-success-subtle text-success" : "bg-light text-dark") p-2 mb-4 w-100">
-                            <i class="bi bi-info-circle me-1"></i> @message
+                        <div class="badge @statusBadgeClass px-3 py-2 fs-6 mb-4 w-100 rounded-pill">
+                            <i class="bi bi-info-circle me-1"></i>@statusBadge
                         </div>
                     }
 
-                    <div class="d-grid gap-2">
+                    <div class="d-grid w-100 gap-2">
                         @if (!isCheckedIn)
                         {
-                            <button class="btn btn-primary py-3 fw-bold shadow-sm"
-                                    style="background-color: #5c4ac7; border: none;"
+                            <button class="btn btn-primary py-3 fw-bold"
+                                    style="background:#5c4ac7;border:none;"
                                     @onclick="HandleCheckIn"
-                                    disabled="@isLoading">
-                                @if (isLoading)
+                                    disabled="@isActionLoading">
+                                @if (isActionLoading)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2"></span>
                                 }
-                                CHECK IN NOW
+                                <i class="bi bi-box-arrow-in-right me-2"></i>CHECK IN NOW
+                            </button>
+                        }
+                        else if (!isCheckedOut)
+                        {
+                            <button class="btn btn-outline-danger py-3 fw-bold"
+                                    @onclick="HandleCheckOut"
+                                    disabled="@isActionLoading">
+                                @if (isActionLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="bi bi-box-arrow-right me-2"></i>CHECK OUT
                             </button>
                         }
                         else
                         {
-                            <button class="btn btn-outline-danger py-3 fw-bold shadow-sm"
-                                    @onclick="HandleCheckOut"
-                                    disabled="@(isCheckedOut || isLoading)">
-                                @if (isLoading)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2"></span>
-                                }
-                                @(isCheckedOut ? "WORK COMPLETED" : "CHECK OUT")
+                            <button class="btn btn-success py-3 fw-bold" disabled>
+                                <i class="bi bi-check2-circle me-2"></i>WORK COMPLETED
                             </button>
                         }
                     </div>
-
                 </div>
             </div>
         </div>
 
-        <!-- RIGHT PANEL -->
-        <div class="col-xl-8 col-md-6">
+        <!-- ── STATS + HISTORY ───────────────────────────────────────────── -->
+        <div class="col-xl-8 col-lg-7">
 
-            <!-- STATS -->
-            <div class="row g-3">
-                <div class="col-sm-6 col-lg-4">
+            <div class="row g-3 mb-4">
+                <div class="col-sm-6 col-lg-3">
                     <div class="card shadow-sm border-0 border-start border-success border-4">
-                        <div class="card-body">
-                            <small class="text-muted fw-bold">PRESENT DAYS</small>
-                            <h3 class="mb-0">
+                        <div class="card-body py-3">
+                            <small class="text-muted fw-bold text-uppercase d-block">Present</small>
+                            <h3 class="mb-0 fw-bold">
                                 @attendanceList.Count(x =>
                                 x.Status == AttendanceStatuses.Present ||
-                                x.Status == AttendanceStatuses.Late)
+                                x.Status == AttendanceStatuses.Late ||
+                                x.Status == AttendanceStatuses.EarlyExit)
                             </h3>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-sm-6 col-lg-4">
+                <div class="col-sm-6 col-lg-3">
                     <div class="card shadow-sm border-0 border-start border-warning border-4">
-                        <div class="card-body">
-                            <small class="text-muted fw-bold">LATE ARRIVALS</small>
-                            <h3 class="mb-0">
+                        <div class="card-body py-3">
+                            <small class="text-muted fw-bold text-uppercase d-block">Late</small>
+                            <h3 class="mb-0 fw-bold">
                                 @attendanceList.Count(x => x.Status == AttendanceStatuses.Late)
                             </h3>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-sm-6 col-lg-4">
+                <div class="col-sm-6 col-lg-3">
                     <div class="card shadow-sm border-0 border-start border-danger border-4">
-                        <div class="card-body">
-                            <small class="text-muted fw-bold">ABSENT</small>
-                            <h3 class="mb-0">
+                        <div class="card-body py-3">
+                            <small class="text-muted fw-bold text-uppercase d-block">Absent</small>
+                            <h3 class="mb-0 fw-bold">
                                 @attendanceList.Count(x => x.Status == AttendanceStatuses.Absent)
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <div class="card shadow-sm border-0 border-start border-primary border-4">
+                        <div class="card-body py-3">
+                            <small class="text-muted fw-bold text-uppercase d-block">WFH</small>
+                            <h3 class="mb-0 fw-bold">
+                                @attendanceList.Count(x => x.Status == AttendanceStatuses.WorkFromHome)
                             </h3>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- HISTORY -->
-            <div class="card shadow-sm border-0 mt-4">
-                <div class="card-header bg-white py-3 border-0">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0 fw-bold">Recent History</h5>
+                    <small class="text-muted">Last 30 days</small>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="ps-4 border-0 text-muted small">DATE</th>
-                                <th class="text-center border-0 text-muted small">CHECK IN</th>
-                                <th class="text-center border-0 text-muted small">CHECK OUT</th>
-                                <th class="border-0 text-muted small">STATUS</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            @if (!attendanceList.Any())
-                            {
+                @if (isLoading)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="text-muted small mt-2">Loading attendance...</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
                                 <tr>
-                                    <td colspan="4" class="text-center py-4 text-muted">
-                                        No attendance history found.
-                                    </td>
+                                    <th class="ps-4 text-muted small fw-bold border-0">DATE</th>
+                                    <th class="text-center text-muted small fw-bold border-0">CHECK IN</th>
+                                    <th class="text-center text-muted small fw-bold border-0">CHECK OUT</th>
+                                    <th class="text-muted small fw-bold border-0">HOURS</th>
+                                    <th class="text-muted small fw-bold border-0">STATUS</th>
+                                    <th class="text-muted small fw-bold border-0">OT</th>
                                 </tr>
-                            }
-                            else
-                            {
-                                @foreach (var att in attendanceList
-                                                            .OrderByDescending(x => x.Date)
-                                                            .Take(10))
+                            </thead>
+                            <tbody>
+                                @if (!attendanceList.Any())
                                 {
                                     <tr>
-                                        <td class="ps-4 fw-bold">
-                                            @att.Date.ToString("dd MMM yyyy")
-
-                                            @if (att.IsManual)
-                                            {
-                                                <i class="bi bi-pencil-square ms-1 text-muted"
-                                                   title="Manually Edited"></i>
-                                            }
-                                        </td>
-
-                                        <td class="text-center font-monospace small">
-                                            @* @(att.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "--:--") *@
-                                            @TimeHelper.FormatOrgTime(att.CheckIn)
-                                        </td>
-
-                                        <td class="text-center font-monospace small">
-                                            @* @(att.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "--:--") *@
-                                            @TimeHelper.FormatOrgTime(att.CheckOut)
-                                        </td>
-
-                                        <td>
-                                            <span class="badge rounded-pill @GetStatusClass(att.Status)">
-                                                @att.Status
-                                            </span>
+                                        <td colspan="6" class="text-center py-5 text-muted">
+                                            <i class="bi bi-calendar-x fs-2 d-block mb-2 opacity-25"></i>
+                                            No attendance records yet.
                                         </td>
                                     </tr>
                                 }
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                                else
+                                {
+                                    @foreach (var att in attendanceList.OrderByDescending(x => x.Date).Take(30))
+                                    {
+                                        <tr>
+                                            <td class="ps-4 fw-semibold">
+                                                @att.Date.ToString("dd MMM yyyy")
+                                                @if (att.IsManual)
+                                                {
+                                                    <i class="bi bi-pencil-square ms-1 text-muted small"
+                                                       title="Manually edited by HR"></i>
+                                                }
+                                            </td>
+                                            <td class="text-center font-monospace small">
+                                                @FormatOrgTime(att.CheckIn)
+                                            </td>
+                                            <td class="text-center font-monospace small">
+                                                @FormatOrgTime(att.CheckOut)
+                                            </td>
+                                            <td class="small text-muted">
+                                                @(att.TotalHours.HasValue ? $"{att.TotalHours:F1}h" : "—")
+                                            </td>
+                                            <td>
+                                                <span class="badge rounded-pill @GetStatusClass(att.Status)">
+                                                    @att.Status
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (att.NeedsOvertimeApproval == true)
+                                                {
+                                                    var otBadge = att.OvertimeStatus switch
+                                                    {
+                                                        "Approved" => ("bg-success", "OT ✓"),
+                                                        "Rejected" => ("bg-danger", "OT ✗"),
+                                                        _ => ("bg-warning text-dark", "OT ⏳")
+                                                    };
+                                                    <span class="badge @otBadge.Item1"
+                                                          title="Overtime @(att.OvertimeStatus ?? "pending approval")">
+                                                        @otBadge.Item2
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </div>
-
         </div>
     </div>
 </div>
@@ -197,34 +236,109 @@
     private bool isCheckedIn;
     private bool isCheckedOut;
     private bool isLoading;
+    private bool _isRefreshing;
+    private bool isActionLoading;
     private string? error;
-    private string? message;
+    private string? statusBadge;
+    private string statusBadgeClass = "bg-light text-dark";
     private List<AttendanceListDto> attendanceList = new();
 
-    private DateTime currentTime = DateTime.Now;
-    private Timer? timer;
+    // currentTime ticks in org-local time — NEVER use DateTime.Now (server timezone)
+    private DateTime currentTime = DateTime.UtcNow;
+    private Timer? _timer;
+    private string orgTimeZoneId = "UTC";
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+
+    // protected override async Task OnInitializedAsync()
+    // {
+    //     await LoadOrgTimezone();
+    //     StartClock();
+    //     await RefreshUI();
+    // }
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadOrgTimezone();
+
+        currentTime = TimeHelper.GetOrgNow(orgTimeZone);
+
         StartClock();
+
         await RefreshUI();
+    }
+
+    private async Task LoadOrgTimezone()
+    {
+        try
+        {
+            var user = await CurrentUserService.GetUserAsync();
+
+            if (user?.OrganizationId == null)
+                return;
+
+            var tzId = await DbContext.Organizations
+                .AsNoTracking()
+                .Where(o => o.OrganizationId == user.OrganizationId)
+                .Select(o => o.TimeZoneId)
+                .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrWhiteSpace(tzId))
+            {
+                orgTimeZoneId = tzId;
+                orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
+            }
+        }
+        catch
+        {
+            orgTimeZoneId = "UTC";
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
     }
 
     private void StartClock()
     {
-        timer = new Timer(_ =>
+        _timer = new Timer(async _ =>
         {
-            currentTime = DateTime.Now;
-            InvokeAsync(StateHasChanged);
-        }, null, 0, 1000);
-    }
+            try
+            {
+                var newTime = TimeHelper.GetOrgNow(orgTimeZone);
+                bool dayChanged = newTime.Date != currentTime.Date;
 
+                currentTime = newTime;
+
+                // ONLY refresh once when date changes
+                if (dayChanged && !_isRefreshing)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await RefreshUI();
+                        StateHasChanged();
+                    });
+                }
+                else
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch
+            {
+                // prevent timer crash
+            }
+
+        }, null, 0, 1000);
+    }   
     private async Task RefreshUI()
     {
+        if (_isRefreshing)
+            return;
+
+        _isRefreshing = true;
+
+        isLoading = true;
+        error = null;
+
         try
         {
-            error = null;
-
             var status = await AttendanceService.GetTodayStatusAsync();
 
             if (status != null)
@@ -232,40 +346,34 @@
                 isCheckedIn = status.CheckIn != null;
                 isCheckedOut = status.CheckOut != null;
 
-                if (isCheckedOut)
-                    message = $"Checked out at {status.CheckOut?.ToLocalTime():hh:mm tt}";
-                else if (isCheckedIn)
-                    message = $"Checked in at {status.CheckIn?.ToLocalTime():hh:mm tt}";
+                if (isCheckedOut && status.CheckOut.HasValue)
+                {
+                    var local = TimeHelper.ToOrgLocal(status.CheckOut.Value, orgTimeZone);
+                    statusBadge = $"CHECKED OUT AT {local:hh:mm tt}";
+                    statusBadgeClass = "bg-success-subtle text-success border border-success-subtle";
+                }
+                else if (isCheckedIn && status.CheckIn.HasValue)
+                {
+                    var local = TimeHelper.ToOrgLocal(status.CheckIn.Value, orgTimeZone);
+                    statusBadge = $"CHECKED IN AT {local:hh:mm tt}";
+                    statusBadgeClass = "bg-primary-subtle text-primary border border-primary-subtle";
+                }
                 else
-                    message = "Ready to start your day?";
+                {
+                    statusBadge = "Ready to start your day?";
+                    statusBadgeClass = "bg-light text-muted border";
+                }
             }
             else
             {
                 isCheckedIn = false;
                 isCheckedOut = false;
-                message = "Ready to start your day?";
+                statusBadge = "Ready to start your day?";
+                statusBadgeClass = "bg-light text-muted border";
             }
 
             attendanceList = await AttendanceService.GetMyAttendanceAsync();
         }
-        catch
-        {
-            error = "Failed to load attendance data.";
-        }
-    }
-
-    private async Task HandleCheckIn()
-    {
-        try
-        {
-            isLoading = true;
-            error = null;
-
-            var location = await JS.InvokeAsync<LocationDto>("getLocation");
-            await AttendanceService.CheckInAsync(location.Latitude, location.Longitude);
-
-            await RefreshUI();
-        }
         catch (Exception ex)
         {
             error = ex.Message;
@@ -273,36 +381,102 @@
         finally
         {
             isLoading = false;
+            _isRefreshing = false;
         }
+    }
+    // private async Task RefreshUI()
+    // {
+    //     isLoading = true;
+    //     error = null;
+
+    //     try
+    //     {
+    //         var status = await AttendanceService.GetTodayStatusAsync();
+
+    //         if (status != null)
+    //         {
+    //             isCheckedIn = status.CheckIn != null;
+    //             isCheckedOut = status.CheckOut != null;
+
+    //             if (isCheckedOut && status.CheckOut.HasValue)
+    //             {
+    //                 var local = TimeHelper.ToOrgLocal(status.CheckOut.Value, orgTimeZone);
+    //                 statusBadge = $"CHECKED OUT AT {local:hh:mm tt}";
+    //                 statusBadgeClass = "bg-success-subtle text-success border border-success-subtle";
+    //             }
+    //             else if (isCheckedIn && status.CheckIn.HasValue)
+    //             {
+    //                 var local = TimeHelper.ToOrgLocal(status.CheckIn.Value, orgTimeZone);
+    //                 statusBadge = $"CHECKED IN AT {local:hh:mm tt}";
+    //                 statusBadgeClass = "bg-primary-subtle text-primary border border-primary-subtle";
+    //             }
+    //             else
+    //             {
+    //                 statusBadge = "Ready to start your day?";
+    //                 statusBadgeClass = "bg-light text-muted border";
+    //             }
+    //         }
+    //         else
+    //         {
+    //             isCheckedIn = false;
+    //             isCheckedOut = false;
+    //             statusBadge = "Ready to start your day?";
+    //             statusBadgeClass = "bg-light text-muted border";
+    //         }
+
+    //         attendanceList = await AttendanceService.GetMyAttendanceAsync();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         error = ex.Message;
+    //     }
+    //     finally
+    //     {
+    //         isLoading = false;
+    //     }
+    // }
+
+    /// <summary>
+    /// Converts a UTC timestamp (EF returns Unspecified) to org-local display time.
+    /// NEVER use .ToLocalTime() — that uses the server OS timezone.
+    /// </summary>
+    private string FormatOrgTime(DateTime? utcTime)
+        => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
+
+    private async Task HandleCheckIn()
+    {
+        isActionLoading = true;
+        error = null;
+        try
+        {
+            var loc = await JS.InvokeAsync<LocationDto>("getLocation");
+            await AttendanceService.CheckInAsync(loc.Latitude, loc.Longitude);
+            await RefreshUI();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { isActionLoading = false; }
     }
 
     private async Task HandleCheckOut()
     {
+        isActionLoading = true;
+        error = null;
         try
         {
-            isLoading = true;
-            error = null;
-
-            var location = await JS.InvokeAsync<LocationDto>("getLocation");
-            await AttendanceService.CheckOutAsync(location.Latitude, location.Longitude);
-
+            var loc = await JS.InvokeAsync<LocationDto>("getLocation");
+            await AttendanceService.CheckOutAsync(loc.Latitude, loc.Longitude);
             await RefreshUI();
         }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-        }
-        finally
-        {
-            isLoading = false;
-        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { isActionLoading = false; }
     }
 
-    private string GetStatusClass(string status) => status switch
+    private static string GetStatusClass(string? status) => status switch
     {
         AttendanceStatuses.Present => "bg-success",
         AttendanceStatuses.Late => "bg-warning text-dark",
-        AttendanceStatuses.HalfDay => "bg-info",
+        AttendanceStatuses.HalfDay => "bg-info text-dark",
+        AttendanceStatuses.EarlyExit => "bg-info text-dark",
         AttendanceStatuses.ShortHours => "bg-secondary",
         AttendanceStatuses.Absent => "bg-danger",
         AttendanceStatuses.WorkFromHome => "bg-primary",
@@ -310,8 +484,5 @@
         _ => "bg-secondary"
     };
 
-    public void Dispose()
-    {
-        timer?.Dispose();
-    }
+    public void Dispose() => _timer?.Dispose();
 }

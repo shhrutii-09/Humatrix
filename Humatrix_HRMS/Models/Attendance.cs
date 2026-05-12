@@ -52,5 +52,16 @@ namespace Humatrix_HRMS.Models
         public DateTime? UpdatedAt { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public bool IsHrCorrected { get; set; }
+
+        public Guid? LastModifiedByEmployeeId { get; set; }
+
+        public DateTime? LastModifiedAt { get; set; }
+
+        public string? ModificationReason { get; set; }
+
+        public ICollection<AttendanceCorrectionRequest> CorrectionRequests { get; set; }
+    = new List<AttendanceCorrectionRequest>();
     }
 }

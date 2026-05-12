@@ -1,102 +1,299 @@
 ﻿@page "/hr/wfh"
 @rendermode InteractiveServer
-
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-
-@attribute [Authorize(Roles = "HR")]
-
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
 @inject WorkFromHomeService WfhService
 
-<PageTitle>WFH Approvals</PageTitle>
+<PageTitle>WFH Approvals | HR | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <h2 class="mb-4">WFH Approvals</h2>
-
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-0">
-
-            <table class="table mb-0 align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th>Employee</th>
-                        <th>Date</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                        <th></th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @foreach (var r in list)
-                    {
-                        <tr>
-
-                            <td>@r.Employee?.FirstName</td>
-
-                            <td>@r.Date.ToString("dd MMM")</td>
-
-                            <td>@r.Reason</td>
-
-                            <td>
-                                <span class="badge @GetStatusClass(r.Status)">
-                                    @r.Status
-                                </span>
-                            </td>
-
-                            <td>
-                                @if (r.Status == "Pending")
-                                {
-                                    <button class="btn btn-success btn-sm"
-                                            @onclick="() => Approve(r.Id)">
-                                        Approve
-                                    </button>
-
-                                    <button class="btn btn-danger btn-sm ms-2"
-                                            @onclick="() => Reject(r.Id)">
-                                        Reject
-                                    </button>
-                                }
-                            </td>
-
-                        </tr>
-                    }
-                </tbody>
-
-            </table>
-
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">WFH Approvals</h4>
+            <small class="text-muted">Review and process employee Work From Home requests</small>
         </div>
+        <div class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm w-auto shadow-sm"
+                    @onchange="HandleFilterChange">
+                <option value="">All Requests</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm shadow-sm"
+                    @onclick="LoadData" disabled="@loading">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ALERT BANNER -->
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-@(isError ? "danger" : "success") alert-dismissible shadow-sm border-0 d-flex gap-2">
+            <i class="bi bi-@(isError ? "exclamation-triangle-fill" : "check-circle-fill") mt-1"></i>
+            <div class="flex-grow-1">@message</div>
+            <button class="btn-close" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    <!-- TABLE -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-bottom py-3 px-4">
+            <span class="text-muted small fw-bold">
+                @if (loading)
+                {
+                    <text>Loading...</text>
+                }
+                else
+                {
+
+                    <text>@list.Count RESULT(S)</text>
+                }
+            </span>
+        </div>
+
+        @if (loading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <p class="text-muted small mt-2">Loading requests...</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4 text-muted small fw-bold border-0">EMPLOYEE</th>
+                            <th class="text-muted small fw-bold border-0">DATE</th>
+                            <th class="text-muted small fw-bold border-0">REASON</th>
+                            <th class="text-muted small fw-bold border-0">APPLIED ON</th>
+                            <th class="text-muted small fw-bold border-0">STATUS</th>
+                            <th class="text-end text-muted small fw-bold border-0 pe-4">ACTION</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!list.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="bi bi-house-door fs-2 d-block mb-2 opacity-25"></i>
+                                    No WFH requests found.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var r in list.OrderBy(x => x.Status != "Pending").ThenByDescending(x => x.Date))
+                            {
+                                <tr class="@(r.Status == "Pending" ? "table-warning" : "")">
+                                    <td class="ps-4">
+                                        <div class="fw-semibold">@r.Employee?.FirstName @r.Employee?.LastName</div>
+                                        <small class="text-muted">@r.Employee?.Department?.Name</small>
+                                    </td>
+                                    <td class="fw-semibold">@r.Date.ToString("dd MMM yyyy")</td>
+                                    <td class="text-muted small" style="max-width:200px;">@r.Reason</td>
+                                    <td class="small text-muted">
+                                        @r.AppliedAt.ToLocalTime().ToString("dd MMM yyyy")
+                                    </td>
+                                    <td>
+                                        <span class="badge rounded-pill @GetStatusClass(r.Status)">
+                                            @r.Status
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        @if (r.Status == "Pending")
+                                        {
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <button class="btn btn-sm btn-success"
+                                                        disabled="@actionLoading"
+                                                        @onclick="() => Approve(r.Id)">
+                                                    <i class="bi bi-check-circle me-1"></i>Approve
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        disabled="@actionLoading"
+                                                        @onclick="() => OpenRejectModal(r)">
+                                                    <i class="bi bi-x-circle me-1"></i>Reject
+                                                </button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
 
 </div>
 
+<!-- REJECT MODAL -->
+@if (showRejectModal && selectedRequest != null)
+{
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-x-circle-fill text-danger me-2"></i>Reject WFH Request
+                    </h5>
+                    <button class="btn-close" @onclick="CloseRejectModal"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <div class="p-3 bg-light rounded small mb-3">
+                        <strong>@selectedRequest.Employee?.FirstName @selectedRequest.Employee?.LastName</strong> —
+                        WFH on @selectedRequest.Date.ToString("dd MMM yyyy")
+                    </div>
+                    <label class="form-label small fw-bold text-uppercase text-muted">
+                        Rejection Reason <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control @(showValidation && string.IsNullOrWhiteSpace(rejectReason) ? "is-invalid" : "")"
+                              rows="3"
+                              placeholder="Explain why this WFH is being rejected..."
+                              @bind="rejectReason"></textarea>
+                    @if (showValidation && string.IsNullOrWhiteSpace(rejectReason))
+                    {
+                        <div class="invalid-feedback">Rejection reason is required.</div>
+                    }
+                </div>
+                <div class="modal-footer border-0">
+                    <button class="btn btn-secondary" @onclick="CloseRejectModal" disabled="@actionLoading">Cancel</button>
+                    <button class="btn btn-danger" @onclick="ConfirmReject" disabled="@actionLoading">
+                        @if (actionLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Reject
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
 @code {
 
+    // ── State ────────────────────────────────────────────────────────────────────
     private List<WorkFromHomeRequest> list = new();
+    private WorkFromHomeRequest? selectedRequest;
 
-    protected override async Task OnInitializedAsync()
+    private bool loading;
+    private bool actionLoading;
+    private bool showRejectModal;
+    private bool showValidation;
+    private bool isError;
+    private string? message;
+    private string? selectedStatus;
+    private string rejectReason = string.Empty;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task HandleFilterChange(ChangeEventArgs e)
     {
-        list = await WfhService.GetAllAsync();
+        selectedStatus = e.Value?.ToString();
+        await LoadData();
     }
 
+    private async Task LoadData()
+    {
+        if (loading) return;
+        loading = true;
+        message = null;
+
+        try
+        {
+            list = await WfhService.GetAllAsync(string.IsNullOrEmpty(selectedStatus) ? null : selectedStatus);
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    // ── Actions ──────────────────────────────────────────────────────────────────
     private async Task Approve(Guid id)
     {
-        await WfhService.UpdateStatusAsync(id, "Approved");
-        list = await WfhService.GetAllAsync();
+        actionLoading = true;
+        message = null;
+        try
+        {
+            await WfhService.UpdateStatusAsync(id, "Approved");
+            isError = false;
+            message = "WFH request approved.";
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+        finally
+        {
+            actionLoading = false;
+        }
     }
 
-    private async Task Reject(Guid id)
+    private void OpenRejectModal(WorkFromHomeRequest r)
     {
-        await WfhService.UpdateStatusAsync(id, "Rejected", "Rejected by HR");
-        list = await WfhService.GetAllAsync();
+        selectedRequest = r;
+        rejectReason = string.Empty;
+        showValidation = false;
+        showRejectModal = true;
     }
 
-    private string GetStatusClass(string status) => status switch
+    private void CloseRejectModal()
+    {
+        showRejectModal = false;
+        selectedRequest = null;
+    }
+
+    private async Task ConfirmReject()
+    {
+        showValidation = true;
+        if (string.IsNullOrWhiteSpace(rejectReason) || selectedRequest == null) return;
+
+        actionLoading = true;
+        try
+        {
+            await WfhService.UpdateStatusAsync(selectedRequest.Id, "Rejected", rejectReason);
+            isError = false;
+            message = $"WFH request rejected for {selectedRequest.Employee?.FirstName}.";
+            CloseRejectModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+            CloseRejectModal();
+        }
+        finally
+        {
+            actionLoading = false;
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+    private static string GetStatusClass(string? status) => status switch
     {
         "Approved" => "bg-success",
         "Rejected" => "bg-danger",
+        "Cancelled" => "bg-secondary",
         _ => "bg-warning text-dark"
     };
 }

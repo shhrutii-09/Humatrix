@@ -2,152 +2,108 @@
 using Humatrix_HRMS.Helpers;
 using Humatrix_HRMS.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Humatrix_HRMS.Services
 {
+    /// <summary>
+    /// Background job running on a 1-hour cycle.
+    ///
+    /// AutoCheckout job:
+    ///   • Processes per-org with their own timezone.
+    ///   • Forces checkout at scheduled shift end once the overtime window
+    ///     (shift end + MaxOT + 30 min grace) has passed.
+    ///   • SystemCheckOut is ALWAYS set to the scheduled shift end (stable OT baseline).
+    ///   • Auto-checked-out records get NO overtime flag — employee must
+    ///     raise an explicit OT request.
+    ///   • Idempotent: skips records that are already checked out or IsAutoCheckedOut.
+    ///
+    /// MarkAbsents job:
+    ///   • Marks yesterday's eligible employees Absent.
+    ///   • Skips: non-working days, holidays, employees on leave, WFH, or any
+    ///     attendance record already existing.
+    ///   • Idempotent: AnyAsync guard prevents duplicate absent rows.
+    ///
+    /// Race-condition safety:
+    ///   • Each org is processed in its own scope.
+    ///   • SaveChangesAsync is called once per org batch (not per record).
+    ///   • The DB unique constraint on (EmployeeId, WorkDate) prevents duplicates.
+    /// </summary>
     public class AttendanceBackgroundService : BackgroundService
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IServiceProvider _services;
         private readonly ILogger<AttendanceBackgroundService> _logger;
 
-        private const double MaxOvertimeHoursPerDay = 4.0;   // match OvertimeService
-        private const double AutoCheckoutGraceHours = 0.5;   // 30 min after OT window
+        private const double MAX_OT = AttendanceConstants.MaxOvertimeHoursPerDay;
+        private const double AUTO_CHECKOUT_GRACE = AttendanceConstants.AutoCheckoutGraceHours;
 
         public AttendanceBackgroundService(
-            IServiceProvider serviceProvider,
+            IServiceProvider services,
             ILogger<AttendanceBackgroundService> logger)
         {
-            _serviceProvider = serviceProvider;
+            _services = services;
             _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Brief startup delay so the app fully boots first
+            // Brief startup delay so the app fully initialises first
             await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await AutoCheckoutAsync();
-                    await MarkAbsentsAsync();
+                    await RunAutoCheckoutAsync(stoppingToken);
+                    await RunMarkAbsentsAsync(stoppingToken);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.LogError(ex, "Attendance background job failed at {Time}", DateTime.UtcNow);
+                    _logger.LogError(ex, "Attendance background jobs failed at {Time:u}", DateTime.UtcNow);
                 }
 
-                await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
 
         // =========================================================================
         // AUTO CHECKOUT
         // =========================================================================
-        private async Task AutoCheckoutAsync()
+        private async Task RunAutoCheckoutAsync(CancellationToken ct)
         {
-            using var scope = _serviceProvider.CreateScope();
+            using var scope = _services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var calc = scope.ServiceProvider.GetRequiredService<AttendanceCalculationService>();
 
-            var orgs = await context.Organizations
-                .Where(o => o.IsActive)
-                .ToListAsync();
+            List<Organization> orgs;
+            try
+            {
+                orgs = await context.Organizations
+                    .Where(o => o.IsActive)
+                    .ToListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AutoCheckout: failed to load organisations");
+                return;
+            }
 
             foreach (var org in orgs)
             {
+                if (ct.IsCancellationRequested) break;
+
                 try
                 {
-                    var tz = GetOrgTimezone(org.TimeZoneId);
-                    var orgNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-
-                    // Fetch all open attendances (checked in, not yet checked out)
-                    var records = await context.Attendances
-                        .Include(a => a.Employee)
-                            .ThenInclude(e => e!.Shift)
-                        .Where(a =>
-                            a.OrganizationId == org.OrganizationId &&
-                            a.CheckIn != null &&
-                            a.CheckOut == null)
-                        .ToListAsync();
-
-                    if (!records.Any()) continue;
-
-                    foreach (var att in records)
-                    {
-                        try
-                        {
-                            // Skip records that HR already handled manually
-                            if (att.IsManual) continue;
-
-                            var shift = att.Employee?.Shift;
-                            if (shift == null) continue;
-
-                            var checkInLocal = TimeZoneInfo.ConvertTimeFromUtc(att.CheckIn!.Value, tz);
-                            var shiftDate = checkInLocal.Date;
-
-                            var shiftEnd = shiftDate.Add(shift.EndTime);
-
-                            // Handle overnight shift
-                            if (shift.EndTime < shift.StartTime)
-                                shiftEnd = shiftEnd.AddDays(1);
-
-                            // ─── OVERTIME WINDOW ─────────────────────────────────
-                            // Employee has until (shift end + 4 h) to work overtime.
-                            // We wait an extra 30 min grace before forcing auto-checkout.
-                            var overtimeWindowEnd = shiftEnd.AddHours(MaxOvertimeHoursPerDay);
-                            var autoCheckoutTime = overtimeWindowEnd.AddHours(AutoCheckoutGraceHours);
-
-                            // Still within allowed working / overtime time → skip
-                            if (orgNow <= autoCheckoutTime) continue;
-
-                            // ─── SET SystemCheckOut ───────────────────────────────
-                            // Always = scheduled shift end (UTC) — this is the baseline
-                            // the OvertimeService uses.  Set it BEFORE changing CheckOut.
-                            var shiftEndUtc = TimeZoneInfo.ConvertTimeToUtc(shiftEnd, tz);
-                            att.SystemCheckOut = shiftEndUtc;
-
-                            // ─── SET CheckOut ─────────────────────────────────────
-                            // Auto-checkout is recorded at scheduled shift end,
-                            // NOT at the time this job runs (which would be hours later).
-                            att.CheckOut = shiftEndUtc;
-                            att.ActualCheckOut = shiftEndUtc;
-                            att.IsAutoCheckedOut = true;
-
-                            // ─── TOTAL HOURS ─────────────────────────────────────
-                            var totalHours = (att.CheckOut.Value - att.CheckIn.Value).TotalHours;
-                            att.TotalHours = Math.Round(totalHours, 2);
-
-                            // ─── NO OVERTIME ON AUTO-CHECKOUT ────────────────────
-                            // The employee didn't initiate a checkout — we don't know
-                            // if they actually stayed.  OT requires a conscious request.
-                            att.OvertimeHours = 0;
-                            att.ApprovedOvertimeHours = 0;
-                            att.NeedsOvertimeApproval = false;
-
-                            // ─── ATTENDANCE STATUS ────────────────────────────────
-                            bool wasLate = att.Status == AttendanceStatuses.Late;
-
-                            if (totalHours < shift.MinimumHoursForHalfDay)
-                                att.Status = AttendanceStatuses.ShortHours;
-                            else if (totalHours < shift.MinimumHoursForFullDay)
-                                att.Status = AttendanceStatuses.HalfDay;
-                            else
-                                att.Status = wasLate
-                                    ? AttendanceStatuses.Late
-                                    : AttendanceStatuses.Present;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex,
-                                "AutoCheckout failed | Org:{OrgId} Emp:{EmpId} Att:{AttId}",
-                                org.OrganizationId, att.EmployeeId, att.AttendanceId);
-                        }
-                    }
-
-                    await context.SaveChangesAsync();
-
-                    _logger.LogInformation("AutoCheckout completed | Org {OrgId}", org.OrganizationId);
+                    await ProcessAutoCheckoutForOrgAsync(context, calc, org, ct);
                 }
                 catch (Exception ex)
                 {
@@ -156,110 +112,126 @@ namespace Humatrix_HRMS.Services
             }
         }
 
-        // =========================================================================
-        // MARK ABSENTS
-        // =========================================================================
-        private async Task MarkAbsentsAsync()
+        private async Task ProcessAutoCheckoutForOrgAsync(
+            ApplicationDbContext context,
+            AttendanceCalculationService calc,
+            Organization org,
+            CancellationToken ct)
         {
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var tz = TimeHelper.GetOrgTimeZone(org.TimeZoneId);
+            var orgNow = TimeHelper.GetOrgNow(tz);
 
-            var orgs = await context.Organizations
-                .Where(o => o.IsActive)
-                .ToListAsync();
+            // Load all open sessions (checked in, not yet checked out)
+            var records = await context.Attendances
+                .Include(a => a.Employee)
+                    .ThenInclude(e => e!.Shift)
+                .Where(a =>
+                    a.OrganizationId == org.OrganizationId &&
+                    a.CheckIn != null &&
+                    a.CheckOut == null)
+                .ToListAsync(ct);
 
-            foreach (var org in orgs)
+            if (!records.Any()) return;
+
+            bool anyChanged = false;
+
+            foreach (var att in records)
             {
                 try
                 {
-                    var orgNow = GetOrgNow(org.TimeZoneId);
-                    var targetDate = orgNow.Date.AddDays(-1); // yesterday
+                    // Skip HR-manually-handled records
+                    if (att.IsManual) continue;
 
-                    // ── Skip non-working days ────────────────────────────────────
-                    var workWeek = await context.WorkWeeks
-                        .FirstOrDefaultAsync(w => w.OrganizationId == org.OrganizationId);
+                    var shift = att.Employee?.Shift;
+                    if (shift == null) continue;
 
-                    if (workWeek != null && !DateHelper.IsWorkingDay(targetDate, workWeek))
-                        continue;
+                    var checkInUtc = TimeHelper.EnsureUtc(att.CheckIn!.Value);
+                    var checkInLocal = TimeHelper.ToOrgLocal(checkInUtc, tz);
+                    var shiftDate = checkInLocal.Date;
 
-                    // Default weekend check when workWeek not configured
-                    if (workWeek == null &&
-                        (targetDate.DayOfWeek == DayOfWeek.Saturday ||
-                         targetDate.DayOfWeek == DayOfWeek.Sunday))
-                        continue;
+                    var shiftEndLocal = TimeHelper.GetShiftEndLocal(shiftDate, shift);
 
-                    // ── Skip holidays ────────────────────────────────────────────
-                    var isHoliday = await context.Holidays.AnyAsync(h =>
-                        h.OrganizationId == org.OrganizationId &&
-                        h.Date.Date == targetDate &&
-                        !h.IsOptional);
+                    // Total window before we force checkout:
+                    //   shift end + max OT hours + grace
+                    var autoCheckoutTime = shiftEndLocal
+                        .AddHours(MAX_OT)
+                        .AddHours(AUTO_CHECKOUT_GRACE);
 
-                    if (isHoliday) continue;
+                    // Still within the allowed window — skip
+                    if (orgNow <= autoCheckoutTime) continue;
 
-                    // ── Active employees ─────────────────────────────────────────
-                    var employees = await context.Employees
-                        .Where(e => e.OrganizationId == org.OrganizationId && e.Status == "Active")
-                        .Select(e => new { e.EmployeeId, e.UserId })
-                        .ToListAsync();
+                    // ── Force checkout at scheduled shift end ─────────────────────
+                    var shiftEndUtc = TimeHelper.ToUtc(shiftEndLocal, tz);
+                    shiftEndUtc = DateTime.SpecifyKind(shiftEndUtc, DateTimeKind.Utc);
 
-                    var employeeIds = employees.Select(e => e.EmployeeId).ToList();
+                    att.CheckOut = shiftEndUtc;
+                    att.ActualCheckOut = shiftEndUtc;
+                    att.SystemCheckOut = shiftEndUtc; // always = shift end
+                    att.IsAutoCheckedOut = true;
 
-                    // ── Approved leave ───────────────────────────────────────────
-                    var onLeave = (await context.LeaveRequests
-                        .Where(l =>
-                            l.Status == "Approved" &&
-                            l.FromDate.Date <= targetDate &&
-                            l.ToDate.Date >= targetDate &&
-                            employeeIds.Contains(l.EmployeeId))
-                        .Select(l => l.EmployeeId)
-                        .ToListAsync())
-                        .ToHashSet();
+                    // No overtime on auto-checkout — employee must raise an explicit request
+                    att.OvertimeHours = 0;
+                    att.ApprovedOvertimeHours = 0;
+                    att.NeedsOvertimeApproval = false;
 
-                    // ── Approved WFH ─────────────────────────────────────────────
-                    var wfhEmployees = (await context.WorkFromHomeRequests
-                        .Where(w =>
-                            w.Status == "Approved" &&
-                            w.Date.Date == targetDate &&
-                            employeeIds.Contains(w.EmployeeId))
-                        .Select(w => w.EmployeeId)
-                        .ToListAsync())
-                        .ToHashSet();
+                    // Recalculate TotalHours and Status
+                    calc.Recalculate(att, shift, tz);
 
-                    // ── Already has an attendance record ─────────────────────────
-                    var haveRecord = (await context.Attendances
-                        .Where(a =>
-                            a.OrganizationId == org.OrganizationId &&
-                            a.WorkDate.Date == targetDate)
-                        .Select(a => a.EmployeeId)
-                        .ToListAsync())
-                        .ToHashSet();
+                    // After auto-checkout recalculate, force OT flags off again
+                    // (Recalculate might set NeedsOvertimeApproval if checkout > shift end,
+                    //  which it won't be since we set checkout = shiftEnd, but guard anyway)
+                    att.NeedsOvertimeApproval = false;
+                    att.OvertimeHours = 0;
 
-                    var toMark = employees
-                        .Where(e =>
-                            !haveRecord.Contains(e.EmployeeId) &&
-                            !onLeave.Contains(e.EmployeeId) &&
-                            !wfhEmployees.Contains(e.EmployeeId))
-                        .ToList();
-
-                    if (!toMark.Any()) continue;
-
-                    var records = toMark.Select(e => new Attendance
-                    {
-                        AttendanceId = Guid.NewGuid(),
-                        UserId = e.UserId ?? throw new InvalidOperationException($"Employee {e.EmployeeId} has no UserId"),
-                        EmployeeId = e.EmployeeId,
-                        OrganizationId = org.OrganizationId,
-                        WorkDate = targetDate,
-                        IsPresent = false,
-                        Status = AttendanceStatuses.Absent
-                    }).ToList();
-
-                    await context.Attendances.AddRangeAsync(records);
-                    await context.SaveChangesAsync();
+                    anyChanged = true;
 
                     _logger.LogInformation(
-                        "MarkAbsents: {Count} marked absent | Org {OrgId}",
-                        records.Count, org.OrganizationId);
+                        "AutoCheckout: Emp {EmpId} on {WorkDate:yyyy-MM-dd} checked out at shift end {ShiftEnd:u}",
+                        att.EmployeeId, att.WorkDate, shiftEndUtc);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "AutoCheckout: failed processing Att {AttId} Emp {EmpId} Org {OrgId}",
+                        att.AttendanceId, att.EmployeeId, org.OrganizationId);
+                }
+            }
+
+            if (anyChanged)
+            {
+                await context.SaveChangesAsync(ct);
+                _logger.LogInformation("AutoCheckout: completed for org {OrgId}", org.OrganizationId);
+            }
+        }
+
+        // =========================================================================
+        // MARK ABSENTS
+        // =========================================================================
+        private async Task RunMarkAbsentsAsync(CancellationToken ct)
+        {
+            using var scope = _services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            List<Organization> orgs;
+            try
+            {
+                orgs = await context.Organizations
+                    .Where(o => o.IsActive)
+                    .ToListAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "MarkAbsents: failed to load organisations");
+                return;
+            }
+
+            foreach (var org in orgs)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                try
+                {
+                    await ProcessMarkAbsentsForOrgAsync(context, org, ct);
                 }
                 catch (Exception ex)
                 {
@@ -268,24 +240,102 @@ namespace Humatrix_HRMS.Services
             }
         }
 
-       
-        private DateTime GetOrgNow(string timeZoneId)
+        private async Task ProcessMarkAbsentsForOrgAsync(
+            ApplicationDbContext context,
+            Organization org,
+            CancellationToken ct)
         {
-            try
-            {
-                var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            }
-            catch
-            {
-                return DateTime.UtcNow;
-            }
-        }
+            var tz = TimeHelper.GetOrgTimeZone(org.TimeZoneId);
+            var orgNow = TimeHelper.GetOrgNow(tz);
+            var targetDate = orgNow.Date.AddDays(-1); // yesterday
 
-        private TimeZoneInfo GetOrgTimezone(string timeZoneId)
-        {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
-            catch { return TimeZoneInfo.Utc; }
+            // ── Skip non-working days ─────────────────────────────────────────────
+            var workWeek = await context.WorkWeeks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(w => w.OrganizationId == org.OrganizationId, ct);
+
+            bool isWorkingDay = workWeek != null
+                ? DateHelper.IsWorkingDay(targetDate, workWeek)
+                : (targetDate.DayOfWeek != DayOfWeek.Saturday && targetDate.DayOfWeek != DayOfWeek.Sunday);
+
+            if (!isWorkingDay) return;
+
+            // ── Skip mandatory holidays ───────────────────────────────────────────
+            bool isHoliday = await context.Holidays.AnyAsync(h =>
+                h.OrganizationId == org.OrganizationId &&
+                h.Date.Date == targetDate &&
+                !h.IsOptional, ct);
+
+            if (isHoliday) return;
+
+            // ── Active employees ──────────────────────────────────────────────────
+            var employees = await context.Employees
+                .Where(e => e.OrganizationId == org.OrganizationId && e.Status == "Active")
+                .Select(e => new { e.EmployeeId, e.UserId })
+                .ToListAsync(ct);
+
+            if (!employees.Any()) return;
+
+            var employeeIds = employees.Select(e => e.EmployeeId).ToList();
+
+            // ── Exclusion sets ────────────────────────────────────────────────────
+            var onLeave = (await context.LeaveRequests
+                .Where(l =>
+                    l.Status == "Approved" &&
+                    l.FromDate.Date <= targetDate &&
+                    l.ToDate.Date >= targetDate &&
+                    employeeIds.Contains(l.EmployeeId))
+                .Select(l => l.EmployeeId)
+                .ToListAsync(ct))
+                .ToHashSet();
+
+            var onWfh = (await context.WorkFromHomeRequests
+                .Where(w =>
+                    w.Status == "Approved" &&
+                    w.Date.Date == targetDate &&
+                    employeeIds.Contains(w.EmployeeId))
+                .Select(w => w.EmployeeId)
+                .ToListAsync(ct))
+                .ToHashSet();
+
+            var haveRecord = (await context.Attendances
+                .Where(a =>
+                    a.OrganizationId == org.OrganizationId &&
+                    a.WorkDate.Date == targetDate)
+                .Select(a => a.EmployeeId)
+                .ToListAsync(ct))
+                .ToHashSet();
+
+            var toMark = employees
+                .Where(e =>
+                    !haveRecord.Contains(e.EmployeeId) &&
+                    !onLeave.Contains(e.EmployeeId) &&
+                    !onWfh.Contains(e.EmployeeId))
+                .ToList();
+
+            if (!toMark.Any()) return;
+
+            var records = toMark.Select(e => new Attendance
+            {   
+                AttendanceId = Guid.NewGuid(),
+                UserId = e.UserId
+                    ?? throw new InvalidOperationException(
+                        $"Employee {e.EmployeeId} has no linked user account."),
+                EmployeeId = e.EmployeeId,
+                OrganizationId = org.OrganizationId,
+                WorkDate = targetDate,
+                IsPresent = false,
+                Status = AttendanceStatuses.Absent,
+                IsManual = false,
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
+
+            await context.Attendances.AddRangeAsync(records, ct);
+            await context.SaveChangesAsync(ct);
+
+            _logger.LogInformation(
+                "MarkAbsents: {Count} employees marked absent for {Date:yyyy-MM-dd} in org {OrgId}",
+                records.Count, targetDate, org.OrganizationId);
         }
     }
 }

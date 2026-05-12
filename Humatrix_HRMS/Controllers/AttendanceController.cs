@@ -86,21 +86,21 @@ namespace Humatrix_HRMS.Controllers
         // =========================
         // ADMIN - ALL ATTENDANCE
         // =========================
-        [HttpGet("all")]
-        public async Task<IActionResult> GetAllAttendance(
-            [FromQuery] DateTime? date,
-            [FromQuery] Guid? departmentId,
-            [FromQuery] string? role)
-        {
-            try
-            {
-                var result = await _attendanceService.GetAllAttendanceAsync(date, departmentId, role);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { error = ex.Message });
-            }
-        }
+        //[HttpGet("all")]
+        //public async Task<IActionResult> GetAllAttendance(
+        //    [FromQuery] DateTime? date,
+        //    [FromQuery] Guid? departmentId,
+        //    [FromQuery] string? role)
+        //{
+        //    try
+        //    {
+        //        var result = await _attendanceService.GetAllAttendanceAsync(date, departmentId, role);
+        //        return Ok(result);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return BadRequest(new { error = ex.Message });
+        //    }
+        //}
     }
 }

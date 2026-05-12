@@ -7,40 +7,46 @@ using Microsoft.EntityFrameworkCore;
 namespace Humatrix_HRMS.Services
 {
     /// <summary>
-    /// Overtime flow in a real HRMS:
+    /// Overtime flow:
     ///
-    /// 1. Employee checks out AFTER shift end  →  attendance.NeedsOvertimeApproval = true,
-    ///    attendance.OvertimeHours = raw hours, attendance.SystemCheckOut = scheduled shift end.
+    /// 1. Employee checks out after shift end:
+    ///      attendance.NeedsOvertimeApproval = true
+    ///      attendance.OvertimeHours         = raw hours (capped)
+    ///      attendance.SystemCheckOut        = scheduled shift end (UTC)
     ///
-    /// 2. Employee raises an OT request for that attendance record.
-    ///    They provide the actual time they left (ActualCheckOut) and a reason.
-    ///    The service validates the time against SystemCheckOut and the org cap.
+    /// 2. Employee raises an OT request (RaiseRequestAsync).
+    ///    Provides ActualCheckOut (org-local, Unspecified kind) and Reason.
+    ///    Service converts to UTC, validates against SystemCheckOut and the cap.
     ///
-    /// 3. HR approves / rejects.
-    ///    On approval:
-    ///      • attendance.CheckOut        = ActualCheckOut  (final record)
-    ///      • attendance.ActualCheckOut  = ActualCheckOut
+    /// 3. HR approves / rejects (ReviewAsync).
+    ///    Approval:
+    ///      • attendance.CheckOut             = ActualCheckOut (UTC)
+    ///      • attendance.ActualCheckOut       = ActualCheckOut (UTC)
     ///      • attendance.ApprovedOvertimeHours set
     ///      • attendance.NeedsOvertimeApproval = false
-    ///      • attendance.Status re-evaluated (could still be Present or Late)
-    ///
-    ///    On rejection:
-    ///      • attendance.CheckOut        stays as SystemCheckOut (shift end)
-    ///      • attendance.OvertimeHours   = 0
-    ///      • attendance.NeedsOvertimeApproval = false
+    ///      • TotalHours, Status recalculated
+    ///    Rejection:
+    ///      • attendance.CheckOut   = SystemCheckOut (rollback to shift end)
+    ///      • attendance.OvertimeHours = 0
+    ///      • TotalHours, Status recalculated
     /// </summary>
     public class OvertimeService
     {
         private readonly ApplicationDbContext _context;
         private readonly CurrentUserService _currentUser;
+        private readonly AttendanceCalculationService _calc;
 
-        // Maximum OT hours that can be approved per day — must match AttendanceService constant
-        private const double MaxOvertimeHoursPerDay = 4.0;
+        private const double MAX_OT = AttendanceConstants.MaxOvertimeHoursPerDay;
+        private const double MIN_OT = AttendanceConstants.MinOvertimeHours;
 
-        public OvertimeService(ApplicationDbContext context, CurrentUserService currentUser)
+        public OvertimeService(
+            ApplicationDbContext context,
+            CurrentUserService currentUser,
+            AttendanceCalculationService calc)
         {
             _context = context;
             _currentUser = currentUser;
+            _calc = calc;
         }
 
         // =========================================================================
@@ -53,91 +59,101 @@ namespace Humatrix_HRMS.Services
 
             var employee = await _context.Employees
                 .FirstOrDefaultAsync(e => e.UserId == user.Id)
-                ?? throw new Exception("Employee profile not found");
+                ?? throw new Exception("Employee profile not found.");
 
-            // ── Load the attendance record they are claiming OT for ──────────────
+            // ── Load attendance record ────────────────────────────────────────────
             var attendance = await _context.Attendances
                 .Include(a => a.Employee)
-                    .ThenInclude(e => e.Shift)
+                    .ThenInclude(e => e!.Shift)
                 .FirstOrDefaultAsync(a =>
                     a.AttendanceId == dto.AttendanceId &&
                     a.EmployeeId == employee.EmployeeId)
-                ?? throw new Exception("Attendance record not found");
+                ?? throw new Exception("Attendance record not found.");
 
             if (attendance.CheckIn == null)
-                throw new Exception("Attendance has no check-in time");
+                throw new Exception("Attendance has no check-in time.");
 
             if (!attendance.NeedsOvertimeApproval)
-                throw new Exception("This attendance record is not eligible for overtime");
+                throw new Exception("This attendance record is not eligible for overtime.");
 
-            var shift = attendance.Employee?.Shift
-                ?? throw new Exception("No shift assigned — cannot calculate overtime");
+            // ── Must be for a completed past day ──────────────────────────────────
+            var org = await _context.Organizations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.OrganizationId == employee.OrganizationId)
+                ?? throw new Exception("Organisation not found.");
 
-            // ── Must be for a past day (not today) ───────────────────────────────
-            var org = await _context.Organizations.AsNoTracking()
-                .FirstOrDefaultAsync(o => o.OrganizationId == employee.OrganizationId);
-            var today = TimeHelper.GetOrgDate(org?.TimeZoneId);
+            var today = TimeHelper.GetOrgDate(org.TimeZoneId);
 
             if (attendance.WorkDate >= today)
-                throw new Exception("Overtime can only be requested for completed past days");
+                throw new Exception("Overtime can only be requested for completed past days.");
 
-            // ── Convert ActualCheckOut from org-local to UTC ──────────────────────
-            // The Razor page sends a local (org-timezone) DateTime with Unspecified kind.
-            // We must convert it here so comparisons against UTC-stored SystemCheckOut work.
-            if (dto.ActualCheckOut.Kind != DateTimeKind.Utc)
+            // ── SystemCheckOut must be present ────────────────────────────────────
+            var systemCheckoutUtc = attendance.SystemCheckOut
+                ?? throw new Exception("System checkout time is missing — contact HR to review the record.");
+
+            systemCheckoutUtc = TimeHelper.EnsureUtc(systemCheckoutUtc);
+
+            // ── Convert ActualCheckOut from org-local (Unspecified) to UTC ────────
+            // The Razor page always sends org-local time with Kind=Unspecified.
+            var tz = TimeHelper.GetOrgTimeZone(org.TimeZoneId);
+            DateTime actualCheckOutUtc;
+
+            if (dto.ActualCheckOut.Kind == DateTimeKind.Utc)
             {
-                var tz = TimeZoneInfo.FindSystemTimeZoneById(org?.TimeZoneId ?? "UTC");
-                dto.ActualCheckOut = TimeZoneInfo.ConvertTimeToUtc(
-                    DateTime.SpecifyKind(dto.ActualCheckOut, DateTimeKind.Unspecified), tz);
+                actualCheckOutUtc = dto.ActualCheckOut;
+            }
+            else
+            {
+                actualCheckOutUtc = TimeHelper.ToUtc(dto.ActualCheckOut, tz);
             }
 
-            // ── SystemCheckOut is the reference baseline ─────────────────────────
-            // SystemCheckOut = scheduled shift end UTC (set during employee checkout).
-            // ActualCheckOut = when employee really left.
-            var systemCheckout = attendance.SystemCheckOut
-                ?? throw new Exception("System checkout time is missing — contact HR");
+            // ── Validate ActualCheckOut must be AFTER scheduled shift end ─────────
+            if (actualCheckOutUtc <= systemCheckoutUtc)
+                throw new Exception(
+                    "Actual checkout time must be after your scheduled shift end.");
 
-            if (dto.ActualCheckOut <= systemCheckout)
-                throw new Exception("Actual checkout must be after the scheduled shift end");
+            // ── Enforce org-level cap ─────────────────────────────────────────────
+            var maxAllowedUtc = systemCheckoutUtc.AddHours(MAX_OT);
+            if (actualCheckOutUtc > maxAllowedUtc)
+                throw new Exception(
+                    $"Overtime cannot exceed {MAX_OT:0} hours per day. " +
+                    $"Maximum allowed checkout: {TimeHelper.FormatOrgTime(maxAllowedUtc, tz)}.");
 
-            // ── Enforce org-level cap ────────────────────────────────────────────
-            var maxAllowedCheckout = systemCheckout.AddHours(MaxOvertimeHoursPerDay);
-            if (dto.ActualCheckOut > maxAllowedCheckout)
-                throw new Exception($"Overtime cannot exceed {MaxOvertimeHoursPerDay} hours per day");
+            // ── Calculate OT hours (time beyond shift end) ────────────────────────
+            var overtimeHours = (actualCheckOutUtc - systemCheckoutUtc).TotalHours;
+            overtimeHours = Math.Min(overtimeHours, MAX_OT);
 
-            // ── Calculate OT hours ───────────────────────────────────────────────
-            // OT = time beyond shift end (not beyond check-in)
-            var overtimeHours = (dto.ActualCheckOut - systemCheckout).TotalHours;
-            overtimeHours = Math.Min(overtimeHours, MaxOvertimeHoursPerDay);
-
-            if (overtimeHours < 0.25) // less than 15 min — not worth raising
-                throw new Exception("Overtime must be at least 15 minutes");
+            if (overtimeHours < MIN_OT)
+                throw new Exception(
+                    $"Overtime must be at least {(int)(MIN_OT * 60)} minutes.");
 
             if (string.IsNullOrWhiteSpace(dto.Reason))
-                throw new Exception("A reason is required for the overtime request");
+                throw new Exception("A reason is required for the overtime request.");
 
-            // ── Duplicate guard ──────────────────────────────────────────────────
-            var alreadyExists = await _context.OvertimeRequests.AnyAsync(r =>
+            // ── Duplicate guard ───────────────────────────────────────────────────
+            var alreadyPending = await _context.OvertimeRequests.AnyAsync(r =>
                 r.AttendanceId == dto.AttendanceId &&
                 r.Status == "Pending");
 
-            if (alreadyExists)
-                throw new Exception("An overtime request is already pending for this day");
+            if (alreadyPending)
+                throw new Exception("An overtime request is already pending for this day.");
 
-            // ── Create request ───────────────────────────────────────────────────
+            // Previously rejected request is allowed; employee can re-raise.
+
+            // ── Create request ────────────────────────────────────────────────────
             var request = new OvertimeRequest
             {
                 EmployeeId = employee.EmployeeId,
                 AttendanceId = attendance.AttendanceId,
                 Date = attendance.WorkDate,
                 RequestedHours = Math.Round(overtimeHours, 2),
-                ActualCheckOut = dto.ActualCheckOut,
-                Reason = dto.Reason,
+                ActualCheckOut = actualCheckOutUtc,
+                Reason = dto.Reason.Trim(),
                 Status = "Pending",
                 AppliedAt = DateTime.UtcNow
             };
 
-            // Keep flag set so HR dashboard can see it
+            // Keep flag set so the HR dashboard shows it
             attendance.NeedsOvertimeApproval = true;
 
             _context.OvertimeRequests.Add(request);
@@ -153,8 +169,9 @@ namespace Humatrix_HRMS.Services
                 ?? throw new Exception("Unauthorized");
 
             var employee = await _context.Employees
+                .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.UserId == user.Id)
-                ?? throw new Exception("Employee profile not found");
+                ?? throw new Exception("Employee profile not found.");
 
             return await _context.OvertimeRequests
                 .Include(r => r.Attendance)
@@ -165,12 +182,8 @@ namespace Humatrix_HRMS.Services
 
         // =========================================================================
         // HR — View pending requests
+        // allDepartments = true for OrgAdmin; false for HR (own dept only)
         // =========================================================================
-        /// <param name="allDepartments">
-        ///   When true an OrgAdmin sees all departments.
-        ///   When false (HR role) the caller is responsible for passing
-        ///   the correct departmentId filter if needed.
-        /// </param>
         public async Task<List<OvertimeRequest>> GetPendingAsync(bool allDepartments = false)
         {
             var user = await _currentUser.GetUserAsync()
@@ -180,13 +193,12 @@ namespace Humatrix_HRMS.Services
 
             var query = _context.OvertimeRequests
                 .Include(r => r.Employee)
-                    .ThenInclude(e => e.Department)
+                    .ThenInclude(e => e!.Department)
                 .Include(r => r.Attendance)
                 .Where(r =>
                     r.Employee.OrganizationId == orgId &&
                     r.Status == "Pending");
 
-            // HR restricted to own department unless allDepartments flag is set
             if (!allDepartments)
             {
                 var currentEmployee = await _context.Employees
@@ -195,6 +207,8 @@ namespace Humatrix_HRMS.Services
 
                 if (currentEmployee?.DepartmentId != null)
                     query = query.Where(r => r.Employee.DepartmentId == currentEmployee.DepartmentId);
+                else
+                    return new List<OvertimeRequest>();
             }
 
             return await query.OrderBy(r => r.Date).ToListAsync();
@@ -210,127 +224,107 @@ namespace Humatrix_HRMS.Services
 
             var orgId = user.OrganizationId ?? Guid.Empty;
 
-            // ── Load request with all related data ───────────────────────────────
-            var request = await _context.OvertimeRequests
-                .Include(r => r.Employee)
-                .Include(r => r.Attendance)
-                    .ThenInclude(a => a!.Employee)
-                        .ThenInclude(e => e!.Shift)
-                .FirstOrDefaultAsync(r => r.OvertimeRequestId == dto.OvertimeRequestId)
-                ?? throw new Exception("Overtime request not found");
-
-            if (request.Status != "Pending")
-                throw new Exception("This request has already been reviewed");
-
-            if (request.Employee.OrganizationId != orgId)
-                throw new Exception("Unauthorized — request belongs to a different organization");
-
-            request.ReviewedBy = Guid.Parse(user.Id);
-            request.ReviewedAt = DateTime.UtcNow;
-
-            var attendance = request.Attendance
-                ?? throw new Exception("Associated attendance record is missing");
-
-            // ── REJECTION PATH ───────────────────────────────────────────────────
-            if (!dto.Approve)
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                request.Status = "Rejected";
+                var request = await _context.OvertimeRequests
+                    .Include(r => r.Employee)
+                    .Include(r => r.Attendance)
+                        .ThenInclude(a => a!.Employee)
+                            .ThenInclude(e => e!.Shift)
+                    .FirstOrDefaultAsync(r => r.OvertimeRequestId == dto.OvertimeRequestId)
+                    ?? throw new Exception("Overtime request not found.");
 
-                // Roll attendance back to scheduled shift end
-                if (attendance.SystemCheckOut.HasValue)
+                if (request.Status != "Pending")
+                    throw new Exception("This request has already been reviewed.");
+
+                if (request.Employee.OrganizationId != orgId)
+                    throw new Exception("Unauthorized — request belongs to a different organisation.");
+
+                var attendance = request.Attendance
+                    ?? throw new Exception("Associated attendance record is missing — cannot process.");
+
+                // ── Load org timezone ─────────────────────────────────────────────
+                var org = await _context.Organizations
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.OrganizationId == orgId)
+                    ?? throw new Exception("Organisation not found.");
+
+                var tz = TimeHelper.GetOrgTimeZone(org.TimeZoneId);
+
+                request.ReviewedBy = Guid.Parse(user.Id);
+                request.ReviewedAt = DateTime.UtcNow;
+
+                // ── REJECTION PATH ────────────────────────────────────────────────
+                if (!dto.Approve)
                 {
-                    attendance.CheckOut = attendance.SystemCheckOut;
-                    attendance.ActualCheckOut = attendance.SystemCheckOut;
+                    request.Status = "Rejected";
+                    request.RejectionReason = dto.RejectionReason;
+
+                    // Roll checkout back to scheduled shift end
+                    if (attendance.SystemCheckOut.HasValue)
+                    {
+                        var sysUtc = TimeHelper.EnsureUtc(attendance.SystemCheckOut.Value);
+                        attendance.CheckOut = sysUtc;
+                        attendance.ActualCheckOut = sysUtc;
+                    }
+
+                    attendance.OvertimeHours = 0;
+                    attendance.ApprovedOvertimeHours = 0;
+                    attendance.NeedsOvertimeApproval = false;
+                    attendance.IsAutoCheckedOut = false;
+
+                    // Recalculate TotalHours and Status with rolled-back checkout
+                    _calc.ReapplyStatusAfterOtReview(attendance, attendance.Employee?.Shift);
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return;
                 }
 
-                // Recalculate hours using shift end as checkout
-                if (attendance.CheckIn.HasValue && attendance.CheckOut.HasValue)
-                {
-                    attendance.TotalHours = Math.Round(
-                        (attendance.CheckOut.Value - attendance.CheckIn.Value).TotalHours, 2);
-                }
+                // ── APPROVAL PATH ─────────────────────────────────────────────────
+                request.Status = "Approved";
 
-                attendance.OvertimeHours = 0;
-                attendance.ApprovedOvertimeHours = 0;
-                attendance.NeedsOvertimeApproval = false;
+                if (!attendance.CheckIn.HasValue)
+                    throw new Exception("Attendance check-in is missing.");
+
+                if (!request.ActualCheckOut.HasValue)
+                    throw new Exception("Actual checkout time is missing.");
+
+                var actualCheckOutUtc = TimeHelper.EnsureUtc(request.ActualCheckOut.Value);
+
+                attendance.CheckOut = actualCheckOutUtc;
+                attendance.ActualCheckOut = actualCheckOutUtc;
                 attendance.IsAutoCheckedOut = false;
+                attendance.IsManual = false; // employee-driven, not HR-forced
 
-                // Re-run status with corrected hours
-                ReapplyAttendanceStatus(attendance);
+                // OT = time worked beyond scheduled shift end (SystemCheckOut baseline)
+                var sysCheckoutUtc = TimeHelper.EnsureUtc(
+                    attendance.SystemCheckOut
+                    ?? throw new Exception("SystemCheckOut missing on attendance record."));
+
+                var rawOtHours = Math.Max(
+                    0,
+                    (actualCheckOutUtc - sysCheckoutUtc).TotalHours
+                );
+
+                rawOtHours = Math.Min(rawOtHours, MAX_OT);
+
+                attendance.OvertimeHours = Math.Round(rawOtHours, 2);
+                attendance.ApprovedOvertimeHours = Math.Round(rawOtHours, 2);
+                attendance.NeedsOvertimeApproval = false;
+
+                // Recalculate TotalHours and Status with the new checkout time
+                _calc.ReapplyStatusAfterOtReview(attendance, attendance.Employee?.Shift);
 
                 await _context.SaveChangesAsync();
-                return;
+                await transaction.CommitAsync();
             }
-
-            // ── APPROVAL PATH ────────────────────────────────────────────────────
-            request.Status = "Approved";
-
-            // Update checkout to what was actually worked
-            attendance.ActualCheckOut = request.ActualCheckOut;
-            attendance.CheckOut = request.ActualCheckOut;
-            attendance.IsAutoCheckedOut = false;
-            attendance.IsManual = false; // employee-driven, not HR-forced
-
-            if (!attendance.CheckIn.HasValue)
-                throw new Exception("Attendance check-in is missing");
-
-            var totalHours = (attendance.CheckOut!.Value - attendance.CheckIn.Value).TotalHours;
-            attendance.TotalHours = Math.Round(totalHours, 2);
-
-            var shift = attendance.Employee?.Shift;
-            if (shift != null)
+            catch
             {
-                // OT = total hours beyond full-day minimum (i.e. beyond shift end threshold)
-                var rawOt = Math.Max(0, totalHours - shift.MinimumHoursForFullDay);
-                rawOt = Math.Min(rawOt, MaxOvertimeHoursPerDay);
-                attendance.OvertimeHours = Math.Round(rawOt, 2);
-                attendance.ApprovedOvertimeHours = Math.Round(rawOt, 2);
+                await transaction.RollbackAsync();
+                throw;
             }
-            else
-            {
-                attendance.OvertimeHours = Math.Round(request.RequestedHours, 2);
-                attendance.ApprovedOvertimeHours = Math.Round(request.RequestedHours, 2);
-            }
-
-            attendance.NeedsOvertimeApproval = false;
-
-            // Re-evaluate status (remains Present / Late — OT doesn't change day status)
-            ReapplyAttendanceStatus(attendance);
-
-            await _context.SaveChangesAsync();
-        }
-
-        // =========================================================================
-        // PRIVATE HELPERS
-        // =========================================================================
-
-        /// <summary>
-        /// Recalculate attendance Status after checkout time changes.
-        /// Preserves Late flag set at check-in.
-        /// </summary>
-        private static void ReapplyAttendanceStatus(Attendance att)
-        {
-            if (!att.CheckIn.HasValue || !att.CheckOut.HasValue)
-                return;
-
-            var shift = att.Employee?.Shift;
-            var totalHours = att.TotalHours ?? (att.CheckOut.Value - att.CheckIn.Value).TotalHours;
-
-            if (shift == null)
-            {
-                att.Status = AttendanceStatuses.Present;
-                return;
-            }
-
-            if (totalHours < shift.MinimumHoursForHalfDay)
-                att.Status = AttendanceStatuses.ShortHours;
-            else if (totalHours < shift.MinimumHoursForFullDay)
-                att.Status = AttendanceStatuses.HalfDay;
-            else
-                // Keep Late if it was set at check-in; otherwise mark Present
-                att.Status = att.Status == AttendanceStatuses.Late
-                    ? AttendanceStatuses.Late
-                    : AttendanceStatuses.Present;
         }
     }
 }

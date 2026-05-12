@@ -1,15 +1,49 @@
-﻿namespace Humatrix_HRMS.DTOs.AttendanceCorrections
+﻿namespace Humatrix_HRMS.DTOs
 {
-    public class CreateAttendanceCorrectionDto
+    public class AttendanceListDto
+    {
+        public Guid? AttendanceId { get; set; }
+        public string? EmployeeName { get; set; }
+        public string? Email { get; set; }
+        public string? Department { get; set; }
+        public string? Role { get; set; }
+        public DateTime Date { get; set; }
+        public DateTime? CheckIn { get; set; }
+        public DateTime? CheckOut { get; set; }
+
+        public string? Status { get; set; }
+        public double? TotalHours { get; set; }
+        public bool IsManual { get; set; }
+        public bool? NeedsOvertimeApproval { get; set; }
+        public string? OvertimeStatus { get; set; }
+    }
+
+      public class CreateOvertimeRequestDto
+    {
+        public Guid AttendanceId { get; set; }
+        public DateTime ActualCheckOut { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    public class ReviewOvertimeDto
+    {
+        public Guid OvertimeRequestId { get; set; }
+        public bool Approve { get; set; }
+        public string? RejectionReason { get; set; }
+    }
+
+   
+    public class CreateCorrectionRequestDto
     {
         public DateTime WorkDate { get; set; }
-
-        public string RequestType { get; set; } = null!;
-
-        public DateTime? RequestedCheckIn { get; set; }
-
+        public DateTime? RequestedCheckIn { get; set; }    
         public DateTime? RequestedCheckOut { get; set; }
+        public string? Reason { get; set; }
+    }
 
-        public string Reason { get; set; } = null!;
+    public class LocationDto
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
     }
 }
