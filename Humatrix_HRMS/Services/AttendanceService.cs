@@ -223,13 +223,23 @@ namespace Humatrix_HRMS.Services
                         .Select(e => e.EmployeeId)
                         .FirstOrDefaultAsync();
 
+                    //attendance = await _context.Attendances
+                    //    .Include(a => a.Employee)
+                    //        .ThenInclude(e => e!.Shift)
+                    //    .FirstOrDefaultAsync(a =>
+                    //        a.EmployeeId == empId &&
+                    //        a.CheckIn != null &&
+                    //        a.CheckOut == null);
+
                     attendance = await _context.Attendances
-                        .Include(a => a.Employee)
-                            .ThenInclude(e => e!.Shift)
-                        .FirstOrDefaultAsync(a =>
-                            a.EmployeeId == empId &&
-                            a.CheckIn != null &&
-                            a.CheckOut == null);
+    .Include(a => a.Employee)
+        .ThenInclude(e => e!.Shift)
+    .Where(a =>
+        a.EmployeeId == empId &&
+        a.CheckIn != null &&
+        a.CheckOut == null)
+    .OrderByDescending(a => a.CheckIn)
+    .FirstOrDefaultAsync();
                 }
 
                 if (attendance == null || attendance.CheckIn == null)
@@ -240,6 +250,11 @@ namespace Humatrix_HRMS.Services
 
                 if (attendance.Employee?.Status != "Active")
                     throw new Exception("Inactive employees cannot check out.");
+
+                if (attendance.CheckIn > utcNow)
+                {
+                    throw new Exception("Invalid attendance session detected.");
+                }
 
                 // ── Geo validation (wider radius buffer for checkout) ──────────────
                 var office = await _context.OfficeLocations
@@ -279,7 +294,8 @@ namespace Humatrix_HRMS.Services
         // Also surfaces open night-shift sessions (WorkDate=yesterday) so the
         // UI correctly shows "Checked In" during a cross-midnight shift.
         // =========================================================================
-        public async Task<Attendance?> GetTodayStatusAsync()
+        //public async Task<Attendance?> GetTodayStatusAsync()
+        public async Task<AttendanceListDto?> GetTodayStatusAsync()
         {
             var user = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
@@ -294,7 +310,8 @@ namespace Humatrix_HRMS.Services
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
-            if (employee == null) return null;
+            if (employee == null)
+                return null;
 
             // Primary: today's WorkDate record
             var todayRecord = await _context.Attendances
@@ -303,13 +320,7 @@ namespace Humatrix_HRMS.Services
                     a.EmployeeId == employee.EmployeeId &&
                     a.WorkDate == today);
 
-            // Already completed today → return as-is
-            if (todayRecord?.CheckOut != null) return todayRecord;
-
-            // Open session for today → return it
-            if (todayRecord?.CheckIn != null) return todayRecord;
-
-            // Night-shift fallback: open session from a previous WorkDate
+            // Night-shift fallback: open session from previous WorkDate
             var openSession = await _context.Attendances
                 .AsNoTracking()
                 .FirstOrDefaultAsync(a =>
@@ -317,8 +328,29 @@ namespace Humatrix_HRMS.Services
                     a.CheckIn != null &&
                     a.CheckOut == null);
 
-            return openSession ?? todayRecord;
+            //var record = openSession ?? todayRecord;
+            var record = todayRecord ?? openSession;
+
+            if (record == null)
+                return null;
+
+            return new AttendanceListDto
+            {
+                AttendanceId = record.AttendanceId,
+                EmployeeName = $"{employee.FirstName} {employee.LastName}",
+                Date = record.WorkDate,
+                CheckIn = record.CheckIn,
+                CheckOut = record.CheckOut,
+                SystemCheckOut = record.SystemCheckOut,
+                OvertimeHours = record.OvertimeHours ?? 0,
+                ApprovedOvertimeHours = record.ApprovedOvertimeHours,
+                Status = record.Status,
+                TotalHours = record.TotalHours,
+                IsManual = record.IsManual,
+                NeedsOvertimeApproval = record.NeedsOvertimeApproval
+            };
         }
+
 
         // =========================================================================
         // MY ATTENDANCE  (employee view — last 30 days)
@@ -708,6 +740,43 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync();
 
             return TimeHelper.GetOrgTimeZone(tzId);
+        }
+
+
+        public async Task<List<AttendanceListDto>> GetMyAttendanceByMonthAsync(int year, int month)
+        {
+            var user = await _currentUser.GetUserAsync()
+                ?? throw new Exception("Unauthorized");
+
+            var employee = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+            if (employee == null)
+                return new List<AttendanceListDto>();
+
+            var records = await _context.Attendances
+                .AsNoTracking()
+                .Where(a =>
+                    a.EmployeeId == employee.EmployeeId &&
+                    a.WorkDate.Year == year &&
+                    a.WorkDate.Month == month)
+                .OrderByDescending(a => a.WorkDate)
+                .ToListAsync();
+
+            return records.Select(r => new AttendanceListDto
+            {
+                AttendanceId = r.AttendanceId,
+                EmployeeName = $"{employee.FirstName} {employee.LastName}",
+                Date = r.WorkDate,
+                CheckIn = r.CheckIn,
+                CheckOut = r.CheckOut,
+                Status = r.Status,
+                TotalHours = r.TotalHours,
+                IsManual = r.IsManual,
+                NeedsOvertimeApproval = r.NeedsOvertimeApproval,
+                ApprovedOvertimeHours = r.ApprovedOvertimeHours
+            }).ToList();
         }
 
         private static double ToRad(double angle) => angle * Math.PI / 180;

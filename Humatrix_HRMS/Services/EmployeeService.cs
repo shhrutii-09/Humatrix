@@ -1,5 +1,8 @@
 ﻿using Humatrix_HRMS.Data;
 using Humatrix_HRMS.DTOs;
+using Humatrix_HRMS.DTOsA;
+using Humatrix_HRMS.DTOsA.Auth;
+using Humatrix_HRMS.DTOsA;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -136,6 +139,39 @@ namespace Humatrix_HRMS.Services
                 ShiftId = profile?.ShiftId,
                 ShiftName = shift?.Name ?? "No Shift",
                 IsActive = user.IsActive
+            };
+        }
+
+        public async Task<EmployeeProfileDto?> GetMyProfileAsync()
+        {
+            var currentUser = await _currentUser.GetUserAsync();
+
+            if (currentUser == null)
+                return null;
+
+            var employee = await _context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Designation)
+                .Include(e => e.Shift)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
+
+            if (employee == null)
+                return null;
+
+            return new EmployeeProfileDto
+            {
+                EmployeeId = employee.EmployeeId,
+                FullName = $"{employee.FirstName} {employee.LastName}",
+                Email = currentUser.Email ?? "",
+                EmployeeCode = employee.EmployeeCode,
+                Department = employee.Department?.Name ?? "N/A",
+                Designation = employee.Designation?.Name ?? "N/A",
+                Shift = employee.Shift?.Name ?? "No Shift",
+                Status = employee.Status,
+                JoiningDate = employee.JoiningDate,
+                Phone = employee.Phone,
+                Address = employee.Address
             };
         }
 
@@ -512,6 +548,61 @@ namespace Humatrix_HRMS.Services
             };
         }
 
+
+        public async Task<bool> UpdateMyProfileAsync(UpdateEmployeeProfileDto dto)
+        {
+            var currentUser = await _currentUser.GetUserAsync();
+
+            if (currentUser == null)
+                return false;
+
+            var employee = await _context.Employees
+                .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
+
+            if (employee == null)
+                return false;
+
+            employee.Phone = dto.Phone;
+            employee.Address = dto.Address;
+            employee.Gender = dto.Gender;
+            employee.DateOfBirth = dto.DateOfBirth;
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+
+        public async Task<(bool Success, string Message)> ChangePasswordAsync(ChangePasswordDto dto)
+        {
+            var currentUser = await _currentUser.GetUserAsync();
+
+            if (currentUser == null)
+            {
+                return (false, "User not found");
+            }
+
+            var user = await _userManager.FindByIdAsync(currentUser.Id);
+
+            if (user == null)
+            {
+                return (false, "User not found");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(
+                user,
+                dto.CurrentPassword,
+                dto.NewPassword);
+
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(x => x.Description));
+
+                return (false, errors);
+            }
+
+            return (true, "Password changed successfully");
+        }
 
     }
 }

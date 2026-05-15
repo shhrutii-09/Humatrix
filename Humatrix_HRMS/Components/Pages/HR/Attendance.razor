@@ -84,16 +84,17 @@
                             }
                         </select>
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">User Role</label>
+                        <select @bind="selectedRole" class="form-select">
+                            <option value="">All Roles</option>
+                            <option value="Employee">Employee</option>
+                            <option value="HR">HR</option>
+                        </select>
+                    </div>
                 }
 
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold text-muted">User Role</label>
-                    <select @bind="selectedRole" class="form-select">
-                        <option value="">All Roles</option>
-                        <option value="Employee">Employee</option>
-                        <option value="HR">HR</option>
-                    </select>
-                </div>
+              
 
                 <div class="col-md-3">
                     <button class="btn btn-primary w-100 shadow-sm"
@@ -147,7 +148,9 @@
                         }
                         else if (attendanceList.Any())
                         {
-                            @foreach (var item in attendanceList)
+                            @* @foreach (var item in attendanceList)
+                            { *@
+                            @foreach (var item in attendanceList.Skip((currentPage - 1) * pageSize).Take(pageSize))
                             {
                                 <tr class="@(item.Status == "Absent" ? "table-danger" : "")">
 
@@ -217,6 +220,40 @@
                         }
                     </tbody>
                 </table>
+                @if (attendanceList.Any() && !isNonWorkingDay && !isLoading)
+                {
+                    <div class="card-footer bg-white border-top-0 py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="small text-muted">
+                                Showing <b>@(((currentPage - 1) * pageSize) + 1)</b> to
+                                <b>@(Math.Min(currentPage * pageSize, attendanceList.Count))</b>
+                                of <b>@attendanceList.Count</b> records
+                            </div>
+                            <nav>
+                                <ul class="pagination pagination-sm mb-0">
+                                    <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                        <button class="page-link" @onclick="(() => ChangePage(currentPage - 1))">Previous</button>
+                                    </li>
+
+                                    @for (int i = 1; i <= TotalPages; i++)
+                                    {
+                                        var pageNumber = i;
+                                        <li class="page-item @(currentPage == pageNumber ? "active" : "")">
+                                            <button class="page-link" @onclick="(() => ChangePage(pageNumber))"
+                                                    style="@(currentPage == pageNumber ? "background-color: #5c4ac7; border-color: #5c4ac7;" : "")">
+                                                @pageNumber
+                                            </button>
+                                        </li>
+                                    }
+
+                                    <li class="page-item @(currentPage == TotalPages ? "disabled" : "")">
+                                        <button class="page-link" @onclick="(() => ChangePage(currentPage + 1))">Next</button>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                }
             }
         </div>
     </div>
@@ -235,6 +272,16 @@
 
     private bool isOrgAdmin;
     private bool isLoading;
+
+    private int currentPage = 1;
+    private int pageSize = 10; // Change this to 25 or 50 if preferred
+    private int TotalPages => (int)Math.Ceiling((decimal)attendanceList.Count / pageSize);
+
+    private void ChangePage(int newPage)
+    {
+        currentPage = newPage;
+        StateHasChanged();
+    }
 
     // FIX: Store org timezone — used for all time display conversions.
     private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
@@ -280,10 +327,13 @@
 
     private async Task LoadData()
     {
+        // isLoading = true;
+        // isNonWorkingDay = false;
+        // StateHasChanged();
         isLoading = true;
         isNonWorkingDay = false;
+        currentPage = 1; // Reset to first page on new search
         StateHasChanged();
-
         try
         {
             attendanceList = await AttendanceService.GetAttendanceForDateAsync(

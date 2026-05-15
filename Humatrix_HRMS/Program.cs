@@ -5,6 +5,9 @@ using Humatrix_HRMS.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +44,30 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 
 //builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
 //    options.UseSqlServer(connectionString));
+
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+
+builder.Services
+    .AddAuthentication()
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings["Key"]!)
+            ),
+
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
@@ -107,7 +134,7 @@ else
     app.UseHsts();
 }   
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting(); // ✅ VERY IMPORTANT

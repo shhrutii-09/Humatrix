@@ -87,6 +87,7 @@ namespace Humatrix_HRMS.Services
             // For overnight shifts the check-in anchor day is WorkDate, which the
             // caller should ensure matches the record.WorkDate.
             var shiftDate = checkInLocal.Date;
+            var shiftStartLocal = shiftDate.Add(shift.StartTime);
             var shiftEndLocal = TimeHelper.GetShiftEndLocal(shiftDate, shift);
 
             // ── SystemCheckOut — set once, never overwrite if already set by a
@@ -95,46 +96,125 @@ namespace Humatrix_HRMS.Services
             var shiftEndUtc = TimeHelper.ToUtc(shiftEndLocal, tz);
             attendance.SystemCheckOut = DateTime.SpecifyKind(shiftEndUtc, DateTimeKind.Utc);
 
-            // ── Overtime ──────────────────────────────────────────────────────────
-            var overtimeThreshold = shiftEndLocal.AddMinutes(OT_GRACE_MIN);
-            bool wasLate = attendance.Status == AttendanceStatuses.Late;
+            // Employee must actually overlap the shift window
+            //bool overlapsShift =
+            //    checkInLocal < shiftEndLocal &&
+            //    checkOutLocal > checkInLocal;
 
-            if (checkOutLocal > overtimeThreshold)
-            {
-                var rawOtHours = (checkOutLocal - shiftEndLocal).TotalHours;
-                rawOtHours = Math.Min(rawOtHours, MAX_OT_HOURS);
+            //// If attendance is completely outside shift timing,
+            //// do NOT allow overtime
+            //if (!overlapsShift)
+            //{
+            //    attendance.NeedsOvertimeApproval = false;
+            //    attendance.OvertimeHours = 0;
+            //}
+            //else
+            //{
 
-                if (rawOtHours >= MIN_OT_HOURS)
-                {
-                    attendance.NeedsOvertimeApproval = true;
-                    attendance.OvertimeHours = Math.Round(rawOtHours, 2);
-                }
-                else
+                //    // ── Overtime ──────────────────────────────────────────────────────────
+                //    var overtimeThreshold = shiftEndLocal.AddMinutes(OT_GRACE_MIN);
+                //bool wasLate = attendance.Status == AttendanceStatuses.Late;
+
+                //if (checkOutLocal > overtimeThreshold)
+                //{
+                //    var rawOtHours = (checkOutLocal - shiftEndLocal).TotalHours;
+                //    rawOtHours = Math.Min(rawOtHours, MAX_OT_HOURS);
+
+                //    if (rawOtHours >= MIN_OT_HOURS)
+                //    {
+                //        attendance.NeedsOvertimeApproval = true;
+                //        attendance.OvertimeHours = Math.Round(rawOtHours, 2);
+                //    }
+                //    else
+                //    {
+                //        attendance.NeedsOvertimeApproval = false;
+                //        attendance.OvertimeHours = 0;
+                //    }
+                //}
+                //else
+                //{
+                //    attendance.NeedsOvertimeApproval = false;
+                //    attendance.OvertimeHours = 0;
+                //}
+
+                // ── Overtime ──────────────────────────────────────────────────────────
+                // ── Overtime ──────────────────────────────────────────────────────────
+                var overtimeThreshold = shiftEndLocal.AddMinutes(OT_GRACE_MIN);
+                bool wasLate = attendance.Status == AttendanceStatuses.Late;
+
+                // IMPORTANT FIX:
+                // Employee must actually overlap the shift window
+                bool overlapsShift =
+                    checkInLocal < shiftEndLocal &&
+                    checkOutLocal > shiftStartLocal;
+
+                if (!overlapsShift)
                 {
                     attendance.NeedsOvertimeApproval = false;
                     attendance.OvertimeHours = 0;
                 }
-            }
-            else
-            {
-                attendance.NeedsOvertimeApproval = false;
-                attendance.OvertimeHours = 0;
-            }
+                else
+                {
+                    if (checkOutLocal > overtimeThreshold)
+                    {
+                        var rawOtHours = (checkOutLocal - shiftEndLocal).TotalHours;
+                        rawOtHours = Math.Min(rawOtHours, MAX_OT_HOURS);
 
-            // ── Attendance status ─────────────────────────────────────────────────
-            bool leftEarly = checkOutLocal < shiftEndLocal;
+                        if (rawOtHours >= MIN_OT_HOURS)
+                        {
+                            attendance.NeedsOvertimeApproval = true;
+                            attendance.OvertimeHours = Math.Round(rawOtHours, 2);
+                        }
+                        else
+                        {
+                            attendance.NeedsOvertimeApproval = false;
+                            attendance.OvertimeHours = 0;
+                        }
+                    }
+                    else
+                    {
+                        attendance.NeedsOvertimeApproval = false;
+                        attendance.OvertimeHours = 0;
+                    }
+                }
+                //if (checkOutLocal > overtimeThreshold)
+                //    {
+                //        var rawOtHours = (checkOutLocal - shiftEndLocal).TotalHours;
+                //        rawOtHours = Math.Min(rawOtHours, MAX_OT_HOURS);
 
-            if (totalHours < shift.MinimumHoursForHalfDay)
-                attendance.Status = AttendanceStatuses.ShortHours;
-            else if (totalHours < shift.MinimumHoursForFullDay)
-                attendance.Status = AttendanceStatuses.HalfDay;
-            else if (leftEarly)
-                attendance.Status = AttendanceStatuses.EarlyExit;
-            else
-                attendance.Status = wasLate
-                    ? AttendanceStatuses.Late
-                    : AttendanceStatuses.Present;
-        }
+                //        if (rawOtHours >= MIN_OT_HOURS)
+                //        {
+                //            attendance.NeedsOvertimeApproval = true;
+                //            attendance.OvertimeHours = Math.Round(rawOtHours, 2);
+                //        }
+                //        else
+                //        {
+                //            attendance.NeedsOvertimeApproval = false;
+                //            attendance.OvertimeHours = 0;
+                //        }
+                //    }
+                //    else
+                //    {
+                //        attendance.NeedsOvertimeApproval = false;
+                //        attendance.OvertimeHours = 0;
+                //    }
+                //}
+
+                // ── Attendance status ─────────────────────────────────────────────────
+                bool leftEarly = checkOutLocal < shiftEndLocal;
+
+                if (totalHours < shift.MinimumHoursForHalfDay)
+                    attendance.Status = AttendanceStatuses.ShortHours;
+                else if (totalHours < shift.MinimumHoursForFullDay)
+                    attendance.Status = AttendanceStatuses.HalfDay;
+                else if (leftEarly)
+                    attendance.Status = AttendanceStatuses.EarlyExit;
+                else
+                    attendance.Status = wasLate
+                        ? AttendanceStatuses.Late
+                        : AttendanceStatuses.Present;
+            }
+        
 
         // =========================================================================
         // REAPPLY AFTER OT APPROVAL / REJECTION (no shift boundary re-calc)
