@@ -13,14 +13,18 @@ namespace Humatrix_HRMS.Services
 
         private readonly HRPolicyValidationService _policy;
 
+        private readonly NotificationService _notificationService;
+
         public LeaveService(
             ApplicationDbContext context,
             CurrentUserService currentUser,
-            HRPolicyValidationService policy)
+            HRPolicyValidationService policy,
+            NotificationService notificationService)
         {
             _context = context;
             _currentUser = currentUser;
             _policy = policy;
+            _notificationService = notificationService;
         }
 
         // =========================
@@ -123,6 +127,40 @@ namespace Humatrix_HRMS.Services
             _context.LeaveRequests.Add(request);
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
+
+
+            // =========================
+            // NOTIFY HR
+            // =========================
+
+            var hrUsers = await _context.Users
+                .Where(u => u.OrganizationId == employee.OrganizationId)
+                .ToListAsync();
+
+            foreach (var hr in hrUsers)
+            {
+                var roles = await _context.UserRoles
+                    .Where(x => x.UserId == hr.Id)
+                    .Join(
+                        _context.Roles,
+                        ur => ur.RoleId,
+                        r => r.Id,
+                        (ur, r) => r.Name)
+                    .ToListAsync();
+
+                if (roles.Contains("HR") || roles.Contains("Admin"))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        hr.Id,
+
+                        "New Leave Request",
+
+                        $"{employee.FirstName} {employee.LastName} applied for leave",
+
+                        "/hr/leaves"
+                    );
+                }
+            }
         }
 
         // =========================
@@ -221,11 +259,48 @@ namespace Humatrix_HRMS.Services
                         IsManual = true
                     });
                 }
+
+                // =========================
+                // NOTIFY EMPLOYEE APPROVED
+                // =========================
+
+                if (!string.IsNullOrEmpty(employee.UserId))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        employee.UserId,
+
+                        "Leave Approved",
+
+                        $"Your leave request from {leave.FromDate:dd MMM yyyy} to {leave.ToDate:dd MMM yyyy} was approved",
+
+                        "/employee/leaves"
+                    );
+                }
+
             }
             else
             {
                 leave.Status = "Rejected";
                 leave.RejectionReason = rejectionReason;
+
+                // =========================
+                // NOTIFY EMPLOYEE REJECTED
+
+                // =========================
+
+                if (!string.IsNullOrEmpty(employee.UserId))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        employee.UserId,
+
+                        "Leave Rejected",
+
+                        $"Your leave request from {leave.FromDate:dd MMM yyyy} to {leave.ToDate:dd MMM yyyy} was rejected",
+
+                        "/employee/leaves"
+                    );
+                }
+
             }
 
             leave.ReviewedAt = DateTime.UtcNow;
@@ -260,6 +335,40 @@ namespace Humatrix_HRMS.Services
 
             leave.Status = "Cancelled";
             await _context.SaveChangesAsync();
+
+            // =========================
+            // NOTIFY HR
+            // =========================
+
+            var hrUsers = await _context.Users
+                .Where(u => u.OrganizationId == employee.OrganizationId)
+                .ToListAsync();
+
+            foreach (var hr in hrUsers)
+            {
+                var roles = await _context.UserRoles
+                    .Where(x => x.UserId == hr.Id)
+                    .Join(
+                        _context.Roles,
+                        ur => ur.RoleId,
+                        r => r.Id,
+                        (ur, r) => r.Name)
+                    .ToListAsync();
+
+                if (roles.Contains("HR") || roles.Contains("Admin"))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        hr.Id,
+
+                        "Leave Cancelled",
+
+                        $"{employee.FirstName} {employee.LastName} cancelled leave request",
+
+                        "/hr/leaves"
+                    );
+                }
+            }
+
         }
 
         // =========================

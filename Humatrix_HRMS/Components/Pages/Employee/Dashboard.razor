@@ -1,108 +1,281 @@
 ﻿@page "/employee/dashboard"
+
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Components.Account.Shared
 @using Microsoft.AspNetCore.Authorization
 
 @attribute [Authorize(Roles = "Employee")]
+
 @inject EmployeeService EmployeeService
+@inject TaskService TaskService
+
 @rendermode InteractiveServer
 
 <PageTitle>Dashboard | Humatrix</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="mb-4">
-        <h2 class="fw-bold">Welcome, @(data?.FullName ?? "User")!</h2>
-        <p class="text-muted">Here is your professional summary for today.</p>
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+
+        <div>
+            <h2 class="fw-bold">
+                Welcome, @(data?.FullName ?? "User")!
+            </h2>
+
+            <p class="text-muted mb-0">
+                Here is your professional summary for today.
+            </p>
+        </div>
+
+        <!-- RIGHT SIDE -->
+        <div class="d-flex align-items-center gap-3">
+
+            <!-- NOTIFICATION BELL -->
+            <NotificationBell />
+
+            <!-- EMPLOYEE BADGE -->
+            <span class="badge bg-primary p-2">
+                Employee
+            </span>
+
+        </div>
+
     </div>
 
     @if (isLoading)
     {
         <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2 text-muted">Loading your dashboard...</p>
+
+            <div class="spinner-border text-primary"
+                 role="status">
+            </div>
+
+            <p class="mt-2 text-muted">
+                Loading your dashboard...
+            </p>
+
         </div>
     }
     else if (!string.IsNullOrEmpty(error))
     {
         <div class="alert alert-danger shadow-sm">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Error:</strong> @error
+
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+            <strong>Error:</strong>
+            @error
+
         </div>
     }
     else if (data != null)
     {
         <div class="row g-4">
+
+            <!-- DEPARTMENT -->
             <div class="col-md-4">
+
                 <div class="card border-0 shadow-sm p-4 h-100 border-start border-primary border-4">
-                    <h6 class="text-muted small fw-bold text-uppercase">Department</h6>
-                    <h4 class="fw-bold mb-0">@data.DepartmentName</h4>
+
+                    <h6 class="text-muted small fw-bold text-uppercase">
+                        Department
+                    </h6>
+
+                    <h4 class="fw-bold mb-0">
+                        @data.DepartmentName
+                    </h4>
+
                 </div>
+
             </div>
 
+            <!-- DESIGNATION -->
             <div class="col-md-4">
+
                 <div class="card border-0 shadow-sm p-4 h-100 border-start border-info border-4">
-                    <h6 class="text-muted small fw-bold text-uppercase">Designation</h6>
-                    <h4 class="fw-bold mb-0">@data.DesignationName</h4>
+
+                    <h6 class="text-muted small fw-bold text-uppercase">
+                        Designation
+                    </h6>
+
+                    <h4 class="fw-bold mb-0">
+                        @data.DesignationName
+                    </h4>
+
                 </div>
+
             </div>
 
+            <!-- SHIFT -->
             <div class="col-md-4">
+
                 <div class="card border-0 shadow-sm p-4 h-100 border-start border-warning border-4">
-                    <h6 class="text-muted small fw-bold text-uppercase">Current Shift</h6>
-                    <h4 class="fw-bold mb-0">@data.ShiftName</h4>
+
+                    <h6 class="text-muted small fw-bold text-uppercase">
+                        Current Shift
+                    </h6>
+
+                    <h4 class="fw-bold mb-0">
+                        @data.ShiftName
+                    </h4>
+
                 </div>
+
             </div>
 
+            <!-- EMPLOYMENT SUMMARY -->
             <div class="col-lg-8">
+
                 <div class="card border-0 shadow-sm p-4">
-                    <h5 class="fw-bold mb-4">Employment Summary</h5>
+
+                    <h5 class="fw-bold mb-4">
+                        Employment Summary
+                    </h5>
+
                     <div class="row">
+
                         <div class="col-6 mb-3">
-                            <label class="small text-muted d-block">Employee Code</label>
-                            <span class="fw-bold">@data.EmployeeCode</span>
+
+                            <label class="small text-muted d-block">
+                                Employee Code
+                            </label>
+
+                            <span class="fw-bold">
+                                @data.EmployeeCode
+                            </span>
+
                         </div>
+
                         <div class="col-6 mb-3">
-                            <label class="small text-muted d-block">Joining Date</label>
-                            <span class="fw-bold">@data.JoiningDate.ToString("MMMM dd, yyyy")</span>
+
+                            <label class="small text-muted d-block">
+                                Joining Date
+                            </label>
+
+                            <span class="fw-bold">
+                                @data.JoiningDate.ToString("MMMM dd, yyyy")
+                            </span>
+
                         </div>
+
                         <div class="col-6">
-                            <label class="small text-muted d-block">Account Status</label>
-                            <span class="badge bg-success-subtle text-success">@data.Status</span>
+
+                            <label class="small text-muted d-block">
+                                Account Status
+                            </label>
+
+                            <span class="badge bg-success-subtle text-success">
+                                @data.Status
+                            </span>
+
                         </div>
+
                     </div>
+
                 </div>
+
             </div>
 
+            <!-- PROFILE CARD -->
             <div class="col-lg-4">
+
                 <div class="card border-0 shadow-sm text-center p-4">
+
+                    <!-- AVATAR -->
                     <div class="mx-auto mb-3 bg-primary rounded-circle text-white d-flex align-items-center justify-content-center"
                          style="width:70px; height:70px; font-size: 1.5rem;">
+
                         @data.Initial
+
                     </div>
-                    <h5 class="fw-bold mb-1">@data.FullName</h5>
-                    <p class="text-muted small mb-4">@data.Email</p>
-                    <a href="/employee/profile" class="btn btn-outline-primary w-100">View Full Profile</a>
+
+                    <!-- NAME -->
+                    <h5 class="fw-bold mb-1">
+                        @data.FullName
+                    </h5>
+
+                    <!-- EMAIL -->
+                    <p class="text-muted small mb-4">
+                        @data.Email
+                    </p>
+
+                    <!-- BUTTON -->
+                    <a href="/employee/profile"
+                       class="btn btn-outline-primary w-100">
+
+                        View Full Profile
+
+                    </a>
+
                 </div>
+
             </div>
+
         </div>
     }
     else
     {
         <div class="card shadow-sm border-0 p-5 text-center">
+
             <div class="mb-3">
-                <i class="bi bi-person-x text-muted" style="font-size: 3rem;"></i>
+
+                <i class="bi bi-person-x text-muted"
+                   style="font-size: 3rem;"></i>
+
             </div>
-            <h4>Profile Record Not Found</h4>
-            <p class="text-muted">Your account exists, but your employee profile record is missing in the system.</p>
+
+            <h4>
+                Profile Record Not Found
+            </h4>
+
+            <p class="text-muted">
+
+                Your account exists, but your employee profile
+                record is missing in the system.
+
+            </p>
+
             <div class="mt-3">
-                <a href="/contact-support" class="btn btn-primary">Contact HR</a>
+
+                <a href="/contact-support"
+                   class="btn btn-primary">
+
+                    Contact HR
+
+                </a>
+
             </div>
+
         </div>
     }
+
 </div>
 
+<style>
+
+    .card {
+        border-radius: 12px;
+    }
+
+    .bg-success-subtle {
+        background-color: #d1e7dd;
+        color: #0f5132;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+        transition: 0.2s ease;
+    }
+
+</style>
+
 @code {
+
     private EmployeeDashboardDto? data;
+
     private bool isLoading = true;
+
     private string? error;
 
     protected override async Task OnInitializedAsync()
@@ -110,12 +283,16 @@
         try
         {
             isLoading = true;
-            data = await EmployeeService.GetEmployeeDashboardDataAsync();
+            await TaskService.CreateTaskReminderNotificationsAsync();
+
+            data = await EmployeeService
+                .GetEmployeeDashboardDataAsync();
         }
         catch (Exception ex)
         {
             error = "An unexpected error occurred while loading your data.";
-            Console.WriteLine(ex.Message); // Log the actual error for debugging
+
+            Console.WriteLine(ex.Message);
         }
         finally
         {

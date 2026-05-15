@@ -1,0 +1,374 @@
+﻿@page "/hr/tasks"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@inject TaskService TaskService
+@inject NavigationManager Nav
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>All Tasks</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+
+        <div>
+            <h2 class="fw-semibold mb-0">Task Management</h2>
+            <small class="text-muted">
+                Monitor employee tasks
+            </small>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap">
+
+            <!-- SEARCH -->
+            <input class="form-control"
+                   style="min-width:220px"
+                   placeholder="Search tasks..."
+                   @bind="searchText"
+                   @bind:event="oninput" />
+
+            <!-- STATUS -->
+            <select class="form-select"
+                    style="min-width:180px"
+                    @bind="selectedStatus">
+
+                <option value="">All Status</option>
+                <option>Pending</option>
+                <option>In Progress</option>
+                <option>Completed</option>
+
+            </select>
+
+            <!-- PRIORITY -->
+            <select class="form-select"
+                    style="min-width:180px"
+                    @bind="selectedPriority">
+
+                <option value="">All Priority</option>
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+
+            </select>
+
+        </div>
+
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">Total Tasks</small>
+                <h4 class="fw-bold mb-0">
+                    @tasks.Count
+                </h4>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">Pending</small>
+                <h4 class="fw-bold text-warning mb-0">
+                    @tasks.Count(t => t.Status == "Pending")
+                </h4>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">In Progress</small>
+                <h4 class="fw-bold text-info mb-0">
+                    @tasks.Count(t => t.Status == "In Progress")
+                </h4>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">Completed</small>
+                <h4 class="fw-bold text-success mb-0">
+                    @tasks.Count(t => t.Status == "Completed")
+                </h4>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TASK TABLE -->
+    <div class="card shadow-sm border-0">
+
+        <div class="table-responsive">
+
+            <table class="table align-middle mb-0">
+
+                <thead class="table-light">
+
+                    <tr>
+                        <th>Task</th>
+                        <th>Assigned To</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Due Date</th>
+                        <th>Created</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    @if (!filteredTasks.Any())
+                    {
+                        <tr>
+
+                            <td colspan="7" class="text-center py-5">
+
+                                <i class="bi bi-inbox display-6 text-muted"></i>
+
+                                <div class="mt-2 fw-semibold">
+                                    No tasks found
+                                </div>
+
+                                <small class="text-muted">
+                                    Try changing filters
+                                </small>
+
+                            </td>
+
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var t in filteredTasks)
+                        {
+                            <tr class="@(IsOverdue(t) ? "table-danger" : "")">
+
+                                <!-- TASK -->
+                                <td style="min-width:250px;">
+
+                                    <div class="fw-semibold">
+                                        @t.Title
+                                    </div>
+
+                                    <small class="text-muted">
+
+                                        @(string.IsNullOrEmpty(t.Description)
+                                                                        ? "No description"
+                                                                        : (t.Description.Length > 70
+                                                                        ? t.Description.Substring(0, 70) + "..."
+                                                                        : t.Description))
+
+                            </small>
+
+                                </td>
+
+                                <!-- EMPLOYEE -->
+                                <td>
+
+                                    <span class="text-primary fw-semibold"
+                                          style="cursor:pointer"
+                                          @onclick="@(() => Nav.NavigateTo($"/hr/employee/{t.AssignedToName}"))">
+
+                                        @t.AssignedToName
+
+                                    </span>
+
+                                </td>
+
+                                <!-- PRIORITY -->
+                                <td>
+
+                                    <span class="badge @GetPriorityClass(t.Priority)">
+                                        @t.Priority
+                                    </span>
+
+                                </td>
+
+                                <!-- STATUS -->
+                                <td>
+
+                                    <span class="badge @GetStatusClass(t.Status)">
+                                        @t.Status
+                                    </span>
+
+                                </td>
+
+                                <!-- PROGRESS -->
+                                <td style="min-width:220px;">
+
+                                    <div class="d-flex align-items-center gap-2">
+
+                                        <div class="progress flex-grow-1"
+                                             style="height:8px;">
+
+                                            <div class="progress-bar"
+                                                 style="width:@t.Progress%">
+                                            </div>
+
+                                        </div>
+
+                                        <small class="fw-semibold">
+                                            @t.Progress%
+                                        </small>
+
+                                    </div>
+
+                                </td>
+
+                                <!-- DUE DATE -->
+                                <td>
+
+                            @if (t.DueDate.HasValue)
+                                    {
+                                        <div>
+                                            @t.DueDate.Value.ToString("dd MMM yyyy")
+                                        </div>
+
+                                        @if (IsOverdue(t))
+                                        {
+                                            <small class="text-danger fw-semibold">
+                                                Overdue
+                                            </small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            N/A
+                                        </span>
+                                    }
+
+                                </td>
+
+                                <!-- CREATED -->
+                                <td>
+
+                                    <small class="text-muted">
+                                        @t.CreatedAt.ToString("dd MMM yyyy")
+                                    </small>
+
+                                </td>
+
+                            </tr>
+                        }
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<style>
+
+    .table tbody tr {
+        transition: 0.2s ease;
+    }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+    .progress {
+        background-color: #e9ecef;
+    }
+
+    .table td,
+    .table th {
+        vertical-align: middle;
+    }
+
+    .card {
+        border-radius: 12px;
+    }
+
+</style>
+
+@code {
+
+    private List<TaskDto> tasks = new();
+
+    private string? searchText;
+    private string? selectedStatus;
+    private string? selectedPriority;
+
+    protected override async Task OnInitializedAsync()
+    {
+        tasks = await TaskService.GetAllTasksAsync();
+    }
+
+    private List<TaskDto> filteredTasks =>
+        tasks
+        .Where(t =>
+
+            // SEARCH
+            (string.IsNullOrWhiteSpace(searchText) ||
+
+             t.Title.Contains(searchText,
+                 StringComparison.OrdinalIgnoreCase) ||
+
+             t.AssignedToName.Contains(searchText,
+                 StringComparison.OrdinalIgnoreCase))
+
+            // STATUS FILTER
+            &&
+
+            (string.IsNullOrEmpty(selectedStatus)
+                || t.Status == selectedStatus)
+
+            // PRIORITY FILTER
+            &&
+
+            (string.IsNullOrEmpty(selectedPriority)
+                || t.Priority == selectedPriority)
+
+        )
+
+        // PROFESSIONAL SORTING
+        // Pending/In Progress first
+        // Completed at bottom
+        // Latest tasks first
+
+        .OrderBy(t => t.Status == "Completed")
+        .ThenByDescending(t => t.CreatedAt)
+
+        .ToList();
+
+    private bool IsOverdue(TaskDto t)
+    {
+        return t.DueDate.HasValue
+            && t.DueDate.Value.Date < DateTime.Today
+            && t.Status != "Completed";
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Completed" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "In Progress" => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetPriorityClass(string priority) => priority switch
+    {
+        "High" => "bg-danger",
+        "Medium" => "bg-primary",
+        "Low" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+}

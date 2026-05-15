@@ -1,0 +1,416 @@
+@page "/employee/my-tasks"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "Employee")]
+
+@inject TaskService TaskService
+
+<PageTitle>My Tasks</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+
+        <div>
+            <h2 class="fw-semibold mb-0">My Tasks</h2>
+            <small class="text-muted">
+                Update your task progress
+            </small>
+        </div>
+
+        <!-- FILTERS -->
+        <div class="d-flex gap-2 flex-wrap">
+
+            <!-- SEARCH -->
+            <input class="form-control"
+                   style="min-width:220px"
+                   placeholder="Search tasks..."
+                   @bind="searchText"
+                   @bind:event="oninput" />
+
+            <!-- STATUS -->
+            <select class="form-select"
+                    style="min-width:180px"
+                    @bind="selectedStatus">
+
+                <option value="">All Status</option>
+                <option>Pending</option>
+                <option>In Progress</option>
+                <option>Completed</option>
+
+            </select>
+
+            <!-- PRIORITY -->
+            <select class="form-select"
+                    style="min-width:180px"
+                    @bind="selectedPriority">
+
+                <option value="">All Priority</option>
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+
+            </select>
+
+        </div>
+
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">Total Tasks</small>
+                <h4 class="fw-bold mb-0">
+                    @tasks.Count
+                </h4>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">Pending</small>
+                <h4 class="fw-bold text-warning mb-0">
+                    @tasks.Count(t => t.Status == "Pending")
+                </h4>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">In Progress</small>
+                <h4 class="fw-bold text-info mb-0">
+                    @tasks.Count(t => t.Status == "In Progress")
+                </h4>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 p-3">
+                <small class="text-muted">Completed</small>
+                <h4 class="fw-bold text-success mb-0">
+                    @tasks.Count(t => t.Status == "Completed")
+                </h4>
+            </div>
+        </div>
+
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (!filteredTasks.Any())
+    {
+        <div class="text-center py-5">
+
+            <i class="bi bi-check2-circle display-4 text-success"></i>
+
+            <h5 class="mt-3">
+                No tasks found
+            </h5>
+
+            <small class="text-muted">
+                Try changing filters
+            </small>
+
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+
+            @foreach (var t in filteredTasks)
+            {
+                <div class="col-md-4">
+
+                    <div class="card shadow-sm border-0 h-100
+                                         @(IsOverdue(t) ? "border border-danger border-2" : "")">
+
+                        <div class="card-body d-flex flex-column">
+
+                            <!-- TITLE -->
+                            <div class="d-flex justify-content-between align-items-start">
+
+                                <h6 class="fw-semibold mb-1">
+                                    @t.Title
+                                </h6>
+
+                                @if (IsOverdue(t))
+                                {
+                                    <span class="badge bg-danger">
+                                        Overdue
+                                    </span>
+                                }
+
+                        </div>
+
+                        <!-- DESCRIPTION -->
+                        <small class="text-muted mb-3">
+
+                            @(string.IsNullOrEmpty(t.Description)
+                                                    ? "No description"
+                                                    : (t.Description.Length > 100
+                                                    ? t.Description.Substring(0, 100) + "..."
+                                                    : t.Description))
+
+                    </small>
+
+                            <!-- BADGES -->
+                            <div class="d-flex gap-2 mb-3 flex-wrap">
+
+                                <span class="badge @GetPriorityClass(t.Priority)">
+                                    @GetPriorityIcon(t.Priority) @t.Priority
+                                </span>
+
+                                <span class="badge @GetStatusClass(t.Status)">
+                                    @t.Status
+                                </span>
+
+                            </div>
+
+                            <!-- PROGRESS -->
+                            <div class="mb-2">
+
+                                <div class="d-flex justify-content-between mb-1">
+
+                                    <small class="fw-semibold">
+                                        Progress
+                                    </small>
+
+                                    <small class="fw-semibold">
+                                        @t.Progress%
+                                    </small>
+
+                                </div>
+
+                                <div class="progress" style="height:8px;">
+
+                                    <div class="progress-bar @GetProgressBarClass(t.Progress)"
+                                         style="width:@t.Progress%">
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <!-- SLIDER -->
+                            <div class="mt-3">
+
+                                <input type="range"
+                                       min="0"
+                                       max="100"
+                                       step="10"
+                                       class="form-range"
+                                       value="@t.Progress"
+                                       disabled="@(t.Status == "Completed")"
+                                       @onchange="(e) => UpdateProgress(t, e)" />
+
+                            </div>
+
+                            <!-- DATES -->
+                            <div class="mt-auto pt-3">
+
+                                <div class="small text-muted">
+
+                                    <div>
+                                        <i class="bi bi-calendar-event"></i>
+                                        Due:
+                                        @t.DueDate?.ToString("dd MMM yyyy")
+                                    </div>
+
+                                    <div class="mt-1">
+
+                                @if (t.DueDate.HasValue)
+                                        {
+                                            @GetDueDateText(t)
+                                        }
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+<style>
+
+    .card {
+        border-radius: 14px;
+        transition: all 0.2s ease;
+    }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+        }
+
+    .progress {
+        background-color: #e9ecef;
+    }
+
+</style>
+
+@code {
+
+    private List<TaskDto> tasks = new();
+
+    private bool isLoading = true;
+
+    private string? searchText;
+    private string? selectedStatus;
+    private string? selectedPriority;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await TaskService.CreateTaskReminderNotificationsAsync();
+        await LoadTasks();
+    }
+
+    private async Task LoadTasks()
+    {
+        isLoading = true;
+
+        tasks = await TaskService.GetMyTasksAsync();
+
+        isLoading = false;
+    }
+
+    private List<TaskDto> filteredTasks =>
+        tasks
+
+        .Where(t =>
+
+            // SEARCH
+            (string.IsNullOrWhiteSpace(searchText)
+
+                || t.Title.Contains(searchText,
+                    StringComparison.OrdinalIgnoreCase)
+
+                || (!string.IsNullOrEmpty(t.Description)
+                    && t.Description.Contains(searchText,
+                        StringComparison.OrdinalIgnoreCase)))
+
+            // STATUS
+            &&
+
+            (string.IsNullOrEmpty(selectedStatus)
+                || t.Status == selectedStatus)
+
+            // PRIORITY
+            &&
+
+            (string.IsNullOrEmpty(selectedPriority)
+                || t.Priority == selectedPriority)
+
+        )
+
+        // SORTING
+        .OrderBy(t => t.Status == "Completed")
+        .ThenByDescending(t => t.CreatedAt)
+
+        .ToList();
+
+    private async Task UpdateProgress(TaskDto task, ChangeEventArgs e)
+    {
+        int progress = Convert.ToInt32(e.Value);
+
+        // UPDATE UI
+        task.Progress = progress;
+
+        // AUTO STATUS CHANGE
+        if (progress == 100)
+            task.Status = "Completed";
+        else if (progress > 0)
+            task.Status = "In Progress";
+        else
+            task.Status = "Pending";
+
+        // SAVE TO DATABASE
+        await TaskService.UpdateTaskAsync(new UpdateTaskDto
+        {
+            TaskId = task.TaskId,
+            Progress = progress
+        });
+    }
+
+    private bool IsOverdue(TaskDto t)
+    {
+        return t.DueDate.HasValue
+            && t.DueDate.Value.Date < DateTime.Today
+            && t.Status != "Completed";
+    }
+
+    private string GetDueDateText(TaskDto t)
+    {
+        if (!t.DueDate.HasValue)
+            return "";
+
+        var days = (t.DueDate.Value.Date - DateTime.Today).Days;
+
+        if (days < 0)
+            return $"Overdue by {Math.Abs(days)} day(s)";
+
+        if (days == 0)
+            return "Due Today";
+
+        if (days == 1)
+            return "Due Tomorrow";
+
+        return $"{days} days left";
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Completed" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "In Progress" => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetPriorityClass(string priority) => priority switch
+    {
+        "High" => "bg-danger",
+        "Medium" => "bg-primary",
+        "Low" => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+
+    private string GetPriorityIcon(string priority) => priority switch
+    {
+        "High" => "??",
+        "Medium" => "??",
+        "Low" => "?",
+        _ => ""
+    };
+
+    private string GetProgressBarClass(int progress)
+    {
+        if (progress <= 30)
+            return "bg-danger";
+
+        if (progress <= 70)
+            return "bg-warning";
+
+        return "bg-success";
+    }
+}

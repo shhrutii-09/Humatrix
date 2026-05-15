@@ -16,20 +16,18 @@ namespace Humatrix_HRMS.Services
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly CurrentUserService _currentUser;
-        private readonly ApplicationDbContext _context;
+        //private readonly ApplicationDbContext _context;
         private readonly IConfiguration _config;
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
         public EmployeeService(
-            UserManager<ApplicationUser> userManager,
-            CurrentUserService currentUser,
-                IDbContextFactory<ApplicationDbContext> contextFactory,
-            ApplicationDbContext context,
-            IConfiguration config)
+     UserManager<ApplicationUser> userManager,
+     CurrentUserService currentUser,
+     IDbContextFactory<ApplicationDbContext> contextFactory,
+     IConfiguration config)
         {
             _userManager = userManager;
             _currentUser = currentUser;
-            _context = context;
             _contextFactory = contextFactory;
             _config = config;
         }
@@ -38,6 +36,7 @@ namespace Humatrix_HRMS.Services
 
         public async Task<EmployeeDashboardDto?> GetEmployeeDashboardDataAsync()
         {
+            using var context = await _contextFactory.CreateDbContextAsync();
             var currentUser = await _currentUser.GetUserAsync();
             if (currentUser == null) return null;
 
@@ -46,16 +45,16 @@ namespace Humatrix_HRMS.Services
             // We use a Left Join approach. 
             // If the record isn't in the 'Employees' table, the LINQ FirstOrDefault will return null.
             var dashboardData = await (
-                from e in _context.Employees
+                from e in context.Employees
                 where e.UserId == userId
 
-                join d in _context.Departments on e.DepartmentId equals d.DepartmentId into dept
+                join d in context.Departments on e.DepartmentId equals d.DepartmentId into dept
                 from d in dept.DefaultIfEmpty()
 
-                join des in _context.Designations on e.DesignationId equals des.DesignationId into desg
+                join des in context.Designations on e.DesignationId equals des.DesignationId into desg
                 from des in desg.DefaultIfEmpty()
 
-                join s in _context.Shifts on e.ShiftId equals s.ShiftId into sh
+                join s in context.Shifts on e.ShiftId equals s.ShiftId into sh
                 from s in sh.DefaultIfEmpty()
 
                 select new EmployeeDashboardDto
@@ -81,6 +80,8 @@ namespace Humatrix_HRMS.Services
 
         public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
+
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) return null;
 
@@ -144,6 +145,8 @@ namespace Humatrix_HRMS.Services
 
         public async Task<EmployeeProfileDto?> GetMyProfileAsync()
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
+
             var currentUser = await _currentUser.GetUserAsync();
 
             if (currentUser == null)
@@ -177,6 +180,7 @@ namespace Humatrix_HRMS.Services
 
         public async Task UpdateEmployeeAsync(string email, EditEmployeeDto dto)
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
 
             if (dto.DepartmentId == null)
                 throw new Exception("Department required");
@@ -221,6 +225,8 @@ namespace Humatrix_HRMS.Services
 
         public async Task ToggleUserStatusAsync(string email, bool isActive)
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
+
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) throw new Exception("User not found");
 
@@ -247,6 +253,8 @@ namespace Humatrix_HRMS.Services
      int pageNumber = 1,
      int pageSize = 10)
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
+
             var currentUser = await _currentUser.GetUserAsync();
             if (currentUser?.OrganizationId == null) return new();
 
@@ -350,8 +358,10 @@ namespace Humatrix_HRMS.Services
             if (currentUser?.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            //using var transaction = await _context.Database.BeginTransactionAsync();
+            using var context = await _contextFactory.CreateDbContextAsync();
 
+            using var transaction = await context.Database.BeginTransactionAsync();
             try
             {
                 var existingUser = await _userManager.FindByEmailAsync(dto.Email);
@@ -361,21 +371,22 @@ namespace Humatrix_HRMS.Services
                 if (string.IsNullOrWhiteSpace(dto.Email))
                     throw new Exception("Email is required");
 
-                var deptExists = await _context.Departments.AnyAsync(d =>
-                    d.DepartmentId == dto.DepartmentId &&
+                //var deptExists = await _context.Departments.AnyAsync(d =>
+                var deptExists = await context.Departments.AnyAsync(d =>
+                                    d.DepartmentId == dto.DepartmentId &&
                     d.OrganizationId == currentUser.OrganizationId);
 
                 if (!deptExists)
                     throw new Exception("Invalid department");
 
-                var desigExists = await _context.Designations.AnyAsync(d =>
+                var desigExists = await context.Designations.AnyAsync(d =>
                     d.DesignationId == dto.DesignationId &&
                     d.OrganizationId == currentUser.OrganizationId);
 
                 if (!desigExists)
                     throw new Exception("Invalid designation");
 
-                var designation = await _context.Designations
+                var designation = await context.Designations
 .FirstOrDefaultAsync(d =>
    d.DesignationId == dto.DesignationId &&
    d.OrganizationId == currentUser.OrganizationId &&
@@ -413,7 +424,7 @@ namespace Humatrix_HRMS.Services
                     DepartmentId = dto.DepartmentId ?? Guid.Empty,
                     DesignationId = dto.DesignationId ?? Guid.Empty,
                     ShiftId = dto.ShiftId,
-                    EmployeeCode = await GenerateEmployeeCodeAsync(),
+                    EmployeeCode = await GenerateEmployeeCodeAsync(context),
                     JoiningDate = DateTime.UtcNow,
                     Status = "Active"
                 };
@@ -422,8 +433,8 @@ namespace Humatrix_HRMS.Services
 
                     
 
-                _context.Employees.Add(employee);
-                await _context.SaveChangesAsync();
+                context.Employees.Add(employee);
+                await context.SaveChangesAsync();
 
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
@@ -438,8 +449,8 @@ namespace Humatrix_HRMS.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
-                _context.UserInvites.Add(invite);
-                await _context.SaveChangesAsync();
+                context.UserInvites.Add(invite);
+                await context.SaveChangesAsync();
 
                 await transaction.CommitAsync();
 
@@ -453,14 +464,15 @@ namespace Humatrix_HRMS.Services
             }
         }
 
-        private async Task<string> GenerateEmployeeCodeAsync()
+        //private async Task<string> GenerateEmployeeCodeAsync()
+        private async Task<string> GenerateEmployeeCodeAsync(ApplicationDbContext context)
         {
             // 1. Get the underlying connection
-            var connection = _context.Database.GetDbConnection();
+            var connection = context.Database.GetDbConnection();
             using var command = connection.CreateCommand();
 
             // 2. IMPORTANT: Link the command to the existing EF Core transaction
-            var currentTransaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var currentTransaction = context.Database.CurrentTransaction?.GetDbTransaction();
             if (currentTransaction != null)
             {
                 command.Transaction = currentTransaction;
@@ -471,7 +483,7 @@ namespace Humatrix_HRMS.Services
             // 3. Ensure the connection is open
             if (connection.State != System.Data.ConnectionState.Open)
             {
-                await _context.Database.OpenConnectionAsync();
+                await context.Database.OpenConnectionAsync();
             }
 
             var nextValue = await command.ExecuteScalarAsync();
@@ -551,6 +563,8 @@ namespace Humatrix_HRMS.Services
 
         public async Task<bool> UpdateMyProfileAsync(UpdateEmployeeProfileDto dto)
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
+
             var currentUser = await _currentUser.GetUserAsync();
 
             if (currentUser == null)
@@ -575,6 +589,8 @@ namespace Humatrix_HRMS.Services
 
         public async Task<(bool Success, string Message)> ChangePasswordAsync(ChangePasswordDto dto)
         {
+            using var _context = await _contextFactory.CreateDbContextAsync();
+
             var currentUser = await _currentUser.GetUserAsync();
 
             if (currentUser == null)

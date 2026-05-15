@@ -1,11 +1,12 @@
 ﻿using Humatrix_HRMS.Components;
 using Humatrix_HRMS.Components.Account;
 using Humatrix_HRMS.Data;
+using Humatrix_HRMS.Hubs;
 using Humatrix_HRMS.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
@@ -103,6 +104,11 @@ builder.Services.AddScoped<AttendanceCalculationService>();
 builder.Services.AddScoped<HRPolicyValidationService>();
 
 builder.Services.AddScoped<OfficeLocationService>();
+
+builder.Services.AddScoped<TaskService>();
+
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddSignalR();
 //builder.Services.AddScoped<AttendanceService>();  
 //builder.Services.AddControllers();
 //builder.Services.AddCascadingAuthenticationState();
@@ -150,5 +156,5 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.MapAdditionalIdentityEndpoints();
-
+app.MapHub<NotificationHub>("/notificationHub");
 app.Run();

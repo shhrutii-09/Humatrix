@@ -2,6 +2,8 @@
 using Humatrix_HRMS.Models;
 using Humatrix_HRMS.Helpers;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
+using Humatrix_HRMS.Hubs;
 
 namespace Humatrix_HRMS.Services
 {
@@ -12,14 +14,23 @@ namespace Humatrix_HRMS.Services
 
         private readonly HRPolicyValidationService _policy;
 
+        private readonly NotificationService _notificationService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+
         public WorkFromHomeService(
             ApplicationDbContext context,
             CurrentUserService currentUser,
-            HRPolicyValidationService policy)
+            HRPolicyValidationService policy,
+            NotificationService notificationService,
+            IHubContext<NotificationHub> hubContext
+
+            )
         {
             _context = context;
             _currentUser = currentUser;
             _policy = policy;
+            _notificationService = notificationService;
+            _hubContext = hubContext;
         }
         // ─────────────────────────────────────
         // APPLY
@@ -67,6 +78,44 @@ namespace Humatrix_HRMS.Services
 
             _context.WorkFromHomeRequests.Add(request);
             await _context.SaveChangesAsync();
+
+            // =========================
+            // NOTIFY HR ONLY
+            // =========================
+
+            var hrUsers = await _context.Users
+                .Where(u => u.OrganizationId == employee.OrganizationId)
+                .ToListAsync();
+
+            foreach (var hr in hrUsers)
+            {
+                var roles = await _context.UserRoles
+                    .Where(x => x.UserId == hr.Id)
+                    .Join(
+                        _context.Roles,
+                        ur => ur.RoleId,
+                        r => r.Id,
+                        (ur, r) => r.Name)
+                    .ToListAsync();
+
+                if (roles.Contains("HR"))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        hr.Id,
+
+                        "New WFH Request",
+
+                        $"{employee.FirstName} {employee.LastName} applied for Work From Home",
+
+                        "/hr/wfh"
+                    );
+
+                    // LIVE SIGNALR NOTIFICATION
+                    await _hubContext.Clients.User(hr.Id)
+                        .SendAsync("ReceiveNotification");
+                }
+            }
+
         }
 
         // ─────────────────────────────────────
@@ -114,11 +163,47 @@ namespace Humatrix_HRMS.Services
 
                 req.Status = "Approved";
                 req.ApprovedBy = Guid.Parse(user.Id);
+
+                // =========================
+                // NOTIFY EMPLOYEE APPROVED
+                // =========================
+
+                await _notificationService.CreateNotificationAsync(
+                    req.Employee.UserId,
+
+                    "WFH Approved",
+
+                    $"Your Work From Home request for {req.Date:dd MMM yyyy} was approved",
+
+                    "/employee/wfh"
+                );
+
+                // LIVE SIGNALR NOTIFICATION
+                await _hubContext.Clients.User(req.Employee.UserId)
+                    .SendAsync("ReceiveNotification");
             }
             else
             {
                 req.Status = "Rejected";
                 req.RejectionReason = reason;
+
+                // =========================
+                // NOTIFY EMPLOYEE REJECTED
+                // =========================
+
+                await _notificationService.CreateNotificationAsync(
+                    req.Employee.UserId,
+
+                    "WFH Rejected",
+
+                    $"Your Work From Home request for {req.Date:dd MMM yyyy} was rejected",
+
+                    "/employee/wfh"
+                );
+
+                // LIVE SIGNALR NOTIFICATION
+                await _hubContext.Clients.User(req.Employee.UserId)
+                    .SendAsync("ReceiveNotification");
             }
 
             req.ReviewedAt = DateTime.UtcNow;
@@ -148,6 +233,44 @@ namespace Humatrix_HRMS.Services
 
             req.Status = "Cancelled";
             await _context.SaveChangesAsync();
+
+            // =========================
+            // NOTIFY HR
+            // =========================
+
+            var hrUsers = await _context.Users
+                .Where(u => u.OrganizationId == employee.OrganizationId)
+                .ToListAsync();
+
+            foreach (var hr in hrUsers)
+            {
+                var roles = await _context.UserRoles
+                    .Where(x => x.UserId == hr.Id)
+                    .Join(
+                        _context.Roles,
+                        ur => ur.RoleId,
+                        r => r.Id,
+                        (ur, r) => r.Name)
+                    .ToListAsync();
+
+                if (roles.Contains("HR"))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        hr.Id,
+
+                        "WFH Cancelled",
+
+                        $"{employee.FirstName} {employee.LastName} cancelled WFH request",
+
+                        "/hr/wfh"
+                    );
+
+                    // LIVE SIGNALR NOTIFICATION
+                    await _hubContext.Clients.User(hr.Id)
+                        .SendAsync("ReceiveNotification");
+                }
+            }
+
         }
 
         // ─────────────────────────────────────

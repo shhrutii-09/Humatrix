@@ -31,6 +31,8 @@ namespace Humatrix_HRMS.Data
         public DbSet<LeaveRequest> LeaveRequests { get; set; }
 
         public DbSet<WorkWeek> WorkWeeks { get; set; }
+        public DbSet<TaskItem> Tasks { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         public DbSet<WorkFromHomeRequest> WorkFromHomeRequests { get; set; }
 

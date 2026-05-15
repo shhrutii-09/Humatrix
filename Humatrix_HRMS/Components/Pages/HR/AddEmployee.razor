@@ -190,8 +190,16 @@
     }
 
     // ✅ SUBMIT
+    // private async Task HandleSubmit()
+    // {
+    //     try
+    //     {
+    //         isSubmitting = true;
     private async Task HandleSubmit()
     {
+        if (isSubmitting)
+            return;
+
         try
         {
             isSubmitting = true;

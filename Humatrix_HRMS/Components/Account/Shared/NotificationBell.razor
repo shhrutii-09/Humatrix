@@ -1,0 +1,278 @@
+﻿@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Humatrix_HRMS.Data
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@inject NotificationService NotificationService
+@inject AuthenticationStateProvider AuthProvider
+
+@inject NavigationManager Nav
+
+<div class="dropdown">
+
+    <!-- BELL BUTTON -->
+    <button class="btn btn-light position-relative border"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false">
+
+        <i class="bi bi-bell fs-5"></i>
+
+        @if (unreadCount > 0)
+        {
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                @unreadCount
+            </span>
+        }
+
+    </button>
+
+    <!-- DROPDOWN -->
+    <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-0"
+        style="width:350px; max-height:450px; overflow-y:auto;">
+
+        <!-- HEADER -->
+        <li class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light sticky-top">
+
+            <span class="fw-bold">
+                Notifications
+            </span>
+
+            @if (notifications.Any())
+            {
+                <button class="btn btn-sm btn-link text-danger text-decoration-none"
+                        @onclick="ClearAllNotifications">
+                    Clear All
+                </button>
+            }
+
+        </li>
+
+        <!-- EMPTY -->
+        @if (!notifications.Any())
+        {
+            <li class="text-center text-muted p-4">
+                <i class="bi bi-bell-slash fs-4 d-block mb-2"></i>
+                No notifications
+            </li>
+        }
+        else
+        {
+            @foreach (var n in notifications.OrderByDescending(x => x.CreatedAt))
+            {
+                <li class="border-bottom">
+
+                    <div class="d-flex justify-content-between align-items-start p-3 notification-item">
+
+                        <!-- CLICKABLE CONTENT -->
+                        @* <div class="flex-grow-1"
+                             style="cursor:pointer"
+                             @onclick="() => OpenNotification(n)"> *@
+
+                        <div class="flex-grow-1"
+                             style="cursor:pointer"
+                             @onclick:stopPropagation="true"
+                             @onclick="async () => await OpenNotification(n)">
+
+                            <div class="fw-semibold">
+                                @n.Title
+                            </div>
+
+                            <small class="text-muted d-block">
+                                @n.Message
+                            </small>
+
+                            <div class="small text-muted mt-1">
+                                @n.CreatedAt.ToString("dd MMM yyyy hh:mm tt")
+                            </div>
+
+                        </div>
+
+                        <!-- DELETE BUTTON -->
+                        <button class="btn btn-sm text-danger"
+                                title="Delete"
+                                @onclick="() => DeleteNotification(n.NotificationId)">
+
+                            <i class="bi bi-x-lg"></i>
+
+                        </button>
+
+                    </div>
+
+                </li>
+            }
+        }
+
+    </ul>
+
+</div>
+
+<style>
+    .notification-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .dropdown-menu {
+        border-radius: 12px;
+    }
+</style>
+
+@code {
+
+    private HubConnection? hubConnection;
+
+    private List<NotificationDto> notifications = new();
+
+    private int unreadCount;
+
+    private string? currentUserId;
+
+
+    private bool connected = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotifications();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !connected && !string.IsNullOrEmpty(currentUserId))
+        {
+            connected = true;
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.On("ReceiveNotification", async () =>
+{
+    try
+    {
+        await LoadNotifications();
+
+        var latest = notifications
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
+
+        if (latest != null)
+        {
+            await JS.InvokeVoidAsync(
+                "showToastNotification",
+                latest.Title,
+                latest.Message,
+                latest.RedirectUrl);
+
+            await JS.InvokeVoidAsync(
+                "playNotificationSound");
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex.ToString());
+    }
+});
+
+            await hubConnection.StartAsync();
+
+            await hubConnection.SendAsync(
+                "JoinUserGroup",
+                currentUserId);
+        }
+    }
+    // =========================
+    // LOAD NOTIFICATIONS
+    // =========================
+    private async Task LoadNotifications()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+
+        var user = auth.User;
+
+        if (user?.Identity == null || !user.Identity.IsAuthenticated)
+            return;
+
+        currentUserId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(currentUserId))
+            return;
+
+        notifications = await NotificationService
+            .GetMyNotificationsAsync(currentUserId);
+
+        unreadCount = await NotificationService
+            .GetUnreadCountAsync(currentUserId);
+
+        StateHasChanged();
+    }
+    // =========================
+    // OPEN NOTIFICATION
+    // =========================
+    private async Task OpenNotification(NotificationDto n)
+    {
+        try
+        {
+            await NotificationService.MarkAsReadAsync(n.NotificationId);
+
+            n.IsRead = true;
+
+            unreadCount = Math.Max(0, unreadCount - 1);
+
+            await InvokeAsync(StateHasChanged);
+
+            if (!string.IsNullOrWhiteSpace(n.RedirectUrl))
+            {
+                Nav.NavigateTo(n.RedirectUrl, forceLoad: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
+    }
+
+    // =========================
+    // DELETE SINGLE
+    // =========================
+    private async Task DeleteNotification(int id)
+    {
+        await NotificationService.DeleteNotificationAsync(id);
+
+        notifications.RemoveAll(x => x.NotificationId == id);
+
+        unreadCount = notifications.Count(x => !x.IsRead);
+
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+    // =========================
+    // CLEAR ALL
+    // =========================
+    private async Task ClearAllNotifications()
+    {
+        if (string.IsNullOrEmpty(currentUserId))
+            return;
+
+        await NotificationService.ClearAllNotificationsAsync(currentUserId);
+
+        notifications.Clear();
+
+        unreadCount = 0;
+
+        StateHasChanged();
+    }
+}

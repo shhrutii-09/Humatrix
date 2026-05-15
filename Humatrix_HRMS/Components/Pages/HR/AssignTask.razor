@@ -1,0 +1,141 @@
+﻿@page "/hr/assign-task"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@inject TaskService TaskService
+@inject CurrentUserService CurrentUser
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>Assign Task</PageTitle>
+
+<div class="container mt-4">
+
+    <h3>Assign Task</h3>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <EditForm Model="model" OnValidSubmit="AssignTaskAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <!-- Employee -->
+        <div class="mb-3">
+            <label>Assign To</label>
+            <InputSelect class="form-control" @bind-Value="model.AssignedTo">
+                <option value="">-- Select Employee --</option>
+                @foreach (var emp in employees)
+                {
+                    <option value="@emp.EmployeeId">
+                        @emp.FirstName @emp.LastName
+                    </option>
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => model.AssignedTo)" />
+        </div>
+
+        <!-- Title -->
+        <div class="mb-3">
+            <label>Title</label>
+            <InputText class="form-control" @bind-Value="model.Title" />
+            <ValidationMessage For="@(() => model.Title)" />
+        </div>
+
+        <!-- Description -->
+        <div class="mb-3">
+            <label>Description</label>
+            <InputTextArea class="form-control" @bind-Value="model.Description" />
+            <ValidationMessage For="@(() => model.Description)" />
+        </div>
+
+        <!-- Priority -->
+        <div class="mb-3">
+            <label>Priority</label>
+            <InputSelect class="form-control" @bind-Value="model.Priority">
+                <option value="">-- Select Priority --</option>
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+            </InputSelect>
+            <ValidationMessage For="@(() => model.Priority)" />
+        </div>
+
+        <!-- Due Date -->
+        <div class="mb-3">
+            <label>Due Date</label>
+            <InputDate class="form-control"
+                       @bind-Value="model.DueDate"
+                       min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            <ValidationMessage For="@(() => model.DueDate)" />
+        </div>
+
+        <button class="btn btn-primary">Assign Task</button>
+    </EditForm>
+
+</div>
+
+@code {
+    private CreateTaskDto model = new();
+    private List<Employee> employees = new();
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = DbFactory.CreateDbContext();
+
+        var user = await CurrentUser.GetUserAsync();
+        if (user == null) return;
+
+        // ✅ Get logged-in HR employee record
+        var currentEmployee = await db.Employees
+            .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+        if (currentEmployee == null) return;
+
+        // ✅ Filter employees of SAME department only
+        employees = await db.Employees
+            .Include(e => e.Designation)
+            .Where(e =>
+                e.OrganizationId == user.OrganizationId &&
+                e.DepartmentId == currentEmployee.DepartmentId &&   // 🔥 IMPORTANT FIX
+                e.Status == "Active" &&
+                e.Designation != null &&
+                e.Designation.Name.ToLower() != "hr" &&
+                e.Designation.Name.ToLower() != "orgadmin" &&
+                e.UserId != user.Id
+            )
+            .ToListAsync();
+    }
+
+    private async Task AssignTaskAsync()
+    {
+        error = null;
+
+        if (model.DueDate.HasValue && model.DueDate.Value.Date < DateTime.Today)
+        {
+            error = "Cannot assign past date";
+            return;
+        }
+
+        try
+        {
+            await TaskService.AssignTaskAsync(model);
+            Nav.NavigateTo("/hr/tasks");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}

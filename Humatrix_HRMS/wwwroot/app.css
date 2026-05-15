@@ -49,3 +49,23 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: white;
+    border-left: 5px solid #5c4ac7;
+    padding: 14px 18px;
+    border-radius: 12px;
+    z-index: 9999;
+    min-width: 300px;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.3s ease;
+}
+
+    .toast-notification.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
