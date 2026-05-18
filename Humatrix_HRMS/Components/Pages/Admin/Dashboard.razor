@@ -14,7 +14,6 @@
 
 <div class="container-fluid px-4 mt-4">
 
-    @* Header *@
     <div class="mb-4">
         <h2 class="fw-bold">Super Admin Dashboard</h2>
         <p class="text-muted small">Overview and quick actions for platform management.</p>
@@ -29,7 +28,6 @@
     }
     else
     {
-        @* ===== STATS ===== *@
         <div class="row g-4 mb-4">
 
             <div class="col-md-4">
@@ -80,7 +78,6 @@
 
         </div>
 
-        @* ===== QUICK ACTIONS ===== *@
         <div class="row g-4 mb-4">
 
             <div class="col-md-6">
@@ -93,7 +90,7 @@
                     </div>
 
                     <h5 class="fw-bold">Create Organization</h5>
-                    <p class="text-muted small mb-0">Onboard a new company into the system</p>
+                    <p class="text-muted small mb-0">Onboard a new organizations into the system</p>
                 </div>
             </div>
 
@@ -113,13 +110,12 @@
 
         </div>
 
-        @* ===== RECENT ORGANIZATIONS (DASHBOARD STYLE, NOT TABLE) ===== *@
         <div class="card border-0 shadow-sm p-4">
-            <h5 class="fw-bold mb-3">Recently Added Organizations</h5>
+            <h5 class="fw-bold mb-3">Organizations Added Today</h5>
 
             @if (!recentOrgs.Any())
             {
-                <p class="text-muted small mb-0">No organizations found.</p>
+                <p class="text-muted small mb-0">No organizations added today.</p>
             }
             else
             {
@@ -190,6 +186,7 @@
         totalHRs = userStats.totalHRs;
 
         recentOrgs = orgs
+            .Where(o => o.CreatedAt.Date == DateTime.Today)
             .OrderByDescending(o => o.CreatedAt)
             .Take(5)
             .ToList();

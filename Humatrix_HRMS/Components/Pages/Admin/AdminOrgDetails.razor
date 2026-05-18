@@ -5,21 +5,30 @@
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
+
 @inject IJSRuntime JS
+
 @attribute [Authorize(Roles = "SuperAdmin")]
 
 @inject OrganizationService OrgService
-@inject NavigationManager Nav  
+@inject NavigationManager Nav
 
 <PageTitle>Organization Details</PageTitle>
 
-<div class="container py-4">
+<div class="container-fluid px-4 mt-4">
 
-    @* 2. Add the Back Button Section *@
-    <div class="mb-4">
-        <button class="btn btn-link text-decoration-none p-0 text-muted" @onclick='() => Nav.NavigateTo("/admin/organizations")'>
-            <i class="bi bi-arrow-left me-1"></i> Back to Organizations
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h2 class="fw-normal">Organization Details</h2>
+        </div>
+
+        <button class="btn btn-primary shadow-sm"
+                style="background-color: #5c4ac7; border: none;"
+                @onclick='() => Nav.NavigateTo("/admin/organizations")'>
+            BACK TO ORGANIZATIONS
         </button>
+
     </div>
 
     @if (org == null)
@@ -31,86 +40,232 @@
     }
     else
     {
-        @* Rest of your existing UI code *@
         <div class="card shadow-sm border-0 p-4 mb-4">
+
             <div class="d-flex justify-content-between align-items-start">
+
                 <h4 class="fw-bold mb-3">@org.Name</h4>
-                @* Optional: Quick Edit Button *@
-                <span class="badge @(org.IsActive ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-2">
+
+                <span class="status-badge @(org.IsActive ? "active-status" : "inactive-status")">
+                    <i class="bi @(org.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
                     @(org.IsActive ? "Active" : "Inactive")
                 </span>
+
             </div>
 
             <div class="row">
+
                 <div class="col-md-6">
-                    <p class="mb-2"><b>Email:</b> <span class="text-muted">@org.Email</span></p>
-                    <p class="mb-2"><b>Phone:</b> <span class="text-muted">@org.Phone</span></p>
+
+                    <p class="mb-2">
+                        <b>Email:</b>
+                        <span class="text-muted">@org.Email</span>
+                    </p>
+
+                    <p class="mb-2">
+                        <b>Phone:</b>
+                        <span class="text-muted">@org.Phone</span>
+                    </p>
+
                     <p class="mb-2">
                         <b>Current Admin:</b>
                         <span class="text-muted">@currentAdminEmail</span>
                     </p>
+
                 </div>
+
                 <div class="col-md-6">
-                    <p class="mb-2"><b>Address:</b> <span class="text-muted">@org.Address</span></p>
+
+                    <p class="mb-2">
+                        <b>Address:</b>
+                        <span class="text-muted">@org.Address</span>
+                    </p>
+
                 </div>
+
             </div>
+
         </div>
 
-        @* Stats *@
-        <div class="row g-3">
+        <div class="row g-3 mb-4">
+
             <div class="col-md-4">
-                <div class="card shadow-sm border-0 p-3 text-center">
+                <div class="card dashboard-card shadow-sm border-0 p-3 text-center"
+                     style="cursor:pointer"
+                     @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/employees")'>
+
+                    <div class="mb-2">
+                        <i class="bi bi-people-fill fs-2 text-primary"></i>
+                    </div>
+
                     <h6 class="text-muted small text-uppercase">Employees</h6>
                     <h3 class="fw-bold">@employeeCount</h3>
+
+                    <small class="text-muted">
+                        Click to view all employees
+                    </small>
+
                 </div>
             </div>
 
             <div class="col-md-4">
-                <div class="card shadow-sm border-0 p-3 text-center">
+                <div class="card dashboard-card shadow-sm border-0 p-3 text-center"
+                     style="cursor:pointer"
+                     @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/hrs")'>
+
+                    <div class="mb-2">
+                        <i class="bi bi-person-badge-fill fs-2 text-success"></i>
+                    </div>
+
                     <h6 class="text-muted small text-uppercase">HRs</h6>
                     <h3 class="fw-bold">@hrCount</h3>
+
+                    <small class="text-muted">
+                        Click to view all HR managers
+                    </small>
+
                 </div>
             </div>
 
             <div class="col-md-4">
-                <div class="card shadow-sm border-0 p-3 text-center">
+                <div class="card dashboard-card shadow-sm border-0 p-3 text-center"
+                     style="cursor:pointer"
+                     @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/departments")'>
+
+                    <div class="mb-2">
+                        <i class="bi bi-diagram-3-fill fs-2 text-warning"></i>
+                    </div>
+
                     <h6 class="text-muted small text-uppercase">Departments</h6>
                     <h3 class="fw-bold">@departmentCount</h3>
+
+                    <small class="text-muted">
+                        Click to view all departments
+                    </small>
+
                 </div>
             </div>
+
         </div>
-        <div class="card p-3 mt-3">
-            <h6 class="fw-bold mb-2">Change Organization Admin</h6>
 
-            <InputText @bind-Value="newAdminEmail" class="form-control mb-2" placeholder="Enter new admin email" />
+        <div class="card shadow-sm border-0 p-4">
 
-            <button class="btn btn-primary"
-                    @onclick="ChangeAdmin">
+            <h5 class="fw-bold mb-3">
+                Change Organization Admin
+            </h5>
+
+            <InputText @bind-Value="newAdminEmail"
+                       class="form-control mb-3"
+                       placeholder="Enter new admin email" />
+
+            <button class="btn btn-primary w-100"
+                    @onclick="ChangeAdmin"
+                    style="background-color: #5c4ac7; border: none;">
                 Change Admin
             </button>
 
             @if (!string.IsNullOrEmpty(adminLink))
             {
-                <div class="alert alert-success mt-3">
-                    <b>Invite Link Generated</b>
-                    <button class="btn btn-sm btn-outline-success ms-2"
-                            @onclick="CopyLink">
-                        Copy
-                    </button>
+                <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3"
+                     style="background-color: #e6ffed;">
+
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+
+                        <div class="d-flex align-items-center">
+
+                            <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
+
+                            <div>
+                                <b class="text-success" style="font-size: 1.1rem;">
+                                    Admin changed successfully!
+                                </b>
+
+                                <div class="text-muted small">
+                                    Copy the invite link below.
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <button class="btn btn-outline-success border-0 p-2"
+                                title="Copy Link"
+                                @onclick="CopyLink"
+                                style="border-radius: 8px;">
+
+                            <i class="bi bi-copy"
+                               style="font-size: 1.5rem;"></i>
+
+                        </button>
+
+                    </div>
+
                 </div>
             }
+
         </div>
     }
 
 </div>
 
+<style>
+
+    .card {
+        border-radius: 12px;
+    }
+
+    .dashboard-card {
+        transition: all 0.25s ease;
+    }
+
+        .dashboard-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12) !important;
+        }
+
+    .form-control:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+    }
+
+    .status-badge {
+        padding: 10px 18px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        letter-spacing: 0.3px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    .active-status {
+        background: linear-gradient(135deg, #d1fae5, #ecfdf5);
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+
+    .inactive-status {
+        background: linear-gradient(135deg, #fee2e2, #fef2f2);
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+    }
+
+</style>
+
 @code {
-    [Parameter] public Guid id { get; set; }
+
+    [Parameter]
+    public Guid id { get; set; }
 
     private Organization? org;
+
     private int employeeCount;
     private int hrCount;
     private int departmentCount;
+
+    private string newAdminEmail = "";
+    private string? adminLink;
+    private string? currentAdminEmail;
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,41 +274,46 @@
 
     private async Task LoadData()
     {
-        try 
+        try
         {
             var result = await OrgService.GetOrganizationDetailsAsync(id);
+
             org = result.Organization;
+
             employeeCount = result.EmployeeCount;
             hrCount = result.HRCount;
             departmentCount = result.DepartmentCount;
-            currentAdminEmail = await OrgService.GetOrganizationAdminEmailAsync(id);
+
+            currentAdminEmail =
+                await OrgService.GetOrganizationAdminEmailAsync(id);
         }
         catch (Exception)
         {
-            // Handle error (e.g., redirect back if ID not found)
             Nav.NavigateTo("/admin/organizations");
         }
     }
-
-    private string newAdminEmail = "";
-    private string? adminLink;
 
     private async Task ChangeAdmin()
     {
         if (string.IsNullOrWhiteSpace(newAdminEmail))
             return;
 
-        adminLink = await OrgService.ChangeOrganizationAdminAsync(id, newAdminEmail);
+        adminLink =
+            await OrgService.ChangeOrganizationAdminAsync(
+                id,
+                newAdminEmail
+            );
     }
 
     private async Task CopyLink()
     {
         if (!string.IsNullOrEmpty(adminLink))
         {
-            await JS.InvokeVoidAsync("clipboardCopy.copyText", adminLink);
+            await JS.InvokeVoidAsync(
+                "clipboardCopy.copyText",
+                adminLink
+            );
         }
     }
-
-    private string? currentAdminEmail;
 
 }

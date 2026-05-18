@@ -428,10 +428,10 @@ namespace Humatrix_HRMS.Services
                     JoiningDate = DateTime.UtcNow,
                     Status = "Active"
                 };
-           
 
 
-                    
+
+
 
                 context.Employees.Add(employee);
                 await context.SaveChangesAsync();
@@ -622,4 +622,3 @@ namespace Humatrix_HRMS.Services
 
     }
 }
-
