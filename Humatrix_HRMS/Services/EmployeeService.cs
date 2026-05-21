@@ -2,13 +2,16 @@
 using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.DTOsA;
 using Humatrix_HRMS.DTOsA.Auth;
-using Humatrix_HRMS.DTOsA;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Humatrix_HRMS.Services
 {
@@ -16,15 +19,14 @@ namespace Humatrix_HRMS.Services
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly CurrentUserService _currentUser;
-        //private readonly ApplicationDbContext _context;
         private readonly IConfiguration _config;
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
 
         public EmployeeService(
-     UserManager<ApplicationUser> userManager,
-     CurrentUserService currentUser,
-     IDbContextFactory<ApplicationDbContext> contextFactory,
-     IConfiguration config)
+            UserManager<ApplicationUser> userManager,
+            CurrentUserService currentUser,
+            IDbContextFactory<ApplicationDbContext> contextFactory,
+            IConfiguration config)
         {
             _userManager = userManager;
             _currentUser = currentUser;
@@ -42,8 +44,6 @@ namespace Humatrix_HRMS.Services
 
             var userId = currentUser.Id;
 
-            // We use a Left Join approach. 
-            // If the record isn't in the 'Employees' table, the LINQ FirstOrDefault will return null.
             var dashboardData = await (
                 from e in context.Employees
                 where e.UserId == userId
@@ -70,7 +70,6 @@ namespace Humatrix_HRMS.Services
                 }
             ).AsNoTracking().FirstOrDefaultAsync();
 
-            // If dashboardData is null, it means there is no entry in the 'Employees' table for this UserID.
             return dashboardData;
         }
 
@@ -87,36 +86,21 @@ namespace Humatrix_HRMS.Services
 
             var currentUser = await _currentUser.GetUserAsync();
 
-
             var profile = await _context.Employees
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            //var dept = await _context.Departments
-            //    .AsNoTracking()
-            //    .FirstOrDefaultAsync(d => d.DepartmentId == user.DepartmentId);
-
             var dept = await _context.Departments
-    .FirstOrDefaultAsync(d =>
-        d.DepartmentId == user.DepartmentId &&
-        d.OrganizationId == currentUser.OrganizationId);
-
-
-            //var desig = await _context.Designations
-            //    .AsNoTracking()
-            //    .FirstOrDefaultAsync(d => d.DesignationId == user.DesignationId);
+                .FirstOrDefaultAsync(d =>
+                    d.DepartmentId == user.DepartmentId &&
+                    d.OrganizationId == currentUser.OrganizationId);
 
             var desig = await _context.Designations
                 .FirstOrDefaultAsync(d =>
                     d.DesignationId == user.DesignationId &&
                     d.OrganizationId == currentUser.OrganizationId);
-
-
-            //var shift = await _context.Shifts
-            //    .AsNoTracking()
-            //    .FirstOrDefaultAsync(s => s.ShiftId == profile?.ShiftId);
 
             var shiftId = profile?.ShiftId;
 
@@ -248,27 +232,23 @@ namespace Humatrix_HRMS.Services
         #region List Retrieval
 
         public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
-     string? search = null,
-     Guid? departmentId = null,
-     int pageNumber = 1,
-     int pageSize = 10)
+            string? search = null,
+            Guid? departmentId = null,
+            int pageNumber = 1,
+            int pageSize = 10)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
 
             var currentUser = await _currentUser.GetUserAsync();
-            if (currentUser?.OrganizationId == null) return new();
+            if (currentUser?.OrganizationId == null) return (new List<EmployeeListDto>(), 0);
 
-            // 1. Identify current user's role
             var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
             bool isOrgAdmin = currentUserRoles.Contains("OrgAdmin");
             bool isHR = currentUserRoles.Contains("HR");
 
-            // 2. Fetch all users in organization (excluding self)
             var usersQuery = _userManager.Users
                 .Where(u => u.OrganizationId == currentUser.OrganizationId && u.Id != currentUser.Id);
 
-
-            // 🔒 SECURITY FIX: If user is HR (and NOT OrgAdmin), restrict to their department
             if (isHR && !isOrgAdmin)
             {
                 usersQuery = usersQuery.Where(u => u.DepartmentId == currentUser.DepartmentId);
@@ -276,7 +256,6 @@ namespace Humatrix_HRMS.Services
 
             var users = await usersQuery.ToListAsync();
 
-            // 3. Prepare metadata (Departments, Designations, etc.)
             var depts = await _context.Departments
                 .Where(d => d.OrganizationId == currentUser.OrganizationId)
                 .AsNoTracking().ToListAsync();
@@ -286,8 +265,8 @@ namespace Humatrix_HRMS.Services
                 .AsNoTracking().ToListAsync();
 
             var shifts = await _context.Shifts
-        .Where(s => s.OrganizationId == currentUser.OrganizationId)
-        .AsNoTracking().ToListAsync();
+                .Where(s => s.OrganizationId == currentUser.OrganizationId)
+                .AsNoTracking().ToListAsync();
 
             var profiles = await _context.Employees
                 .Where(e => e.OrganizationId == currentUser.OrganizationId)
@@ -300,8 +279,6 @@ namespace Humatrix_HRMS.Services
                 var userRoles = await _userManager.GetRolesAsync(u);
                 var role = userRoles.FirstOrDefault() ?? "Employee";
 
-                // HR should not see/manage OrgAdmins or other HRs usually, 
-                // but even if they do, they are now restricted by DepartmentId above.
                 if (isHR && !isOrgAdmin && (role == "HR" || role == "OrgAdmin"))
                     continue;
 
@@ -325,7 +302,6 @@ namespace Humatrix_HRMS.Services
                 });
             }
 
-            // Apply Search and Manual Filters
             if (!string.IsNullOrWhiteSpace(search))
             {
                 search = search.ToLower();
@@ -345,9 +321,65 @@ namespace Humatrix_HRMS.Services
                 .ToList();
 
             return (items, totalCount);
-
-            //return list.OrderBy(x => x.Name).ToList();
         }
+
+        /// <summary>
+        /// Fetches all active or inactive employee summaries assigned to a specific target organization ID.
+        /// </summary>
+        public async Task<List<EmployeeListDto>> GetEmployeesByOrganizationIdAsync(Guid organizationId)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+
+            var users = await _userManager.Users
+                .Where(u => u.OrganizationId == organizationId)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var depts = await context.Departments
+                .Where(d => d.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
+
+            var desigs = await context.Designations
+                .Where(d => d.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
+
+            var shifts = await context.Shifts
+                .Where(s => s.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
+
+            var profiles = await context.Employees
+                .Where(e => e.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
+
+            var resultList = new List<EmployeeListDto>();
+
+            foreach (var u in users)
+            {
+                var userRoles = await _userManager.GetRolesAsync(u);
+                var role = userRoles.FirstOrDefault() ?? "Employee";
+                var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
+
+                resultList.Add(new EmployeeListDto
+                {
+                    EmployeeId = profile?.EmployeeId ?? Guid.Empty,
+                    Email = u.Email ?? string.Empty,
+                    FirstName = u.FirstName,
+                    LastName = u.LastName,
+                    Name = $"{u.FirstName} {u.LastName}",
+                    Role = role,
+                    Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
+                    Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
+                    DepartmentId = u.DepartmentId,
+                    DesignationId = u.DesignationId,
+                    ShiftId = profile?.ShiftId,
+                    ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift Assigned",
+                    IsActive = u.IsActive
+                });
+            }
+
+            return resultList.OrderBy(x => x.Name).ToList();
+        }
+
         #endregion
 
         #region Creation
@@ -358,9 +390,7 @@ namespace Humatrix_HRMS.Services
             if (currentUser?.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
-            //using var transaction = await _context.Database.BeginTransactionAsync();
             using var context = await _contextFactory.CreateDbContextAsync();
-
             using var transaction = await context.Database.BeginTransactionAsync();
             try
             {
@@ -371,10 +401,9 @@ namespace Humatrix_HRMS.Services
                 if (string.IsNullOrWhiteSpace(dto.Email))
                     throw new Exception("Email is required");
 
-                //var deptExists = await _context.Departments.AnyAsync(d =>
                 var deptExists = await context.Departments.AnyAsync(d =>
                                     d.DepartmentId == dto.DepartmentId &&
-                    d.OrganizationId == currentUser.OrganizationId);
+                                    d.OrganizationId == currentUser.OrganizationId);
 
                 if (!deptExists)
                     throw new Exception("Invalid department");
@@ -387,14 +416,13 @@ namespace Humatrix_HRMS.Services
                     throw new Exception("Invalid designation");
 
                 var designation = await context.Designations
-.FirstOrDefaultAsync(d =>
-   d.DesignationId == dto.DesignationId &&
-   d.OrganizationId == currentUser.OrganizationId &&
-   d.IsActive); // ✅ IMPORTANT
+                    .FirstOrDefaultAsync(d =>
+                       d.DesignationId == dto.DesignationId &&
+                       d.OrganizationId == currentUser.OrganizationId &&
+                       d.IsActive);
 
                 if (designation == null)
                     throw new Exception("Selected designation is inactive or invalid");
-
 
                 var user = new ApplicationUser
                 {
@@ -429,10 +457,6 @@ namespace Humatrix_HRMS.Services
                     Status = "Active"
                 };
 
-
-
-
-
                 context.Employees.Add(employee);
                 await context.SaveChangesAsync();
 
@@ -464,14 +488,11 @@ namespace Humatrix_HRMS.Services
             }
         }
 
-        //private async Task<string> GenerateEmployeeCodeAsync()
         private async Task<string> GenerateEmployeeCodeAsync(ApplicationDbContext context)
         {
-            // 1. Get the underlying connection
             var connection = context.Database.GetDbConnection();
             using var command = connection.CreateCommand();
 
-            // 2. IMPORTANT: Link the command to the existing EF Core transaction
             var currentTransaction = context.Database.CurrentTransaction?.GetDbTransaction();
             if (currentTransaction != null)
             {
@@ -480,15 +501,12 @@ namespace Humatrix_HRMS.Services
 
             command.CommandText = "SELECT NEXT VALUE FOR EmployeeCodeSequence";
 
-            // 3. Ensure the connection is open
             if (connection.State != System.Data.ConnectionState.Open)
             {
                 await context.Database.OpenConnectionAsync();
             }
 
             var nextValue = await command.ExecuteScalarAsync();
-
-            // Handle potential nulls and convert to long safely
             long value = (nextValue != DBNull.Value) ? Convert.ToInt64(nextValue) : 0;
 
             return $"EMP{value.ToString("D4")}";
@@ -497,7 +515,6 @@ namespace Humatrix_HRMS.Services
 
         public async Task<EmployeeDetailsDto?> GetEmployeeDetailsByIdAsync(Guid employeeId)
         {
-            // Create a new context instance from the factory
             using var context = _contextFactory.CreateDbContext();
 
             var employee = await context.Employees
@@ -512,7 +529,6 @@ namespace Humatrix_HRMS.Services
             var roles = await _userManager.GetRolesAsync(user!);
             var primaryRole = roles.FirstOrDefault() ?? "Employee";
 
-            // Use 'context' instead of '_context' for all queries in this method
             var recentAttendance = await context.Attendances
                 .Where(a => a.EmployeeId == employeeId)
                 .OrderByDescending(a => a.WorkDate)
@@ -560,21 +576,17 @@ namespace Humatrix_HRMS.Services
             };
         }
 
-
         public async Task<bool> UpdateMyProfileAsync(UpdateEmployeeProfileDto dto)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
 
             var currentUser = await _currentUser.GetUserAsync();
-
-            if (currentUser == null)
-                return false;
+            if (currentUser == null) return false;
 
             var employee = await _context.Employees
                 .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
 
-            if (employee == null)
-                return false;
+            if (employee == null) return false;
 
             employee.Phone = dto.Phone;
             employee.Address = dto.Address;
@@ -582,28 +594,18 @@ namespace Humatrix_HRMS.Services
             employee.DateOfBirth = dto.DateOfBirth;
 
             await _context.SaveChangesAsync();
-
             return true;
         }
-
 
         public async Task<(bool Success, string Message)> ChangePasswordAsync(ChangePasswordDto dto)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
 
             var currentUser = await _currentUser.GetUserAsync();
-
-            if (currentUser == null)
-            {
-                return (false, "User not found");
-            }
+            if (currentUser == null) return (false, "User not found");
 
             var user = await _userManager.FindByIdAsync(currentUser.Id);
-
-            if (user == null)
-            {
-                return (false, "User not found");
-            }
+            if (user == null) return (false, "User not found");
 
             var result = await _userManager.ChangePasswordAsync(
                 user,
@@ -613,12 +615,10 @@ namespace Humatrix_HRMS.Services
             if (!result.Succeeded)
             {
                 var errors = string.Join(", ", result.Errors.Select(x => x.Description));
-
                 return (false, errors);
             }
 
             return (true, "Password changed successfully");
         }
-
     }
 }

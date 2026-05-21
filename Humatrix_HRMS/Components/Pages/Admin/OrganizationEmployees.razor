@@ -1,0 +1,246 @@
+﻿@page "/admin/organizations/{id:guid}/employees"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "SuperAdmin")]
+
+@inject OrganizationService OrgService
+@inject EmployeeService EmpService
+@inject NavigationManager Nav
+
+<PageTitle>Organization Employees</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-normal">Employees - @orgName</h2>
+        </div>
+        <button class="btn btn-primary shadow-sm"
+                style="background-color: #5c4ac7; border: none;"
+                @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}")'>
+            BACK TO DETAILS
+        </button>
+    </div>
+
+    @if (_allEmployees == null)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted">Loading employees list...</div>
+        </div>
+    }
+    else
+    {
+        <!-- Search and Filter Bar -->
+        <div class="row g-3 mb-4 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group shadow-sm">
+                    <span class="input-group-text bg-white border-end-0 text-muted">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text"
+                           class="form-control border-start-0"
+                           placeholder="Search by name or email..."
+                           @bind="_searchQuery"
+                           @bind:event="oninput" />
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <select class="form-select shadow-sm" @bind="_selectedDepartment">
+                    <option value="">All Departments</option>
+                    @foreach (var dept in _departments)
+                    {
+                        <option value="@dept">@dept</option>
+                    }
+                </select>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_searchQuery) || !string.IsNullOrWhiteSpace(_selectedDepartment))
+            {
+                <div class="col-md-3">
+                    <button class="btn btn-link text-decoration-none text-danger p-0" @onclick="ClearFilters">
+                        <i class="bi bi-x-circle-fill me-1"></i> Clear Filters
+                    </button>
+                </div>
+            }
+        </div>
+
+        @if (!GetFilteredEmployees().Any())
+        {
+            <div class="alert alert-info text-center shadow-sm border-0 py-4">
+                <i class="bi bi-info-circle-fill fs-4 me-2 align-middle"></i>
+                No matching employee records found.
+            </div>
+        }
+        else
+        {
+            <div class="card shadow-sm border-0 p-4 mb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col" class="ps-3">Name</th>
+                                <th scope="col">Email</th>
+                                <th scope="col">Department</th>
+                                <th scope="col">Designation</th>
+                                <th scope="col">Assigned Role</th>
+                                <th scope="col" class="text-center">System Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var emp in GetFilteredEmployees())
+                            {
+                                <tr>
+                                    <td class="fw-bold ps-3">@emp.Name</td>
+                                    <td class="text-muted">@emp.Email</td>
+                                    <td><span class="badge bg-secondary-subtle text-secondary px-2 py-1">@emp.Department</span></td>
+                                    <td>@emp.Designation</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border px-2 py-1">
+                                            @emp.Role
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="status-badge-compact @(emp.IsActive ? "active-badge" : "inactive-badge")">
+                                            <i class="bi @(emp.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                                            @(emp.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .card {
+        border-radius: 12px;
+    }
+
+    .table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+    }
+
+    .status-badge-compact {
+        padding: 5px 12px;
+        border-radius: 50px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .active-badge {
+        background-color: #d1fae5;
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+
+    .inactive-badge {
+        background-color: #fee2e2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+    }
+
+    .input-group-text, .form-control, .form-select {
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public Guid id { get; set; }
+
+    private List<EmployeeListDto>? _allEmployees;
+    private List<string> _departments = new();
+    private string orgName = "Loading...";
+
+    // Filter bindings
+    private string _searchQuery = string.Empty;
+    private string _selectedDepartment = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrganizationEmployees();
+    }
+
+    private async Task LoadOrganizationEmployees()
+    {
+        try
+        {
+            var result = await OrgService.GetOrganizationDetailsAsync(id);
+            if (result.Organization == null)
+            {
+                Nav.NavigateTo("/admin/organizations");
+                return;
+            }
+
+            orgName = result.Organization.Name;
+
+            var rawList = await EmpService.GetEmployeesByOrganizationIdAsync(id);
+
+            // Filter out OrgAdmin and HR records immediately
+            _allEmployees = rawList
+                .Where(x => !string.Equals(x.Role, "OrgAdmin", StringComparison.OrdinalIgnoreCase) &&
+                            !string.Equals(x.Role, "HR", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Distinctly group valid unique department names from this filtered group for the drop-down selector
+            _departments = _allEmployees
+                .Where(x => !string.IsNullOrWhiteSpace(x.Department) && x.Department != "N/A")
+                .Select(x => x.Department)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            Nav.NavigateTo("/admin/organizations");
+        }
+    }
+
+    // Handles filtering operations dynamically in-memory
+    private IEnumerable<EmployeeListDto> GetFilteredEmployees()
+    {
+        if (_allEmployees == null) return Enumerable.Empty<EmployeeListDto>();
+
+        var query = _allEmployees.AsEnumerable();
+
+        // 1. Apply Search Query (Name or Email)
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var cleanSearch = _searchQuery.Trim().ToLower();
+            query = query.Where(x => (x.Name != null && x.Name.ToLower().Contains(cleanSearch)) ||
+                                     (x.Email != null && x.Email.ToLower().Contains(cleanSearch)));
+        }
+
+        // 2. Apply Department Wise filter
+        if (!string.IsNullOrWhiteSpace(_selectedDepartment))
+        {
+            query = query.Where(x => string.Equals(x.Department, _selectedDepartment, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return query;
+    }
+
+    private void ClearFilters()
+    {
+        _searchQuery = string.Empty;
+        _selectedDepartment = string.Empty;
+    }
+}
