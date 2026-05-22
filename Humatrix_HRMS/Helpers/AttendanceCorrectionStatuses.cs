@@ -6,4 +6,10 @@
         public const string Approved = "Approved";
         public const string Rejected = "Rejected";
     }
+
+    public static class CorrectionReviewLevels
+    {
+        public const string Hr = "HR";
+        public const string OrgAdmin = "OrgAdmin";
+    }
 }

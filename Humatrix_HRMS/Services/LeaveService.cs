@@ -1,7 +1,8 @@
 ﻿using Humatrix_HRMS.Data;
 using Humatrix_HRMS.DTOs;
-using Humatrix_HRMS.Models;
 using Humatrix_HRMS.Helpers;
+using Humatrix_HRMS.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services
@@ -15,17 +16,36 @@ namespace Humatrix_HRMS.Services
 
         private readonly NotificationService _notificationService;
 
+        //public LeaveService(
+        //    ApplicationDbContext context,
+        //    CurrentUserService currentUser,
+        //    HRPolicyValidationService policy,
+        //    NotificationService notificationService)
+        //{
+        //    _context = context;
+        //    _currentUser = currentUser;
+        //    _policy = policy;
+        //    _notificationService = notificationService;
+        //}
+
+        // ADD to LeaveService fields:
+        private readonly UserManager<ApplicationUser> _userManager;
+
+        // UPDATE constructor signature:
         public LeaveService(
             ApplicationDbContext context,
             CurrentUserService currentUser,
             HRPolicyValidationService policy,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            UserManager<ApplicationUser> userManager)   // ← ADD THIS
         {
             _context = context;
             _currentUser = currentUser;
             _policy = policy;
             _notificationService = notificationService;
+            _userManager = userManager;   // ← ADD THIS
         }
+
 
         // =========================
         // APPLY LEAVE
@@ -114,6 +134,21 @@ namespace Humatrix_HRMS.Services
                 throw new Exception(
                     $"Insufficient leave balance. Available: {effectiveRemaining} day(s), Requested: {totalDays} day(s)");
 
+            //using var tx = await _context.Database.BeginTransactionAsync();
+
+            //balance.Pending += totalDays;
+
+            //request.EmployeeId = employee.EmployeeId;
+            //request.Employee = employee;
+            //request.TotalDays = totalDays;
+            //request.Status = "Pending";
+            //request.AppliedAt = DateTime.UtcNow;
+
+
+            // Resolve applicant role before entering transaction
+            var applicantRoles = await _userManager.GetRolesAsync(user);
+            bool applicantIsHR = applicantRoles.Contains("HR");
+
             using var tx = await _context.Database.BeginTransactionAsync();
 
             balance.Pending += totalDays;
@@ -123,42 +158,144 @@ namespace Humatrix_HRMS.Services
             request.TotalDays = totalDays;
             request.Status = "Pending";
             request.AppliedAt = DateTime.UtcNow;
+            request.ApplicantRole = applicantIsHR ? "HR" : "Employee";
 
-            _context.LeaveRequests.Add(request);
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
+            //_context.LeaveRequests.Add(request);
+            //await _context.SaveChangesAsync();
+            //await tx.CommitAsync();
 
 
             // =========================
             // NOTIFY HR
             // =========================
 
-            var hrUsers = await _context.Users
-                .Where(u => u.OrganizationId == employee.OrganizationId)
-                .ToListAsync();
+            //var hrUsers = await _context.Users
+            //    .Where(u => u.OrganizationId == employee.OrganizationId)
+            //    .ToListAsync();
 
-            foreach (var hr in hrUsers)
+            //foreach (var hr in hrUsers)
+            //{
+            //    var roles = await _context.UserRoles
+            //        .Where(x => x.UserId == hr.Id)
+            //        .Join(
+            //            _context.Roles,
+            //            ur => ur.RoleId,
+            //            r => r.Id,
+            //            (ur, r) => r.Name)
+            //        .ToListAsync();
+
+            //    if (roles.Contains("HR") || roles.Contains("Admin"))
+            //    {
+            //        await _notificationService.CreateNotificationAsync(
+            //            hr.Id,
+
+            //            "New Leave Request",
+
+            //            $"{employee.FirstName} {employee.LastName} applied for leave",
+
+            //            "/hr/leaves"
+            //        );
+            //    }
+            //}
+
+            // =========================
+            // NOTIFY APPROVERS (role-aware, no N+1)
+            // =========================
+
+            // Determine who applied: Employee → notify HR; HR → notify OrgAdmin
+            //var applicantRoles = await _userManager.GetRolesAsync(user);
+            //bool applicantIsHR = applicantRoles.Contains("HR");
+
+            //// Set ApplicantRole on the request for future reference
+            //request.ApplicantRole = applicantIsHR ? "HR" : "Employee";
+
+            //string[] targetRoles = applicantIsHR
+            //    ? new[] { "OrgAdmin" }
+            //    : new[] { "HR", "OrgAdmin" };
+
+            //string notifyTitle = "New Leave Request";
+            //string notifyMsg = $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}";
+            //string notifyUrl = "/hr/leaves";
+
+            //var approverIds = await GetRoleUserIdsAsync(employee.OrganizationId, targetRoles);
+
+            //// Save the ApplicantRole change before notifications
+            //await _context.SaveChangesAsync();
+
+            //foreach (var approverId in approverIds)
+            //{
+            //    await _notificationService.CreateNotificationAsync(
+            //        approverId, notifyTitle, notifyMsg, notifyUrl);
+            //}
+            _context.LeaveRequests.Add(request);
+            await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            // =========================
+            // NOTIFY APPROVERS (role-aware, no N+1, outside tx is acceptable for notifications)
+            // =========================
+            // ==========================================
+            // ROLE-BASED + DEPARTMENT-BASED NOTIFICATIONS
+            // ==========================================
+
+            // HR APPLIED → ONLY ORGADMINS
+            if (applicantIsHR)
             {
-                var roles = await _context.UserRoles
-                    .Where(x => x.UserId == hr.Id)
-                    .Join(
-                        _context.Roles,
-                        ur => ur.RoleId,
-                        r => r.Id,
-                        (ur, r) => r.Name)
-                    .ToListAsync();
+                var orgAdminIds = await GetRoleUserIdsAsync(
+                    employee.OrganizationId,
+                    "OrgAdmin");
 
-                if (roles.Contains("HR") || roles.Contains("Admin"))
+                foreach (var approverId in orgAdminIds)
                 {
                     await _notificationService.CreateNotificationAsync(
-                        hr.Id,
-
+                        approverId,
                         "New Leave Request",
+                        $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
+                        "/hr/leaves");
+                }
+            }
 
-                        $"{employee.FirstName} {employee.LastName} applied for leave",
+            // EMPLOYEE APPLIED → SAME DEPARTMENT HR + ORGADMIN
+            else
+            {
+                // SAME DEPARTMENT HR
+                var hrUsers = await _context.Employees
+                    .Where(e =>
+                        e.OrganizationId == employee.OrganizationId &&
+                        e.DepartmentId == employee.DepartmentId)
+                    .Join(
+                        _context.Users,
+                        e => e.UserId,
+                        u => u.Id,
+                        (e, u) => new { e, u })
+                    .ToListAsync();
 
-                        "/hr/leaves"
-                    );
+                foreach (var item in hrUsers)
+                {
+                    var roles = await _userManager.GetRolesAsync(item.u);
+
+                    if (roles.Contains("HR"))
+                    {
+                        await _notificationService.CreateNotificationAsync(
+                            item.u.Id,
+                            "New Leave Request",
+                            $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
+                            "/hr/leaves");
+                    }
+                }
+
+                // ORGADMINS
+                var orgAdminIds = await GetRoleUserIdsAsync(
+                    employee.OrganizationId,
+                    "OrgAdmin");
+
+                foreach (var approverId in orgAdminIds)
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        approverId,
+                        "New Leave Request",
+                        $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
+                        "/hr/leaves");
                 }
             }
         }
@@ -182,8 +319,27 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync(e => e.EmployeeId == leave.EmployeeId)
                 ?? throw new Exception("Employee not found");
 
+            //if (employee.OrganizationId != user.OrganizationId)
+            //    throw new Exception("Unauthorized");
+
+            //if (leave.Status != "Pending")
+            //    throw new Exception("Only pending requests can be reviewed");
+
             if (employee.OrganizationId != user.OrganizationId)
                 throw new Exception("Unauthorized");
+
+            // ── Role-based approval enforcement ──────────────────────────────────────────
+            var reviewerRoles = await _userManager.GetRolesAsync(user);
+            bool reviewerIsHR = reviewerRoles.Contains("HR");
+            bool reviewerIsOrgAdmin = reviewerRoles.Contains("OrgAdmin");
+
+            if (!reviewerIsHR && !reviewerIsOrgAdmin)
+                throw new Exception("Unauthorized: Only HR or OrgAdmin can review leave requests");
+
+            // HR cannot approve their own leave or other HR's leave — only OrgAdmin can
+            if (!string.IsNullOrEmpty(leave.ApplicantRole) && leave.ApplicantRole == "HR" && !reviewerIsOrgAdmin)
+                throw new Exception("Unauthorized: Only OrgAdmin can approve HR leave requests");
+            // ─────────────────────────────────────────────────────────────────────────────
 
             if (leave.Status != "Pending")
                 throw new Exception("Only pending requests can be reviewed");
@@ -327,9 +483,14 @@ namespace Humatrix_HRMS.Services
                     l.EmployeeId == employee.EmployeeId)
                 ?? throw new Exception("Leave request not found");
 
-            if (leave.Status != "Pending")
-                throw new Exception("Only pending requests can be cancelled");
-
+            //if (leave.Status != "Pending")
+            //    throw new Exception("Only pending requests can be cancelled");
+            // Replace: if (leave.Status != "Pending")
+            // With this robust check:
+            if (!string.Equals(leave.Status?.Trim(), "Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"Only pending requests can be cancelled. Current status in DB: '{leave.Status}'");
+            }
             var balance = await GetOrCreateBalanceAsync(employee.EmployeeId, leave.LeaveTypeId);
             balance.Pending = Math.Max(0, balance.Pending - leave.TotalDays);
 
@@ -340,32 +501,113 @@ namespace Humatrix_HRMS.Services
             // NOTIFY HR
             // =========================
 
-            var hrUsers = await _context.Users
-                .Where(u => u.OrganizationId == employee.OrganizationId)
-                .ToListAsync();
+            //var hrUsers = await _context.Users
+            //    .Where(u => u.OrganizationId == employee.OrganizationId)
+            //    .ToListAsync();
 
-            foreach (var hr in hrUsers)
+            //foreach (var hr in hrUsers)
+            //{
+            //    var roles = await _context.UserRoles
+            //        .Where(x => x.UserId == hr.Id)
+            //        .Join(
+            //            _context.Roles,
+            //            ur => ur.RoleId,
+            //            r => r.Id,
+            //            (ur, r) => r.Name)
+            //        .ToListAsync();
+
+            //    if (roles.Contains("HR") || roles.Contains("Admin"))
+            //    {
+            //        await _notificationService.CreateNotificationAsync(
+            //            hr.Id,
+
+            //            "Leave Cancelled",
+
+            //            $"{employee.FirstName} {employee.LastName} cancelled leave request",
+
+            //            "/hr/leaves"
+            //        );
+            //    }
+            //}
+            // Use the role-aware helper — no N+1
+            var cancellerRoles = await _userManager.GetRolesAsync(user);
+            bool cancellerIsHR = cancellerRoles.Contains("HR");
+
+            //string[] targetRoles = cancellerIsHR
+            //    ? new[] { "OrgAdmin" }
+            //    : new[] { "HR", "OrgAdmin" };
+
+            //var approverIds = await GetRoleUserIdsAsync(employee.OrganizationId, targetRoles);
+
+            //foreach (var approverId in approverIds)
+            //{
+            //    await _notificationService.CreateNotificationAsync(
+            //        approverId,
+            //        "Leave Cancelled",
+            //        $"{employee.FirstName} {employee.LastName} cancelled their leave request",
+            //        "/hr/leaves");
+            //}
+
+            // ==========================================
+            // ROLE + DEPARTMENT BASED CANCEL NOTIFICATION
+            // ==========================================
+
+            // HR CANCELLED → ONLY ORGADMIN
+            if (cancellerIsHR)
             {
-                var roles = await _context.UserRoles
-                    .Where(x => x.UserId == hr.Id)
-                    .Join(
-                        _context.Roles,
-                        ur => ur.RoleId,
-                        r => r.Id,
-                        (ur, r) => r.Name)
-                    .ToListAsync();
+                var orgAdminIds = await GetRoleUserIdsAsync(
+                    employee.OrganizationId,
+                    "OrgAdmin");
 
-                if (roles.Contains("HR") || roles.Contains("Admin"))
+                foreach (var approverId in orgAdminIds)
                 {
                     await _notificationService.CreateNotificationAsync(
-                        hr.Id,
-
+                        approverId,
                         "Leave Cancelled",
+                        $"{employee.FirstName} {employee.LastName} cancelled their leave request",
+                        "/hr/leaves");
+                }
+            }
 
-                        $"{employee.FirstName} {employee.LastName} cancelled leave request",
+            // EMPLOYEE CANCELLED → SAME DEPARTMENT HR + ORGADMIN
+            else
+            {
+                var hrUsers = await _context.Employees
+                    .Where(e =>
+                        e.OrganizationId == employee.OrganizationId &&
+                        e.DepartmentId == employee.DepartmentId)
+                    .Join(
+                        _context.Users,
+                        e => e.UserId,
+                        u => u.Id,
+                        (e, u) => new { e, u })
+                    .ToListAsync();
 
-                        "/hr/leaves"
-                    );
+                foreach (var item in hrUsers)
+                {
+                    var roles = await _userManager.GetRolesAsync(item.u);
+
+                    if (roles.Contains("HR"))
+                    {
+                        await _notificationService.CreateNotificationAsync(
+                            item.u.Id,
+                            "Leave Cancelled",
+                            $"{employee.FirstName} {employee.LastName} cancelled their leave request",
+                            "/hr/leaves");
+                    }
+                }
+
+                var orgAdminIds = await GetRoleUserIdsAsync(
+                    employee.OrganizationId,
+                    "OrgAdmin");
+
+                foreach (var approverId in orgAdminIds)
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        approverId,
+                        "Leave Cancelled",
+                        $"{employee.FirstName} {employee.LastName} cancelled their leave request",
+                        "/hr/leaves");
                 }
             }
 
@@ -397,6 +639,9 @@ namespace Humatrix_HRMS.Services
         // =========================
         // GET ALL (HR)
         // =========================
+        // =========================
+        // GET ALL (HR / OrgAdmin)
+        // =========================
         public async Task<List<LeaveRequestDto>> GetAllForHRAsync(string? status = null)
         {
             var user = await _currentUser.GetUserAsync()
@@ -406,11 +651,39 @@ namespace Humatrix_HRMS.Services
                 .AsNoTracking()
                 .ToDictionaryAsync(d => d.DepartmentId, d => d.Name);
 
+            // 1. Establish reviewer role credentials
+            var reviewerRoles = await _userManager.GetRolesAsync(user);
+            bool reviewerIsHR = reviewerRoles.Contains("HR");
+            bool reviewerIsOrgAdmin = reviewerRoles.Contains("OrgAdmin");
+
             var query = _context.LeaveRequests
                 .AsNoTracking()
                 .Include(l => l.Employee)
                 .Include(l => l.LeaveType)
                 .Where(l => l.Employee.OrganizationId == user.OrganizationId);
+
+            // 2. ENFORCE BOUNDARY: If the user is HR (and NOT an OrgAdmin), 
+            // hide all requests where the applicant is an HR team member.
+            //if (reviewerIsHR && !reviewerIsOrgAdmin)
+            //{
+            //    query = query.Where(l => l.ApplicantRole != "HR");
+            //}
+            if (reviewerIsHR && !reviewerIsOrgAdmin)
+            {
+                var currentHrEmployee = await _context.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                    ?? throw new Exception("HR employee profile not found");
+
+                query = query.Where(l =>
+
+                    // SAME DEPARTMENT ONLY
+                    l.Employee.DepartmentId == currentHrEmployee.DepartmentId
+
+                    // HR CANNOT SEE HR REQUESTS
+                    && l.ApplicantRole != "HR"
+                );
+            }
 
             if (!string.IsNullOrEmpty(status))
                 query = query.Where(l => l.Status == status);
@@ -544,9 +817,19 @@ namespace Humatrix_HRMS.Services
         // =========================
         // PRIVATE HELPERS
         // =========================
+        //private async Task<LeaveBalance> GetOrCreateBalanceAsync(Guid employeeId, Guid leaveTypeId)
+        //{
+        //    int year = DateTime.UtcNow.Year;
         private async Task<LeaveBalance> GetOrCreateBalanceAsync(Guid employeeId, Guid leaveTypeId)
         {
-            int year = DateTime.UtcNow.Year;
+            // Use org timezone to determine the current year (avoids UTC year-boundary issues)
+            var employee = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
+
+            int year = employee != null
+                ? (await _policy.GetOrgTodayAsync(employee.OrganizationId)).Year
+                : DateTime.UtcNow.Year;
 
             var balance = await _context.LeaveBalances
                 .FirstOrDefaultAsync(b =>
@@ -608,6 +891,7 @@ namespace Humatrix_HRMS.Services
             Reason = l.Reason,
             Status = l.Status,
             AppliedAt = l.AppliedAt,
+            ReviewedAt = l.ReviewedAt,
             RejectionReason = l.RejectionReason
         };
 
@@ -638,15 +922,26 @@ namespace Humatrix_HRMS.Services
                 return "Holiday";
 
             // 2. Leave
+            //var leave = await _context.LeaveRequests
+            //    .FirstOrDefaultAsync(l =>
+            //        l.EmployeeId == employeeId &&
+            //        l.Status == "Approved" &&
+            //        l.FromDate.Date <= date &&
+            //        l.ToDate.Date >= date);
+
             var leave = await _context.LeaveRequests
-                .FirstOrDefaultAsync(l =>
-                    l.EmployeeId == employeeId &&
-                    l.Status == "Approved" &&
-                    l.FromDate.Date <= date &&
-                    l.ToDate.Date >= date);
+    .Include(l => l.LeaveType)
+    .FirstOrDefaultAsync(l =>
+        l.EmployeeId == employeeId &&
+        l.Status == "Approved" &&
+        l.FromDate.Date <= date &&
+        l.ToDate.Date >= date);
+
+            //if (leave != null)
+            //    return $"Leave ({leave.LeaveType})";
 
             if (leave != null)
-                return $"Leave ({leave.LeaveType})";
+                return $"Leave ({leave.LeaveType?.Name ?? "Unknown"})";
 
             // 3. WFH
             var wfh = await _context.WorkFromHomeRequests
@@ -669,6 +964,31 @@ namespace Humatrix_HRMS.Services
 
             // 5. Absent
             return AttendanceStatuses.Absent;
+        }
+
+
+        // =========================
+        // PRIVATE: GET HR/ORGADMIN USER IDs FOR ORG (no N+1)
+        // =========================
+        private async Task<List<string>> GetRoleUserIdsAsync(Guid organizationId, params string[] roles)
+        {
+            // Single join query — no per-user role loop
+            return await _context.Users
+                .Where(u => u.OrganizationId == organizationId)
+                .Join(
+                    _context.UserRoles,
+                    u => u.Id,
+                    ur => ur.UserId,
+                    (u, ur) => new { u.Id, ur.RoleId })
+                .Join(
+                    _context.Roles,
+                    x => x.RoleId,
+                    r => r.Id,
+                    (x, r) => new { x.Id, RoleName = r.Name })
+                .Where(x => roles.Contains(x.RoleName))
+                .Select(x => x.Id)
+                .Distinct()
+                .ToListAsync();
         }
     }
 }

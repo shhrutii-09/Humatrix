@@ -11,32 +11,36 @@ namespace Humatrix_HRMS.DTOs
     /// RequestedCheckIn / RequestedCheckOut MUST be org-local DateTime values
     /// with Kind = Unspecified. The service converts to UTC.
     /// </summary>
-    public class SubmitCorrectionRequestDto
-    {
-        [Required]
-        public DateTime WorkDate { get; set; }
+    
+        // =========================================================================
+        // SUBMIT (Employee)
+        // =========================================================================
 
-        [Required]
-        [MaxLength(50)]
-        public string CorrectionType { get; set; } = null!;
+        /// <summary>
+        /// Passed from the Razor page to CorrectionService.SubmitAsync().
+        /// Time fields must be org-local, Kind=Unspecified.
+        /// The service converts them to UTC before storing.
+        /// </summary>
+        public class SubmitCorrectionRequestDto
+        {
+            public DateTime WorkDate { get; set; }
 
-        /// <summary>Org-local (Kind=Unspecified). Service converts to UTC.</summary>
-        public DateTime? RequestedCheckIn { get; set; }
+            /// <summary>See CorrectionTypes constants.</summary>
+            public string CorrectionType { get; set; } = string.Empty;
 
-        /// <summary>Org-local (Kind=Unspecified). Service converts to UTC.</summary>
-        public DateTime? RequestedCheckOut { get; set; }
+            /// <summary>Org-local DateTime, Kind=Unspecified. Service converts to UTC.</summary>
+            public DateTime? RequestedCheckIn { get; set; }
 
-        [MaxLength(50)]
-        public string? RequestedStatus { get; set; }
+            /// <summary>Org-local DateTime, Kind=Unspecified. Service converts to UTC.</summary>
+            public DateTime? RequestedCheckOut { get; set; }
 
-        [Required]
-        [MinLength(10, ErrorMessage = "Please provide a detailed reason (at least 10 characters).")]
-        [MaxLength(1000)]
-        public string Reason { get; set; } = null!;
+            /// <summary>Optional status override (rarely used by employees).</summary>
+            public string? RequestedStatus { get; set; }
 
-        [MaxLength(500)]
-        public string? AttachmentPath { get; set; }
-    }
+            public string Reason { get; set; } = string.Empty;
+
+            public string? AttachmentPath { get; set; }
+        }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // HR → SYSTEM  :  REVIEW (APPROVE / REJECT)
@@ -49,26 +53,26 @@ namespace Humatrix_HRMS.DTOs
     /// </summary>
     public class ReviewCorrectionDto
     {
-        [Required]
         public Guid AttendanceCorrectionRequestId { get; set; }
 
-        [Required]
         public bool Approve { get; set; }
 
         /// <summary>
-        /// HR may override the employee's requested check-in before approving.
-        /// Org-local (Kind=Unspecified). Null = use the employee's RequestedCheckIn.
+        /// Org-local DateTime, Kind=Unspecified. Used only when HR wants to
+        /// override the employee's requested check-in before approving.
+        /// Null = use employee's requested value.
         /// </summary>
         public DateTime? HrOverrideCheckIn { get; set; }
 
-        /// <summary>Org-local (Kind=Unspecified). Null = use the employee's RequestedCheckOut.</summary>
+        /// <summary>Org-local DateTime, Kind=Unspecified. Null = use requested value.</summary>
         public DateTime? HrOverrideCheckOut { get; set; }
 
-        [MaxLength(1000)]
+        /// <summary>Optional status override by HR (e.g. force "Present").</summary>
+        public string? HrOverrideStatus { get; set; }
+
         public string? HrNote { get; set; }
 
-        /// <summary>Required when Approve == false.</summary>
-        [MaxLength(1000)]
+        /// <summary>Required when Approve=false.</summary>
         public string? RejectionReason { get; set; }
     }
 
@@ -78,10 +82,9 @@ namespace Humatrix_HRMS.DTOs
 
     public class CancelCorrectionDto
     {
-        [Required]
         public Guid AttendanceCorrectionRequestId { get; set; }
+        public string? CancelReason { get; set; }
     }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // HR → SYSTEM  :  MANUAL CORRECTION ON BEHALF OF EMPLOYEE
     // ═══════════════════════════════════════════════════════════════════════════
@@ -97,32 +100,28 @@ namespace Humatrix_HRMS.DTOs
     /// </summary>
     public class HrManualCorrectionDto
     {
-        [Required]
+        /// <summary>Target employee (not the HR submitting).</summary>
         public Guid EmployeeId { get; set; }
 
-        [Required]
         public DateTime WorkDate { get; set; }
 
-        /// <summary>Org-local (Kind=Unspecified). Null = do not change check-in.</summary>
+        /// <summary>Org-local DateTime, Kind=Unspecified.</summary>
         public DateTime? NewCheckIn { get; set; }
 
-        /// <summary>Org-local (Kind=Unspecified). Null = do not change check-out.</summary>
+        /// <summary>Org-local DateTime, Kind=Unspecified.</summary>
         public DateTime? NewCheckOut { get; set; }
 
-        [MaxLength(50)]
+        /// <summary>Optional status override. Null = let CalcService decide.</summary>
         public string? OverrideStatus { get; set; }
 
-        [Required]
-        [MinLength(5)]
-        [MaxLength(1000)]
-        public string HrNote { get; set; } = null!;
+        public string HrNote { get; set; } = string.Empty;
 
         /// <summary>
-        /// When true: the correction is created, auto-approved, and applied
-        /// in a single transaction.
-        /// When false: it is created as Pending for a second HR to review.
+        /// When true: request is auto-approved and applied immediately in one
+        /// transaction. When false: creates a Pending request that another HR or
+        /// OrgAdmin must review (four-eyes principle).
         /// </summary>
-        public bool AutoApply { get; set; } = true;
+        public bool AutoApply { get; set; } = false;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -139,14 +138,12 @@ namespace Humatrix_HRMS.DTOs
         public string EmployeeName { get; set; } = string.Empty;
         public string? Department { get; set; }
         public string? EmployeeCode { get; set; }
-
-        /// <summary>Org-local date only (time component = 00:00:00).</summary>
         public DateTime WorkDate { get; set; }
-
         public string CorrectionType { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public string? ReviewLevel { get; set; }
 
-        /// <summary>UTC — display via TimeHelper.</summary>
+        // Timestamps stored as UTC — convert for display in Razor
         public DateTime? RequestedCheckIn { get; set; }
         public DateTime? RequestedCheckOut { get; set; }
         public DateTime? OriginalCheckIn { get; set; }
@@ -166,9 +163,9 @@ namespace Humatrix_HRMS.DTOs
         public bool IsHrInitiated { get; set; }
         public bool HasAttachment { get; set; }
 
-        /// <summary>True when the employee may still cancel this request.</summary>
-        //public bool CanCancel => Status == "Pending";
+        // Computed flags for UI — eliminates status checks in Razor
         public bool CanCancel { get; set; }
+        public bool IsOverdue { get; set; }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -177,17 +174,16 @@ namespace Humatrix_HRMS.DTOs
 
     public class CorrectionRequestDetailDto : CorrectionRequestListDto
     {
+        public List<CorrectionAuditLogDto> AuditLogs { get; set; } = new();
+
+        // Approved values (for display after review)
         public DateTime? ApprovedCheckIn { get; set; }
         public DateTime? ApprovedCheckOut { get; set; }
         public string? ApprovedStatus { get; set; }
+
+        public string? AppliedByName { get; set; }
         public DateTime? AppliedAt { get; set; }
-        public Guid? AttendanceId { get; set; }
-        public string OrgTimeZoneId { get; set; } = "UTC";
-
-        //public List<CorrectionAuditLogDto> AuditLog { get; set; } = new();
-        public List<CorrectionAuditLogDto> AuditLogs { get; set; } = new();
     }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // READ  :  AUDIT LOG ENTRY
     // ═══════════════════════════════════════════════════════════════════════════
@@ -198,7 +194,6 @@ namespace Humatrix_HRMS.DTOs
         public string? ActorName { get; set; }
         public string? Notes { get; set; }
         public DateTime OccurredAt { get; set; }
-
         public DateTime? PreviousCheckIn { get; set; }
         public DateTime? PreviousCheckOut { get; set; }
         public DateTime? NewCheckIn { get; set; }
@@ -216,7 +211,27 @@ namespace Humatrix_HRMS.DTOs
         public int TotalPending { get; set; }
         public int PendingOlderThan2Days { get; set; }
         public int ApprovedThisWeek { get; set; }
-        public int RejectedThisWeek { get; set; }
+    //    public int PendingOlderThan2Days { get; set; } // Add this line
+    //public int ApprovedThisWeek { get; set; }      // Add this line
+    public int RejectedThisWeek { get; set; }
+        //public int RejectedThisWeek { get; set; }
+
+        /// <summary>Count of HR-initiated corrections awaiting OrgAdmin review.</summary>
+        public int HrRequestsPendingOrgAdminReview { get; set; }
+    }
+
+
+    public class CorrectionPreValidationResult
+    {
+        public bool IsAllowed { get; set; }
+        public string? BlockReason { get; set; }
+        public bool IsHoliday { get; set; }
+        public bool IsWeeklyOff { get; set; }
+        public bool IsOnLeave { get; set; }
+        public bool IsOnWfh { get; set; }
+        public bool HasExistingPending { get; set; }
+        public bool AttendanceRecordExists { get; set; }
+        public string? ExistingStatus { get; set; }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -225,14 +240,26 @@ namespace Humatrix_HRMS.DTOs
 
     public class CorrectionQueueFilterDto
     {
+        public string? Status { get; set; }
+        public string? CorrectionType { get; set; }
         public Guid? DepartmentId { get; set; }
-        public string? Status { get; set; }  // null = all statuses
-        public string? CorrectionType { get; set; }  // null = all types
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
         public string? SearchName { get; set; }
-        public int Page { get; set; } = 1;
-        public int PageSize { get; set; } = 20;
+
+        private int _page = 1;
+        public int Page
+        {
+            get => _page;
+            set => _page = value < 1 ? 1 : value;
+        }
+
+        private int _pageSize = 20;
+        public int PageSize
+        {
+            get => _pageSize;
+            set => _pageSize = value < 1 ? 20 : (value > 100 ? 100 : value);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -243,10 +270,13 @@ namespace Humatrix_HRMS.DTOs
     {
         public List<T> Items { get; set; } = new();
         public int TotalCount { get; set; }
-        public int Page { get; set; }
-        public int PageSize { get; set; }
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
 
-        public int TotalPages => PageSize > 0 ? (int)Math.Ceiling(TotalCount / (double)PageSize) : 0;
+        public int TotalPages => PageSize > 0
+            ? (int)Math.Ceiling(TotalCount / (double)PageSize)
+            : 0;
+
         public bool HasPreviousPage => Page > 1;
         public bool HasNextPage => Page < TotalPages;
     }

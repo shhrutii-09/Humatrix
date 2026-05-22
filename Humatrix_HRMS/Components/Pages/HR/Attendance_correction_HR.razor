@@ -4,41 +4,53 @@
 @using Humatrix_HRMS.Helpers
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @using Humatrix_HRMS.Data
+@using System.Globalization
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 
-@* FIX: IDbContextFactory instead of ApplicationDbContext to avoid stale-tracking bugs. *@
 @inject AttendanceCorrectionService CorrectionService
 @inject DepartmentService DeptService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject CurrentUserService CurrentUserService
 
-<PageTitle>Correction Queue | Humatrix HRMS</PageTitle>
+<PageTitle>Correction Desk | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="fw-bold mb-0">Attendance Correction Queue</h4>
-            <small class="text-muted">Review and process employee correction requests</small>
+            <h4 class="fw-bold mb-0">Attendance Correction Management Desk</h4>
+            @if (isOrgAdmin)
+            {
+                <span class="badge bg-danger mt-1">OrgAdmin Privilege Mode</span>
+                <small class="text-muted d-block mt-1">You can view all organizational requests, including those submitted by HR teams.</small>
+            }
+            else
+            {
+                <span class="badge bg-primary mt-1">Department HR Mode</span>
+                <small class="text-muted d-block mt-1">Managing requests from standard employees within your assigned department branch.</small>
+            }
         </div>
-        <button class="btn btn-outline-primary shadow-sm"
-                @onclick="() => showManualModal = true">
-            <i class="bi bi-pencil-square me-2"></i>HR Manual Correction
-        </button>
+
+        @if (isHr)
+        {
+            <button class="btn btn-outline-primary shadow-sm" @onclick="() => showManualModal = true">
+                <i class="bi bi-pencil-square me-2"></i>HR Manual Correction
+            </button>
+        }
     </div>
 
-    <!-- ── SUMMARY CARDS ──────────────────────────────────────────────────── -->
     @if (summary != null)
     {
         <div class="row g-3 mb-4">
             <div class="col-md-3">
                 <div class="card shadow-sm border-0 border-start border-warning border-4">
                     <div class="card-body py-3">
-                        <small class="text-muted fw-bold d-block">PENDING</small>
+                        <small class="text-muted fw-bold d-block">PENDING ACTION</small>
                         <h3 class="mb-0 fw-bold text-warning">@summary.TotalPending</h3>
                     </div>
                 </div>
@@ -54,7 +66,7 @@
             <div class="col-md-3">
                 <div class="card shadow-sm border-0 border-start border-success border-4">
                     <div class="card-body py-3">
-                        <small class="text-muted fw-bold d-block">APPROVED (7 DAYS)</small>
+                        <small class="text-muted fw-bold d-block">APPROVED (THIS WEEK)</small>
                         <h3 class="mb-0 fw-bold text-success">@summary.ApprovedThisWeek</h3>
                     </div>
                 </div>
@@ -62,7 +74,7 @@
             <div class="col-md-3">
                 <div class="card shadow-sm border-0 border-start border-secondary border-4">
                     <div class="card-body py-3">
-                        <small class="text-muted fw-bold d-block">REJECTED (7 DAYS)</small>
+                        <small class="text-muted fw-bold d-block">REJECTED (THIS WEEK)</small>
                         <h3 class="mb-0 fw-bold">@summary.RejectedThisWeek</h3>
                     </div>
                 </div>
@@ -70,7 +82,6 @@
         </div>
     }
 
-    <!-- ── ALERTS ─────────────────────────────────────────────────────────── -->
     @if (!string.IsNullOrEmpty(successMessage))
     {
         <div class="alert alert-success alert-dismissible shadow-sm border-0">
@@ -86,7 +97,6 @@
         </div>
     }
 
-    <!-- ── FILTERS ────────────────────────────────────────────────────────── -->
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body p-3">
             <div class="row g-2 align-items-end">
@@ -100,8 +110,8 @@
                         <option value="@CorrectionStatuses.Cancelled">Cancelled</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted mb-1">TYPE</label>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">CORRECTION TYPE</label>
                     <select @bind="filter.CorrectionType" class="form-select form-select-sm">
                         <option value="">All Types</option>
                         <option value="@CorrectionTypes.ForgotCheckIn">Forgot Check-In</option>
@@ -112,31 +122,34 @@
                         <option value="@CorrectionTypes.HrManualCorrection">HR Manual</option>
                     </select>
                 </div>
+
+                @if (isOrgAdmin)
+                {
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">DEPARTMENT AREA</label>
+                        <select @bind="selectedDepartmentId" class="form-select form-select-sm">
+                            <option value="">All Organization Departments</option>
+                            @foreach (var d in departments)
+                            {
+                                <option value="@d.DepartmentId">@d.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+
                 <div class="col-md-2">
-                    <label class="form-label small text-muted mb-1">DEPARTMENT</label>
-                    <select @bind="selectedDepartmentId" class="form-select form-select-sm">
-                        <option value="">All Departments</option>
-                        @foreach (var d in departments)
-                        {
-                            <option value="@d.DepartmentId">@d.Name</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small text-muted mb-1">SEARCH NAME</label>
-                    <input @bind="filter.SearchName" class="form-control form-control-sm"
-                           placeholder="Employee name..." />
+                    <label class="form-label small text-muted mb-1">SEARCH WORKER</label>
+                    <input @bind="filter.SearchName" class="form-control form-control-sm" placeholder="Search by name or code..." />
                 </div>
                 <div class="col-md-2">
                     <button class="btn btn-primary btn-sm w-100" @onclick="ApplyFilter">
-                        <i class="bi bi-funnel me-1"></i>Filter
+                        <i class="bi bi-funnel me-1"></i>Filter Queue
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ── TABLE ──────────────────────────────────────────────────────────── -->
     <div class="card shadow-sm border-0">
         <div class="table-responsive">
             @if (isLoading)
@@ -145,11 +158,11 @@
                     <div class="spinner-border text-primary"></div>
                 </div>
             }
-            else if (!pagedResult.Items.Any())
+            else if (pagedResult?.Items == null || !pagedResult.Items.Any())
             {
                 <div class="text-center py-5 text-muted">
                     <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
-                    No correction requests found.
+                    No correction records loaded matching your active access scope boundaries.
                 </div>
             }
             else
@@ -157,32 +170,40 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-light">
                         <tr>
-                            <th class="ps-4 text-muted small fw-bold">EMPLOYEE</th>
+                            <th class="ps-4 text-muted small fw-bold">EMPLOYEE DETAILS</th>
                             <th class="text-muted small fw-bold">WORK DATE</th>
                             <th class="text-muted small fw-bold">TYPE</th>
-                            <th class="text-center text-muted small fw-bold">ORIGINAL</th>
-                            <th class="text-center text-muted small fw-bold">REQUESTED</th>
-                            <th class="text-muted small fw-bold">SUBMITTED</th>
+                            <th class="text-center text-muted small fw-bold">ORIGINAL ENTRIES</th>
+                            <th class="text-center text-muted small fw-bold">REQUESTED ENTRIES</th>
+                            <th class="text-muted small fw-bold">SUBMITTED TIMELINE</th>
                             <th class="text-muted small fw-bold">STATUS</th>
-                            <th class="text-muted small fw-bold">ACTIONS</th>
+                            <th class="text-muted small fw-bold text-end pe-4">ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var req in pagedResult.Items)
                         {
                             <tr class="@(req.Status == CorrectionStatuses.Pending && IsOverdue(req.SubmittedAt) ? "table-warning" : "")">
-                                <td class="ps-4">
-                                    <div class="fw-semibold">@req.EmployeeName</div>
-                                    <div class="small text-muted">@req.Department · @req.EmployeeCode</div>
-                                </td>
-                                <td class="fw-semibold">@req.WorkDate.ToString("dd MMM yyyy")</td>
-                                <td>
+                              <td class="ps-4">
+    <div class="fw-semibold text-dark">@req.EmployeeName</div>
+    <div class="small text-muted">
+        @req.Department ·
+        <span class="text-uppercase fw-bold text-secondary">
+            @req.EmployeeCode
+        </span>
+    </div>
+</td>
+
+<td class="fw-semibold">
+    @req.WorkDate.ToString("dd MMM yyyy")
+</td>
+<td>
                                     <span class="badge bg-light text-dark border fw-normal">
                                         @FormatType(req.CorrectionType)
                                     </span>
                                     @if (req.IsHrInitiated)
                                     {
-                                        <span class="ms-1 badge bg-dark text-white" title="HR initiated">HR</span>
+                                        <span class="ms-1 badge bg-dark text-white" title="HR manual submission entry">HR INITIATED</span>
                                     }
                                 </td>
                                 <td class="text-center small">
@@ -191,46 +212,47 @@
                                     </div>
                                     @if (!string.IsNullOrEmpty(req.OriginalStatus))
                                     {
-                                        <span class="badge @GetAttendanceStatusClass(req.OriginalStatus) rounded-pill"
-                                              style="font-size:.65rem">
+                                        <span class="badge @GetAttendanceStatusClass(req.OriginalStatus) rounded-pill" style="font-size:.65rem">
                                             @req.OriginalStatus
                                         </span>
                                     }
                                 </td>
                                 <td class="text-center small">
-                                    <div class="font-monospace">
+                                    <div class="font-monospace fw-bold text-primary">
                                         @FormatTime(req.RequestedCheckIn) → @FormatTime(req.RequestedCheckOut)
                                     </div>
                                 </td>
                                 <td class="small text-muted">
-                                    @req.SubmittedAt.ToString("dd MMM, hh:mm tt")
-                                    @if (req.Status == CorrectionStatuses.Pending && IsOverdue(req.SubmittedAt))
-                                    {
-                                        <span class="badge bg-danger ms-1" title="Overdue">!</span>
+                                    @{
+                                        var localSubmittedAt = TimeZoneInfo.ConvertTimeFromUtc(req.SubmittedAt, orgTimeZone);
                                     }
+                                    <div class="fw-semibold text-dark">@localSubmittedAt.ToString("dd MMM yyyy")</div>
+                                    <div class="small text-secondary d-flex align-items-center">
+                                        @localSubmittedAt.ToString("hh:mm tt")
+                                        @if (req.Status == CorrectionStatuses.Pending && IsOverdue(req.SubmittedAt))
+                                        {
+                                            <span class="badge bg-danger ms-1 px-1 py-0" style="font-size: 0.65rem;" title="Overdue Item">! OVERDUE</span>
+                                        }
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="badge rounded-pill @GetCorrectionStatusClass(req.Status)">
                                         @req.Status
                                     </span>
                                 </td>
-                                <td>
+                                <td class="text-end pe-4">
                                     @if (req.Status == CorrectionStatuses.Pending)
                                     {
-                                        <button class="btn btn-sm btn-success me-1"
-                                                @onclick="() => OpenReviewModal(req, true)"
-                                                title="Approve">
+                                        <button class="btn btn-sm btn-success me-1 shadow-sm" @onclick="() => OpenReviewModal(req, true)" title="Approve Changes">
                                             <i class="bi bi-check-lg"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-danger"
-                                                @onclick="() => OpenReviewModal(req, false)"
-                                                title="Reject">
+                                        <button class="btn btn-sm btn-danger shadow-sm" @onclick="() => OpenReviewModal(req, false)" title="Reject Changes">
                                             <i class="bi bi-x-lg"></i>
                                         </button>
                                     }
                                     else
                                     {
-                                        <span class="text-muted small">@(req.ReviewedByName ?? "—")</span>
+                                        <span class="text-muted small italic">Processed by: @(req.ReviewedByName ?? "—")</span>
                                     }
                                 </td>
                             </tr>
@@ -238,22 +260,18 @@
                     </tbody>
                 </table>
 
-                <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top">
-                    <small class="text-muted">
-                        Showing @pagedResult.Items.Count of @pagedResult.TotalCount
+                <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top bg-light">
+                    <small class="text-muted fw-semibold">
+                        Displaying @pagedResult.Items.Count of @pagedResult.TotalCount structural entries
                     </small>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary"
-                                disabled="@(!pagedResult.HasPreviousPage)"
-                                @onclick="PreviousPage">
-                            ← Prev
+                    <div class="btn-group btn-group-sm shadow-sm">
+                        <button class="btn btn-white text-dark border" disabled="@(!pagedResult.HasPreviousPage)" @onclick="PreviousPage">
+                            ← Back
                         </button>
-                        <span class="btn btn-outline-secondary disabled">
+                        <span class="btn btn-white border disabled text-dark font-monospace fw-bold">
                             @pagedResult.Page / @pagedResult.TotalPages
                         </span>
-                        <button class="btn btn-outline-secondary"
-                                disabled="@(!pagedResult.HasNextPage)"
-                                @onclick="NextPage">
+                        <button class="btn btn-white text-dark border" disabled="@(!pagedResult.HasNextPage)" @onclick="NextPage">
                             Next →
                         </button>
                     </div>
@@ -263,125 +281,99 @@
     </div>
 </div>
 
-<!-- ── REVIEW MODAL ────────────────────────────────────────────────────────── -->
 @if (reviewRequest != null)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
         <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold">
-                        @(reviewDto.Approve ? "Approve" : "Reject") Correction —
-                        @reviewRequest.EmployeeName · @reviewRequest.WorkDate.ToString("dd MMM yyyy")
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-0 bg-light">
+                    <h5 class="modal-title fw-bold text-dark">
+                        @(reviewDto.Approve ? "Authorize and Approve" : "Reject and Dismiss") Record Adjustment
                     </h5>
-                    <button type="button" class="btn-close"
-                            @onclick="CloseReviewModal"
-                            disabled="@isReviewing"></button>
+                    <button type="button" class="btn-close" @onclick="CloseReviewModal" disabled="@isReviewing"></button>
                 </div>
                 <div class="modal-body p-4">
                     @if (!string.IsNullOrEmpty(reviewModalError))
                     {
-                        <div class="alert alert-danger border-0">
+                        <div class="alert alert-danger border-0 shadow-sm">
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>@reviewModalError
                         </div>
                     }
 
-                    <!-- Original vs Requested summary -->
+                    <div class="mb-3 text-muted small fw-bold">
+                        TARGET WORKER: <span class="text-dark">@reviewRequest.EmployeeName (@reviewRequest.EmployeeCode)</span> | DATE: <span class="text-dark">@reviewRequest.WorkDate.ToString("dd MMMM yyyy")</span>
+                    </div>
+
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
-                            <div class="p-3 bg-light rounded">
-                                <div class="small text-muted fw-bold mb-2">ORIGINAL ATTENDANCE</div>
-                                <div class="font-monospace">
-                                    IN:&nbsp; @FormatTime(reviewRequest.OriginalCheckIn)<br />
+                            <div class="p-3 bg-light rounded border">
+                                <div class="small text-muted fw-bold mb-2 text-uppercase">Original System Metrics</div>
+                                <div class="font-monospace text-secondary">
+                                    IN:  @FormatTime(reviewRequest.OriginalCheckIn)<br />
                                     OUT: @FormatTime(reviewRequest.OriginalCheckOut)
                                 </div>
-                                <span class="badge @GetAttendanceStatusClass(reviewRequest.OriginalStatus) mt-1">
-                                    @(reviewRequest.OriginalStatus ?? "—")
+                                <span class="badge @GetAttendanceStatusClass(reviewRequest.OriginalStatus) mt-2">
+                                    @(reviewRequest.OriginalStatus ?? "No System Records")
                                 </span>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="p-3 bg-light rounded">
-                                <div class="small text-muted fw-bold mb-2">EMPLOYEE REQUESTED</div>
-                                <div class="font-monospace">
-                                    IN:&nbsp; @FormatTime(reviewRequest.RequestedCheckIn)<br />
+                            <div class="p-3 bg-light rounded border border-primary">
+                                <div class="small text-primary fw-bold mb-2 text-uppercase">Proposed Overwrite Times</div>
+                                <div class="font-monospace text-dark fw-bold">
+                                    IN:  @FormatTime(reviewRequest.RequestedCheckIn)<br />
                                     OUT: @FormatTime(reviewRequest.RequestedCheckOut)
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mb-3 p-3 bg-light rounded">
-                        <div class="small text-muted fw-bold mb-1">EMPLOYEE REASON</div>
-                        <p class="mb-0">@reviewRequest.Reason</p>
+                    <div class="mb-3 p-3 bg-light rounded border-start border-3 border-info">
+                        <div class="small text-muted fw-bold mb-1">SUBMISSION STATEMENT REASON</div>
+                        <p class="mb-0 text-dark italic">"@reviewRequest.Reason"</p>
                     </div>
 
                     @if (reviewDto.Approve)
                     {
-                        <div class="alert alert-info border-0 small mb-3">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Leave override fields blank to apply the employee's requested times exactly.
-                            Fill them in only if you want to use different times.
+                        <div class="alert alert-info border-0 small mb-3 shadow-sm">
+                            <i class="bi bi-info-circle-fill me-2"></i>
+                            Leave clear if accepting requested entries exactly as submitted. Input data fields only to force system-level overrides.
                         </div>
 
-                        @* FIX: Use value/@onchange (not @bind) to avoid the blur-reset bug.
-                           Same ParseTimeOnly helper as the employee page. *@
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label class="form-label small fw-semibold">
-                                    Override Check-In
-                                    <span class="text-muted fw-normal">(optional)</span>
-                                </label>
-                                <input type="time"
-                                       class="form-control"
-                                       value="@(hrOverrideCheckInTime?.ToString("HH:mm"))"
-                                       @onchange="e => hrOverrideCheckInTime = ParseTimeOnly(e.Value?.ToString())" />
+                                <label class="form-label small fw-semibold">Administrative Check-In Override</label>
+                                <input type="text" class="form-control" placeholder="e.g. 09:30 AM or 14:00" @bind="hrOverrideCheckInText" />
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label small fw-semibold">
-                                    Override Check-Out
-                                    <span class="text-muted fw-normal">(optional)</span>
-                                </label>
-                                <input type="time"
-                                       class="form-control"
-                                       value="@(hrOverrideCheckOutTime?.ToString("HH:mm"))"
-                                       @onchange="e => hrOverrideCheckOutTime = ParseTimeOnly(e.Value?.ToString())" />
+                                <label class="form-label small fw-semibold">Administrative Check-Out Override</label>
+                                <input type="text" class="form-control" placeholder="e.g. 06:00 PM or 22:30" @bind="hrOverrideCheckOutText" />
                             </div>
                         </div>
                     }
                     else
                     {
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">
-                                Rejection Reason <span class="text-danger">*</span>
-                            </label>
-                            <textarea @bind="reviewDto.RejectionReason"
-                                      class="form-control" rows="2"
-                                      placeholder="Required — explain why you are rejecting..."></textarea>
+                            <label class="form-label fw-semibold text-danger">Reason for Denial *</label>
+                            <textarea @bind="reviewDto.RejectionReason" class="form-control" rows="2" placeholder="Provide reason detailing why request was denied..."></textarea>
                         </div>
                     }
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">HR Note (optional)</label>
-                        <textarea @bind="reviewDto.HrNote"
-                                  class="form-control" rows="2"
-                                  placeholder="Internal note visible in the audit log..."></textarea>
+                        <label class="form-label fw-semibold">Administrative Notes (Internal Audit Log)</label>
+                        <textarea @bind="reviewDto.HrNote" class="form-control" rows="2" placeholder="Optional notes visible within management layers..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer border-0">
-                    <button class="btn btn-outline-secondary"
-                            @onclick="CloseReviewModal"
-                            disabled="@isReviewing">
-                        Cancel
+                <div class="modal-footer border-0 bg-light">
+                    <button class="btn btn-outline-secondary btn-sm px-3" @onclick="CloseReviewModal" disabled="@isReviewing">
+                        Dismiss
                     </button>
-                    <button class="btn @(reviewDto.Approve ? "btn-success" : "btn-danger") px-4"
-                            @onclick="HandleReview"
-                            disabled="@isReviewing">
+                    <button class="btn @(reviewDto.Approve ? "btn-success" : "btn-danger") btn-sm px-4 shadow-sm" @onclick="HandleReview" disabled="@isReviewing">
                         @if (isReviewing)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-                        @(reviewDto.Approve ? "Approve & Apply" : "Reject Request")
+                        @(reviewDto.Approve ? "Confirm Authorization" : "Confirm Rejection")
                     </button>
                 </div>
             </div>
@@ -389,97 +381,74 @@
     </div>
 }
 
-<!-- ── HR MANUAL CORRECTION MODAL ─────────────────────────────────────────── -->
 @if (showManualModal)
 {
     <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
         <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold">HR Manual Attendance Correction</h5>
-                    <button type="button" class="btn-close"
-                            @onclick="CloseManualModal"
-                            disabled="@isManualSubmitting"></button>
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-0 bg-light">
+                    <h5 class="modal-title fw-bold text-dark">Submit Manual Adjustment Logs</h5>
+                    <button type="button" class="btn-close" @onclick="CloseManualModal" disabled="@isManualSubmitting"></button>
                 </div>
                 <div class="modal-body p-4">
                     @if (!string.IsNullOrEmpty(manualModalError))
                     {
-                        <div class="alert alert-danger border-0">
+                        <div class="alert alert-danger border-0 shadow-sm">
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>@manualModalError
                         </div>
                     }
-
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Employee <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold">Target Employee Profile <span class="text-danger">*</span></label>
                         <select @bind="manualDto.EmployeeId" class="form-select">
-                            <option value="">— Select employee —</option>
+                            <option value="">— Select Target Employee Account —</option>
                             @foreach (var emp in employees)
                             {
                                 <option value="@emp.EmployeeId">@emp.FullName (@emp.EmployeeCode)</option>
                             }
                         </select>
                     </div>
-
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Work Date <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold">Target Shift Work Date <span class="text-danger">*</span></label>
                         <InputDate @bind-Value="manualDto.WorkDate" class="form-control" />
                     </div>
-
-                    @* FIX: Same value/@onchange pattern for stable time inputs. *@
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">New Check-In Time</label>
-
-                            <input type="time"
-                                   class="form-control"
-                                   value="@(manualCheckInTime?.ToString(@"HH\:mm"))"
-                                   @onchange="OnManualCheckInChanged" />
+                            <div class="form-group">
+                                <label class="form-label fw-semibold">Adjustment Check-In Time</label>
+                                <input type="text" class="form-control" placeholder="e.g. 09:30 AM or 13:00" @bind="manualCheckInText" />
+                            </div>
                         </div>
-
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">New Check-Out Time</label>
-
-                            <input type="time"
-                                   class="form-control"
-                                   value="@(manualCheckOutTime?.ToString(@"HH\:mm"))"
-                                   @onchange="OnManualCheckOutChanged" />
+                            <div class="form-group">
+                                <label class="form-label fw-semibold">Adjustment Check-Out Time</label>
+                                <input type="text" class="form-control" placeholder="e.g. 06:30 PM or 18:00" @bind="manualCheckOutText" />
+                            </div>
                         </div>
                     </div>
-
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">
-                            HR Note / Reason <span class="text-danger">*</span>
-                        </label>
-                        <textarea @bind="manualDto.HrNote" class="form-control" rows="3"
-                                  placeholder="Explain the reason for this manual correction..."></textarea>
+                        <label class="form-label fw-semibold">Justification Statement / Audit Log Note <span class="text-danger">*</span></label>
+                        <textarea @bind="manualDto.HrNote" class="form-control" rows="3" placeholder="Provide justification explanation details for manual entry insertions..."></textarea>
                     </div>
-
                     <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox"
-                               @bind="manualDto.AutoApply" id="autoApply" />
-                        <label class="form-check-label" for="autoApply">
-                            Auto-approve and apply immediately
+                        <input class="form-check-input" type="checkbox" @bind="manualDto.AutoApply" id="autoApply" />
+                        <label class="form-check-label fw-semibold" for="autoApply">
+                            Commit and Auto-Approve Immediately
                         </label>
-                        <div class="form-text">
-                            When unchecked, a second HR reviewer must approve the correction.
+                        <div class="form-text text-muted">
+                            When bypassed, entry parameters are tracked as pending until another admin executes structural clearance verification.
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer border-0">
-                    <button class="btn btn-outline-secondary"
-                            @onclick="CloseManualModal"
-                            disabled="@isManualSubmitting">
+                <div class="modal-footer border-0 bg-light">
+                    <button class="btn btn-outline-secondary btn-sm px-3" @onclick="CloseManualModal" disabled="@isManualSubmitting">
                         Cancel
                     </button>
-                    <button class="btn btn-primary px-4"
-                            style="background:#5c4ac7;border:none;"
-                            @onclick="HandleManualCorrection"
-                            disabled="@isManualSubmitting">
+                    <button class="btn btn-primary btn-sm px-4 shadow-sm" style="background:#5c4ac7;border:none;" @onclick="HandleManualCorrection" disabled="@isManualSubmitting">
                         @if (isManualSubmitting)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
                         }
-                        Submit Correction
+                        Commit Adjustment Logs
                     </button>
                 </div>
             </div>
@@ -488,51 +457,60 @@
 }
 
 @code {
-    // ── State ────────────────────────────────────────────────────────────────
-
     private PagedResult<CorrectionRequestListDto> pagedResult = new();
     private CorrectionQueueSummaryDto? summary;
     private List<DepartmentListItem> departments = new();
     private Guid? selectedDepartmentId;
     private List<EmployeeListItem> employees = new();
-    private CorrectionQueueFilterDto filter = new() { Status = CorrectionStatuses.Pending };
+    private CorrectionQueueFilterDto filter = new() { Status = CorrectionStatuses.Pending, Page = 1, PageSize = 25 };
     private bool isLoading;
     private string? successMessage;
     private string? errorMessage;
     private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+    private string? hrOverrideCheckInText;
+    private string? hrOverrideCheckOutText;
+    private string? manualCheckInText;
+    private string? manualCheckOutText;
+    private bool isHr;
+    private bool isOrgAdmin;
 
-    // Review modal
     private CorrectionRequestListDto? reviewRequest;
     private ReviewCorrectionDto reviewDto = new();
-
-    // FIX: TimeOnly? for all time-input fields.
-    // We do NOT use @bind on these — we use value/@onchange + ParseTimeOnly()
-    // to avoid the "field clears on blur" bug.
     private TimeOnly? hrOverrideCheckInTime;
     private TimeOnly? hrOverrideCheckOutTime;
     private bool isReviewing;
     private string? reviewModalError;
-
     private bool showManualModal;
     private HrManualCorrectionDto manualDto = new() { AutoApply = true };
-    // private TimeOnly? manualCheckInTime;
-    // private TimeOnly? manualCheckOutTime;
     private bool isManualSubmitting;
     private string? manualModalError;
 
     private record DepartmentListItem(Guid DepartmentId, string Name);
     private record EmployeeListItem(Guid EmployeeId, string FullName, string EmployeeCode);
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
-    // private string? manualCheckInText;
-    // private string? manualCheckOutText;
-
-
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        isHr = user.IsInRole("HR");
+        isOrgAdmin = user.IsInRole("OrgAdmin");
+
         await LoadOrgTimezone();
         await LoadDropdownsAsync();
         await LoadAll();
+    }
+
+    private static DateTime? ParseUserDateTime(DateTime baseDate, string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        input = input.Trim().Replace(".", ":").ToUpperInvariant();
+        string[] formats = { "h:mm tt", "hh:mm tt", "h:mmtt", "hh:mmtt", "H:mm", "HH:mm" };
+        if (DateTime.TryParseExact(input, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            return DateTime.SpecifyKind(baseDate.Date.Add(parsed.TimeOfDay), DateTimeKind.Unspecified);
+        }
+        return null;
     }
 
     private async Task LoadOrgTimezone()
@@ -542,7 +520,6 @@
             var user = await CurrentUserService.GetUserAsync();
             if (user?.OrganizationId == null) return;
 
-            // FIX: fresh context per query
             await using var db = await DbFactory.CreateDbContextAsync();
             var tzId = await db.Organizations
                 .AsNoTracking()
@@ -551,7 +528,10 @@
                 .FirstOrDefaultAsync();
             orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
         }
-        catch { /* fallback to UTC */ }
+        catch
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
     }
 
     private async Task LoadDropdownsAsync()
@@ -561,27 +541,37 @@
             var user = await CurrentUserService.GetUserAsync();
             if (user?.OrganizationId == null) return;
             var orgId = user.OrganizationId.Value;
-
             await using var db = await DbFactory.CreateDbContextAsync();
 
-            departments = await db.Departments
-                .AsNoTracking()
-                .Where(d => d.OrganizationId == orgId)
-                .OrderBy(d => d.Name)
-                .Select(d => new DepartmentListItem(d.DepartmentId, d.Name))
-                .ToListAsync();
+            var currentEmp = await db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == user.Id);
 
-            employees = await db.Employees
-                .AsNoTracking()
-                .Where(e => e.OrganizationId == orgId && e.Status == "Active")
+            // Populating department dropdown list
+            if (isOrgAdmin)
+            {
+                departments = await db.Departments
+                    .AsNoTracking()
+                    .Where(d => d.OrganizationId == orgId)
+                    .OrderBy(d => d.Name)
+                    .Select(d => new DepartmentListItem(d.DepartmentId, d.Name))
+                    .ToListAsync();
+            }
+
+            // Populate actionable employee lists contextually
+            var empQuery = db.Employees.AsNoTracking().Where(e => e.OrganizationId == orgId && e.Status == "Active");
+            if (!isOrgAdmin && isHr && currentEmp != null)
+            {
+                empQuery = empQuery.Where(e => e.DepartmentId == currentEmp.DepartmentId && e.EmployeeId != currentEmp.EmployeeId);
+            }
+
+            employees = await empQuery
                 .OrderBy(e => e.FirstName)
-                .Select(e => new EmployeeListItem(
-                    e.EmployeeId,
-                    e.FirstName + " " + e.LastName,
-                    e.EmployeeCode))
+                .Select(e => new EmployeeListItem(e.EmployeeId, e.FirstName + " " + e.LastName, e.EmployeeCode))
                 .ToListAsync();
         }
-        catch (Exception ex) { errorMessage = $"Failed to load dropdowns: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load lookup items: {ex.Message}";
+        }
     }
 
     private async Task LoadAll()
@@ -589,170 +579,216 @@
         isLoading = true;
         errorMessage = null;
         filter.DepartmentId = selectedDepartmentId == Guid.Empty ? null : selectedDepartmentId;
+
         try
         {
             summary = await CorrectionService.GetQueueSummaryAsync();
             pagedResult = await CorrectionService.GetHrQueueAsync(filter);
         }
-        catch (Exception ex) { errorMessage = ex.Message; }
-        finally { isLoading = false; }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
-    private async Task ApplyFilter() { filter.Page = 1; await LoadAll(); }
+    private async Task ApplyFilter()
+    {
+        filter.Page = 1;
+        await LoadAll();
+    }
 
     private async Task PreviousPage()
     {
-        if (pagedResult.HasPreviousPage) { filter.Page--; await LoadAll(); }
+        if (pagedResult.HasPreviousPage)
+        {
+            filter.Page--;
+            await LoadAll();
+        }
     }
 
     private async Task NextPage()
     {
-        if (pagedResult.HasNextPage) { filter.Page++; await LoadAll(); }
+        if (pagedResult.HasNextPage)
+        {
+            filter.Page++;
+            await LoadAll();
+        }
     }
-
-    // ── Review modal ─────────────────────────────────────────────────────────
 
     private void OpenReviewModal(CorrectionRequestListDto req, bool approve)
     {
-        // FIX: reset all time-override fields when opening a new review modal.
-        // Without this, times from the previously-reviewed request would pre-fill.
         reviewRequest = req;
         reviewDto = new ReviewCorrectionDto
         {
             AttendanceCorrectionRequestId = req.AttendanceCorrectionRequestId,
-            Approve = approve
+            Approve = approve,
+            RejectionReason = "",
+            HrNote = ""
         };
-        hrOverrideCheckInTime = null;
-        hrOverrideCheckOutTime = null;
+        hrOverrideCheckInText = null;
+        hrOverrideCheckOutText = null;
         reviewModalError = null;
     }
 
     private void CloseReviewModal()
     {
-        if (isReviewing) return; // prevent closing while async is in flight
         reviewRequest = null;
         reviewModalError = null;
     }
 
+    // private async Task HandleReview()
+    // {
+    //     if (reviewRequest == null) return;
+    //     reviewModalError = null;
+
+    //     if (!reviewDto.Approve && string.IsNullOrWhiteSpace(reviewDto.RejectionReason))
+    //     {
+    //         reviewModalError = "Rejection explanation reason is mandatory.";
+    //         return;
+    //     }
+
+    //     reviewDto.OverrideCheckIn = ParseUserDateTime(reviewRequest.WorkDate, hrOverrideCheckInText);
+    //     reviewDto.OverrideCheckOut = ParseUserDateTime(reviewRequest.WorkDate, hrOverrideCheckOutText);
+
+    //     reviewDto.HrOverrideCheckIn = ParseUserDateTime(reviewRequest.WorkDate, hrOverrideCheckInText);
+    //     reviewDto.HrOverrideCheckOut = ParseUserDateTime(reviewRequest.WorkDate, hrOverrideCheckOutText);
+
+    //     isReviewing = true;
+    //     try
+    //     {
+    //         var result = await CorrectionService.ReviewAsync(reviewDto);
+    //         await CorrectionService.ReviewAsync(reviewDto);
+    //         if (result)
+    //         {
+    //             successMessage = "Correction adjustments applied successfully.";
+    //             CloseReviewModal();
+    //             await LoadAll();
+    //         }
+    //         else
+    //         {
+    //             reviewModalError = "Could not complete transaction validation. Please retry.";
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         reviewModalError = ex.Message;
+    //     }
+    //     finally
+    //     {
+    //         isReviewing = false;
+    //     }
+    // }
     private async Task HandleReview()
     {
         if (reviewRequest == null) return;
         reviewModalError = null;
+
+        if (!reviewDto.Approve && string.IsNullOrWhiteSpace(reviewDto.RejectionReason))
+        {
+            reviewModalError = "Rejection explanation reason is mandatory.";
+            return;
+        }
+
+        reviewDto.HrOverrideCheckIn = ParseUserDateTime(reviewRequest.WorkDate, hrOverrideCheckInText);
+        reviewDto.HrOverrideCheckOut = ParseUserDateTime(reviewRequest.WorkDate, hrOverrideCheckOutText);
+
         isReviewing = true;
         try
         {
-            var workDate = reviewRequest.WorkDate.Date;
-
-            // Convert TimeOnly? → org-local DateTime (Kind=Unspecified).
-            // Service converts to UTC.
-            reviewDto.HrOverrideCheckIn = hrOverrideCheckInTime.HasValue
-                ? DateTime.SpecifyKind(workDate.Add(hrOverrideCheckInTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
-                : null;
-
-            reviewDto.HrOverrideCheckOut = hrOverrideCheckOutTime.HasValue
-                ? DateTime.SpecifyKind(workDate.Add(hrOverrideCheckOutTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
-                : null;
-
+            // ✅ 1. Call the method directly without assigning it to a variable
             await CorrectionService.ReviewAsync(reviewDto);
 
-            successMessage = reviewDto.Approve
-                ? $"✓ Correction approved and applied for {reviewRequest.EmployeeName}. Attendance record updated."
-                : "Correction request rejected.";
-
+            // ✅ 2. If no exception was thrown, it executed cleanly. Handle success states here.
+            successMessage = "Correction adjustments applied successfully.";
             CloseReviewModal();
-            // FIX: force CloseReviewModal even if isReviewing guard would have blocked it.
-            reviewRequest = null;
             await LoadAll();
         }
-        catch (CorrectionValidationException ex) { reviewModalError = ex.Message; }
-        catch (Exception ex) { reviewModalError = $"Unexpected error: {ex.Message}"; }
-        finally { isReviewing = false; }
+        catch (Exception ex)
+        {
+            // Business validation exceptions thrown from your engine will end up here
+            reviewModalError = ex.Message;
+        }
+        finally
+        {
+            isReviewing = false;
+        }
     }
-
-    // ── Manual correction modal ───────────────────────────────────────────────
 
     private void CloseManualModal()
     {
-        if (isManualSubmitting) return;
         showManualModal = false;
         manualDto = new HrManualCorrectionDto { AutoApply = true };
-        manualCheckInTime = null;
-        // manualCheckInText = null;
-        // manualCheckOutText = null;
-        manualCheckOutTime = null;
+        manualCheckInText = null;
+        manualCheckOutText = null;
         manualModalError = null;
     }
 
     private async Task HandleManualCorrection()
     {
         manualModalError = null;
-        isManualSubmitting = true;
+
+        if (manualDto.EmployeeId == Guid.Empty)
+        {
+            manualModalError = "Target Employee selection field is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(manualDto.HrNote))
+        {
+            manualModalError = "Justification text statement explanation is mandatory.";
+            return;
+        }
+
+        var checkInParsed = ParseUserDateTime(manualDto.WorkDate, manualCheckInText);
+        var checkOutParsed = ParseUserDateTime(manualDto.WorkDate, manualCheckOutText);
+
+        if (checkInParsed == null && checkOutParsed == null)
+        {
+            manualModalError = "Input at least one valid check time specification parameter.";
+            return;
+        }
+
+        // manualDto.NewCheckIn = checkInParsed.HasValue ? TimeOnly.FromDateTime(checkInParsed.Value) : null;
+        // manualDto.NewCheckOut = checkOutParsed.HasValue ? TimeOnly.FromDateTime(checkOutParsed.Value) : null;
+        
+        manualDto.NewCheckIn = ParseUserDateTime(manualDto.WorkDate, manualCheckInText);
+        manualDto.NewCheckOut = ParseUserDateTime(manualDto.WorkDate, manualCheckOutText);
+
         try
         {
-            if (manualDto.EmployeeId == Guid.Empty)
-                throw new CorrectionValidationException("Please select an employee.");
-            if (string.IsNullOrWhiteSpace(manualDto.HrNote))
-                throw new CorrectionValidationException("HR Note / Reason is required.");
-
-            var workDate = manualDto.WorkDate.Date;
-
-            // manualDto.NewCheckIn = manualCheckInTime.HasValue
-            //     ? DateTime.SpecifyKind(workDate.Add(manualCheckInTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
-            //     : null;
-
-            // manualDto.NewCheckOut = manualCheckOutTime.HasValue
-            //     ? DateTime.SpecifyKind(workDate.Add(manualCheckOutTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
-            //     : null;
-
-            // var parsedCheckIn = ParseTimeOnly(manualCheckInText);
-            // var parsedCheckOut = ParseTimeOnly(manualCheckOutText);
-
-            manualDto.NewCheckIn = manualCheckInTime.HasValue
-      ? DateTime.SpecifyKind(
-          workDate.Date + manualCheckInTime.Value.ToTimeSpan(),
-          DateTimeKind.Unspecified)
-      : null;
-
-            manualDto.NewCheckOut = manualCheckOutTime.HasValue
-                ? DateTime.SpecifyKind(
-                    workDate.Date + manualCheckOutTime.Value.ToTimeSpan(),
-                    DateTimeKind.Unspecified)
-                : null;
-
             await CorrectionService.HrManualCorrectionAsync(manualDto);
-            successMessage = "Manual correction applied successfully. Attendance record updated.";
+            successMessage = "Manual tracking transaction adjustments stored successfully.";
             CloseManualModal();
             await LoadAll();
         }
-        catch (CorrectionValidationException ex) { manualModalError = ex.Message; }
-        catch (Exception ex) { manualModalError = $"Unexpected error: {ex.Message}"; }
-        finally { isManualSubmitting = false; }
+        catch (Exception ex)
+        {
+            manualModalError = ex.Message;
+        }
+        finally
+        {
+            isManualSubmitting = false;
+        }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Parse the browser's "HH:mm" string from a time input into TimeOnly.
-    /// Returns null for empty/invalid input — never throws.
-    /// </summary>
-    private static TimeOnly? ParseTimeOnly(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        return TimeOnly.TryParse(value, out var t) ? t : null;
-    }
+    // private static string FormatTime(DateTime? dt) => dt?.ToString("hh:mm tt") ?? "—";
 
     private string FormatTime(DateTime? utcTime)
-        => utcTime.HasValue ? TimeHelper.FormatOrgTime(utcTime, orgTimeZone) : "—";
+    {
+        return TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
+    }
 
-    private static bool IsOverdue(DateTime submittedAt)
-        => (DateTime.UtcNow - submittedAt).TotalDays > 2;
+    private static bool IsOverdue(DateTime submittedAt) => (DateTime.UtcNow - submittedAt).TotalDays >= 2;
 
     private static string FormatType(string type) => type switch
     {
         CorrectionTypes.ForgotCheckIn => "Forgot In",
         CorrectionTypes.ForgotCheckOut => "Forgot Out",
         CorrectionTypes.WrongTime => "Wrong Time",
-        CorrectionTypes.AbsentButWorked => "Absent→Worked",
+        CorrectionTypes.AbsentButWorked => "Absent But Worked",
         CorrectionTypes.OvertimeCorrection => "OT Correction",
         CorrectionTypes.HrManualCorrection => "HR Manual",
         _ => type
@@ -760,44 +796,17 @@
 
     private static string GetAttendanceStatusClass(string? status) => status switch
     {
-        "Present" => "bg-success",
-        "Late" => "bg-warning text-dark",   
-        "Absent" => "bg-danger",
-        "Half Day" => "bg-info text-dark",
-        "Early Exit" => "bg-info text-dark",
-        "Short Hours" => "bg-secondary",
-        _ => "bg-secondary"
+        "Present" => "bg-success text-white",
+        "Late" => "bg-warning text-dark",
+        "Absent" => "bg-danger text-white",
+        _ => "bg-secondary text-white"
     };
 
     private static string GetCorrectionStatusClass(string? status) => status switch
     {
         CorrectionStatuses.Pending => "bg-warning text-dark",
-        CorrectionStatuses.Approved => "bg-success",
-        CorrectionStatuses.Rejected => "bg-danger", 
-        CorrectionStatuses.Cancelled => "bg-secondary",
+        CorrectionStatuses.Approved => "bg-success text-white",
+        CorrectionStatuses.Rejected => "bg-danger text-white",
         _ => "bg-light text-dark border"
     };
-
-
-    private TimeOnly? manualCheckInTime;
-    private TimeOnly? manualCheckOutTime;
-    private void OnManualCheckInChanged(ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString();
-
-        if (TimeOnly.TryParse(value, out var time))
-            manualCheckInTime = time;
-        else
-            manualCheckInTime = null;
-    }
-
-    private void OnManualCheckOutChanged(ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString();
-
-        if (TimeOnly.TryParse(value, out var time))
-            manualCheckOutTime = time;
-        else
-            manualCheckOutTime = null;
-    }
 }

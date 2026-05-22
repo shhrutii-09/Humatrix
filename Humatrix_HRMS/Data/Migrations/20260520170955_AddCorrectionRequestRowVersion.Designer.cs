@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260520170955_AddCorrectionRequestRowVersion")]
+    partial class AddCorrectionRequestRowVersion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -223,9 +226,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid?>("AssignedReviewerEmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("AttachmentPath")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -255,9 +255,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsHrSelfRequest")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPayrollPeriodLocked")
                         .HasColumnType("bit");
 
                     b.Property<Guid>("OrganizationId")
@@ -295,9 +292,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("ReviewLevel")
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("datetime2");
 
@@ -318,9 +312,6 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("SubmittedByRole")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -328,8 +319,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("AttendanceCorrectionRequestId");
-
-                    b.HasIndex("AssignedReviewerEmployeeId");
 
                     b.HasIndex("AttendanceId");
 
@@ -342,8 +331,6 @@ namespace Humatrix_HRMS.Migrations
                     b.HasIndex("SubmittedAt");
 
                     b.HasIndex("EmployeeId", "WorkDate", "Status");
-
-                    b.HasIndex("OrganizationId", "Status", "ReviewLevel");
 
                     b.ToTable("AttendanceCorrectionRequests");
                 });
@@ -404,8 +391,6 @@ namespace Humatrix_HRMS.Migrations
                     b.HasIndex("ActorEmployeeId");
 
                     b.HasIndex("AttendanceCorrectionRequestId");
-
-                    b.HasIndex("OccurredAt");
 
                     b.ToTable("CorrectionAuditLogs");
                 });
@@ -809,10 +794,6 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<DateTime>("AppliedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("ApprovalLevel")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<Guid>("AttendanceId")
                         .HasColumnType("uniqueidentifier");
 
@@ -830,10 +811,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RejectionReason")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("RequestedByRole")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<double>("RequestedHours")
@@ -987,10 +964,6 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<DateTime>("AppliedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("ApprovalLevel")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<Guid?>("ApprovedBy")
                         .HasColumnType("uniqueidentifier");
 
@@ -1005,10 +978,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RejectionReason")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("RequestedByRole")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ReviewedAt")
@@ -1238,11 +1207,6 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.Entity("Humatrix_HRMS.Models.AttendanceCorrectionRequest", b =>
                 {
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "AssignedReviewerEmployee")
-                        .WithMany()
-                        .HasForeignKey("AssignedReviewerEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Humatrix_HRMS.Models.Attendance", "Attendance")
                         .WithMany("CorrectionRequests")
                         .HasForeignKey("AttendanceId")
@@ -1269,8 +1233,6 @@ namespace Humatrix_HRMS.Migrations
                         .WithMany()
                         .HasForeignKey("ReviewedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("AssignedReviewerEmployee");
 
                     b.Navigation("Attendance");
 

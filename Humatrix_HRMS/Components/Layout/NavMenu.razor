@@ -44,15 +44,7 @@
                         <i class="bi bi-person-plus"></i>
                         <span>Add Employee</span>
                     </NavLink>
-                    <NavLink class="nav-item-custom" href="/hr/leaves">
-                        <i class="bi bi-person-plus"></i>
-                        <span>Leave Requests</span>
-                    </NavLink>
-
-                    <NavLink class="nav-item-custom" href="/hr/wfh">
-                        <i class="bi bi-house-check"></i>
-                        <span>WFH Approvals</span>
-                    </NavLink>
+                  
                 </AuthorizeView>
 
                 <!-- EMPLOYEE -->
@@ -67,27 +59,7 @@
                         <span>Dashboard</span>
                     </NavLink>
 
-                    <NavLink class="nav-item-custom" href="/employee/attendance">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>My Attendance</span>
-                    </NavLink>
-                    <NavLink class="nav-item-custom" href="/employee/holidays">
-                        <i class="bi bi-calendar3-event"></i>
-                        <span>Holidays</span>
-                    </NavLink>
-                    <NavLink class="nav-item-custom" href="/employee/leaves">
-                        <i class="bi bi-calendar-x"></i>
-                        <span>My Leaves</span>
-                    </NavLink>
-                    @* <NavLink class="nav-item-custom" href="/employee/leaves/apply">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>Leaves Apply</span>
-                    </NavLink> *@
-                    <NavLink class="nav-item-custom" href="/employee/wfh">
-                        <i class="bi bi-laptop"></i>
-                        <span>WFH</span>
-                    </NavLink>
-                </AuthorizeView>
+                                   </AuthorizeView>
 
                 <!-- ORG ADMIN -->
                 <AuthorizeView Roles="OrgAdmin" Context="orgContext">
@@ -108,9 +80,12 @@
 
                     <NavLink class="nav-item-custom" href="/org/add-hr">
                         <i class="bi bi-person-plus"></i>
-                        <span>Manage HR</span>
+                        <span>Add HR</span>
                     </NavLink>
-
+                    <NavLink class="nav-item-custom" href="/admin/leave-types">
+                        <i class="bi bi-journal-x"></i>
+                        <span>Leave Type Manage</span>
+                    </NavLink>
 
                     <NavLink class="nav-item-custom" href="/org/holidays">
                         <i class="bi bi-calendar-event"></i>
@@ -122,7 +97,7 @@
                     </NavLink>
                 </AuthorizeView>
 
-                <!-- COMMON -->
+                <!-- OrgAdmin , HR -->
                 <AuthorizeView Roles="OrgAdmin,HR" Context="commonContext">
                     <NavLink class="nav-item-custom" href="/employees">
                         <i class="bi bi-people"></i>
@@ -133,10 +108,42 @@
                         <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
                     </NavLink>
-                    <NavLink class="nav-item-custom" href="/admin/leave-types">
-                        <i class="bi bi-journal-x"></i>
-                        <span>Leave Type Manage</span>
+                   
+                    <NavLink class="nav-item-custom" href="/hr/leaves">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Leave Requests</span>
                     </NavLink>
+
+                    <NavLink class="nav-item-custom" href="/hr/wfh">
+                        <i class="bi bi-house-check"></i>
+                        <span>WFH Approvals</span>
+                    </NavLink>
+                </AuthorizeView>
+
+
+                <!-- Employee , HR -->
+                <AuthorizeView Roles="Employee , HR" Context="commonContext">
+                    <NavLink class="nav-item-custom" href="/employee/attendance">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>My Attendance</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/holidays">
+                        <i class="bi bi-calendar3-event"></i>
+                        <span>Holidays</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/leaves">
+                        <i class="bi bi-calendar-x"></i>
+                        <span>My Leaves</span>
+                    </NavLink>
+                    @* <NavLink class="nav-item-custom" href="/employee/leaves/apply">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Leaves Apply</span>
+                    </NavLink> *@
+                    <NavLink class="nav-item-custom" href="/employee/wfh">
+                        <i class="bi bi-laptop"></i>
+                        <span>WFH</span>
+                    </NavLink>
+
                 </AuthorizeView>
 
                 <!-- FOOTER -->

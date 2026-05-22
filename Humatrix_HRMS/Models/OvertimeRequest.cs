@@ -20,6 +20,12 @@ namespace Humatrix_HRMS.Models
 
         public double RequestedHours { get; set; }
 
+        // Employee | HR | OrgAdmin
+        public string RequestedByRole { get; set; } = "Employee";
+
+        // HR | OrgAdmin
+        public string ApprovalLevel { get; set; } = "HR";
+
         public DateTime? ActualCheckOut { get; set; }
 
         public string Reason { get; set; } = string.Empty;

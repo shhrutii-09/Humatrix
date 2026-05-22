@@ -16,6 +16,10 @@
         /// <summary>Organisation-level hard cap on overtime per day.</summary>
         public const double MaxOvertimeHoursPerDay = 4.0;
 
+        public const int MaxCorrectionLookbackDays = 30;
+
+        public const int MaxWorkingDurationHours = 24;
+
         // ── Auto-checkout ─────────────────────────────────────────────────────────
         /// <summary>
         /// Grace window (hours) added after the maximum overtime window before the

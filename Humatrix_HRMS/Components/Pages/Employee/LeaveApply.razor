@@ -7,7 +7,7 @@
 @using Humatrix_HRMS.Helpers
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@attribute [Authorize(Roles = "Employee")]
+@attribute [Authorize(Roles = "Employee, HR")]
 @inject LeaveService LeaveService
 @inject CurrentUserService CurrentUser
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
@@ -274,27 +274,32 @@
     {
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-
-            leaveTypes = await db.LeaveTypes
-                .Where(x => x.IsActive)
-                .OrderBy(x => x.Name)
-                .ToListAsync();
-
-            balances = await LeaveService.GetMyBalancesAsync();
-
-            // Read-only data for UX day-count preview
+            // 1. Fetch the current user first so we have their OrganizationId
             var user = await CurrentUser.GetUserAsync();
+
             if (user?.OrganizationId != null)
             {
+                await using var db = await DbFactory.CreateDbContextAsync();
+
+                // 2. Fetch leave types scoped strictly to this user's organization
+                leaveTypes = await db.LeaveTypes
+                    .Where(x => x.IsActive && x.OrganizationId == user.OrganizationId)
+                    .OrderBy(x => x.Name)
+                    .ToListAsync();
+
+                // 3. Fetch holidays for this organization
                 holidays = await db.Holidays
                     .Where(h => h.OrganizationId == user.OrganizationId && !h.IsOptional)
                     .Select(h => h.Date.Date)
                     .ToListAsync();
 
+                // 4. Fetch the work week configuration for this organization
                 workWeek = await db.WorkWeeks
                     .FirstOrDefaultAsync(w => w.OrganizationId == user.OrganizationId);
             }
+
+            // 5. Fetch balances via the service
+            balances = await LeaveService.GetMyBalancesAsync();
         }
         catch (Exception ex)
         {

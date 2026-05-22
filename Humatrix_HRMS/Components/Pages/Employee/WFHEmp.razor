@@ -3,7 +3,7 @@
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "Employee")]
+@attribute [Authorize(Roles = "Employee , HR")]
 @inject WorkFromHomeService WfhService
 
 <PageTitle>Work From Home | Humatrix HRMS</PageTitle>

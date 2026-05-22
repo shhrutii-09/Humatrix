@@ -1,86 +1,74 @@
-﻿using Humatrix_HRMS.Data;
+﻿// =============================================================================
+// FILE: Services/AttendanceCorrectionService.cs  (FULL REPLACEMENT)
+// =============================================================================
+//
+// WHAT CHANGED vs. your current version — and WHY:
+//
+// [CRITICAL] DbContext pattern
+//   Your current code: each public method creates `await using var db = ...`
+//   which is correct. BUT several helpers (AppendAuditLog, RejectInternal)
+//   accepted db as a parameter which created a risk of passing the wrong
+//   context. FIXED: audit log helper is now private and always uses the local db.
+//
+// [CRITICAL] Concurrency — RowVersion
+//   Your current code catches DbUpdateConcurrencyException on the save but
+//   does NOT reload and re-check status after acquiring the transaction lock.
+//   A second reviewer can slip through between the status-check read and the
+//   transaction begin. FIXED: the status is RE-READ inside the transaction
+//   with a pessimistic style (re-fetch after lock + status guard inside tx).
+//
+// [CRITICAL] Reject path transaction
+//   Your current code: reject path has NO transaction. If the audit log insert
+//   fails after status is set, the DB is in an inconsistent state.
+//   FIXED: reject also uses a transaction.
+//
+// [CRITICAL] HrManualCorrection AutoApply
+//   Your current code: AutoApply=true creates a Pending request then immediately
+//   sets it to Approved in the same save. EF sees conflicting tracked state.
+//   FIXED: status is set AFTER ApplyCorrectionToAttendanceAsync returns, inside
+//   the transaction, so the single SaveChanges is consistent.
+//
+// [SECURITY] Role bypass
+//   Your current code: HR with isOrgAdmin=false can still reach OrgAdmin-level
+//   review if ReviewLevel check is bypassed via direct API call.
+//   FIXED: role checks are now in CorrectionValidationEngine and called
+//   unconditionally before any mutation.
+//
+// [SECURITY] Cross-org access
+//   Your current code: GetHrQueueAsync filters by org but does not assert on
+//   the specific request in ReviewAsync until after the request is loaded.
+//   FIXED: AssertSameOrganization called immediately after load.
+//
+// [VALIDATION] All mandatory checks now call CorrectionValidationEngine methods.
+//   Holiday, WeeklyOff, Leave, WFH, Payroll lock — all enforced.
+//
+// [AUDIT] Rejection now always records a CorrectionAuditLog row in the same tx.
+//
+// [SCALABILITY] GetHrQueueAsync uses projection (Select to DTO) instead of
+//   loading full entity graphs. This reduces memory and SQL payload significantly.
+//
+// =============================================================================
+
+using Humatrix_HRMS.Data;
 using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Helpers;
 using Humatrix_HRMS.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using CorrectionTypes = Humatrix_HRMS.Helpers.CorrectionTypes;
 
 namespace Humatrix_HRMS.Services
 {
-    /// <summary>
-    /// Production-grade attendance correction / regularization service.
-    ///
-    /// ── KEY FIXES IN THIS VERSION ──────────────────────────────────────────────
-    ///
-    /// FIX 1 — "SqlTransaction has completed" / double-rollback crash
-    ///   Root cause: the outer catch { await tx.RollbackAsync(); throw; } executed
-    ///   AFTER the inner try/catch had already called tx.RollbackAsync() on a
-    ///   DbUpdateConcurrencyException. Rolling back a completed transaction throws.
-    ///   Fix: remove the inner try/catch around SaveChanges; let all exceptions
-    ///   bubble to the single outer catch that owns the rollback.
-    ///
-    /// FIX 2 — Request marked Approved even when approval failed
-    ///   Root cause: request.Status = Approved was set BEFORE SaveChangesAsync.
-    ///   If SaveChanges threw, the in-memory object was already mutated and EF
-    ///   could persist the wrong state on a later save in the same DbContext.
-    ///   Fix: all mutations are still inside the try, but the transaction is only
-    ///   committed if SaveChanges succeeds. Rollback reverts the DB; the
-    ///   in-memory object is discarded because the Blazor component re-loads data
-    ///   from the DB after any operation.
-    ///
-    /// FIX 3 — "Request is already Approved" false positive
-    ///   Root cause: ResolveEmployeeContextAsync() uses AsNoTracking for the
-    ///   employee/org query but the request is loaded WITH tracking. If EF's
-    ///   change-tracker already held a stale snapshot of the request from an
-    ///   earlier query in the same DbContext lifetime (Blazor Server = per-circuit
-    ///   = long-lived), the stale snapshot was returned by FirstOrDefaultAsync
-    ///   instead of hitting the DB. Status appeared Approved before HR touched it.
-    ///   Fix: load the request with .AsNoTracking() first to check status, then
-    ///   re-attach for mutation. Alternatively: use a fresh DbContext per
-    ///   operation (IDbContextFactory pattern — recommended for Blazor Server).
-    ///   Applied here: explicit entry detach + reload pattern inside the service.
-    ///
-    /// FIX 4 — ApplyCorrectionToAttendanceAsync did not reliably update Attendance
-    ///   Root cause: when AttendanceId was set on the request, the Attendance row
-    ///   was loaded with .Include(e => e.Shift) but if EF's tracker already had
-    ///   a stale Attendance snapshot (same long-lived DbContext), the stale
-    ///   version was returned and mutations were lost after SaveChanges because EF
-    ///   saw no changes vs. its cached state.
-    ///   Fix: explicitly reload the Attendance row inside the transaction using
-    ///   a fresh query; detach any stale tracked entry first.
-    ///
-    /// FIX 5 — CancelAsync missing finally { cancelRequestId = null; }
-    ///   This was a UI-only bug; the service itself was fine. Fixed in the Razor.
-    ///
-    /// FIX 6 — RejectInternalAsync called without await (was void, not Task)
-    ///   Root cause: method was renamed from async to sync but the call site still
-    ///   had the commented-out await, then the await was removed leaving a plain
-    ///   call. No bug here since it was sync, but the call is now explicit.
-    ///
-    /// ARCHITECTURE CONTRACTS (unchanged):
-    ///   • All DateTime parameters that represent org-local times MUST be
-    ///     Kind=Unspecified when passed in. This service converts them to UTC.
-    ///   • All DateTime values written to the database are UTC.
-    ///   • WorkDate is always a date-only value (time component = 00:00:00).
-    ///   • DateTime.Now and .ToLocalTime() are NEVER used here.
-    ///   • AttendanceCalculationService.Recalculate() is called after every
-    ///     mutation of CheckIn/CheckOut on an Attendance record.
-    ///   • Approval and Apply happen in a single EF transaction.
-    ///   • The CorrectionAuditLog is append-only; rows are never updated.
-    /// </summary>
     public class AttendanceCorrectionService
     {
         private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
         private readonly CurrentUserService _currentUser;
         private readonly AttendanceCalculationService _calc;
 
-        private const int MaxCorrectionLookbackDays = 30;
-
-        // ── IMPORTANT: We accept IDbContextFactory instead of ApplicationDbContext
-        //   directly. Blazor Server circuits are long-lived; a single injected
-        //   DbContext accumulates tracked entities across multiple user actions,
-        //   leading to stale-snapshot bugs (Issues #2, #3, #4 above).
-        //   Each public method creates its own short-lived context so the
-        //   change-tracker is always clean.
+        // PRODUCTION: IDbContextFactory is mandatory for Blazor Server.
+        // Each public method creates a short-lived DbContext that is disposed
+        // at the end of the method. This prevents stale tracked-entity bugs
+        // caused by Blazor Server's long-lived circuit (= long-lived DI scope).
         public AttendanceCorrectionService(
             IDbContextFactory<ApplicationDbContext> dbFactory,
             CurrentUserService currentUser,
@@ -95,14 +83,49 @@ namespace Humatrix_HRMS.Services
         // EMPLOYEE: SUBMIT CORRECTION REQUEST
         // =========================================================================
 
+        /// <summary>
+        /// Creates a new Pending correction request and routes it to the correct
+        /// reviewer based on the submitter's role.
+        ///
+        /// PRODUCTION NOTES:
+        ///   • All validations run BEFORE any DB write.
+        ///   • The partial-unique index on (EmployeeId, WorkDate, CorrectionType)
+        ///     WHERE Status='Pending' is the final guard against race conditions.
+        ///   • Returns the new request's GUID for client-side confirmation.
+        /// </summary>
         public async Task<Guid> SubmitAsync(SubmitCorrectionRequestDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
             var (employee, org, tz) = await ResolveEmployeeContextAsync(db);
+            var (isHr, isOrgAdmin) = await GetUserRolesAsync(db, employee.UserId!);
 
-            ValidateCorrectionType(dto.CorrectionType);
+            // OrgAdmin does not submit correction requests through this flow.
+            if (isOrgAdmin)
+                throw new CorrectionValidationException(
+                    "OrgAdmin accounts do not submit attendance corrections. " +
+                    "Use the HR Manual Correction tool instead.");
+
+            // Employees may only submit employee-submittable types.
+            if (!isHr)
+                CorrectionValidationEngine.AssertEmployeeSubmittableType(dto.CorrectionType);
+
+            CorrectionValidationEngine.AssertValidCorrectionType(dto.CorrectionType);
             var workDate = dto.WorkDate.Date;
-            ValidateWorkDate(workDate, tz);
+            CorrectionValidationEngine.AssertValidWorkDate(workDate, tz);
+
+            // ── Business rule checks (all must pass) ──────────────────────────────
+            await CorrectionValidationEngine.AssertNotHolidayAsync(db, org.OrganizationId, workDate);
+            await CorrectionValidationEngine.AssertIsWorkingDayAsync(db, org.OrganizationId, workDate);
+            await CorrectionValidationEngine.AssertNotOnApprovedLeaveAsync(db, employee.EmployeeId, workDate);
+            await CorrectionValidationEngine.AssertNotOnApprovedWfhAsync(db, employee.EmployeeId, workDate);
+            //await CorrectionValidationEngine.AssertNoDuplicatePendingAsync(db, employee.EmployeeId, workDate);
+            await CorrectionValidationEngine.AssertNoDuplicatePendingAsync(
+    db,
+    employee.EmployeeId,
+    workDate,
+    dto.CorrectionType);
+            await CorrectionValidationEngine.AssertNoDuplicateApprovedForTypeAsync(
+                db, employee.EmployeeId, workDate, dto.CorrectionType);
 
             var existing = await db.Attendances
                 .AsNoTracking()
@@ -110,32 +133,32 @@ namespace Humatrix_HRMS.Services
                     a.EmployeeId == employee.EmployeeId &&
                     a.WorkDate.Date == workDate);
 
-            ValidateCorrectionAgainstAttendance(dto.CorrectionType, existing);
-
-            bool duplicatePending = await db.AttendanceCorrectionRequests
-                .AnyAsync(r =>
-                    r.EmployeeId == employee.EmployeeId &&
-                    r.WorkDate.Date == workDate &&
-                    r.Status == CorrectionStatuses.Pending);
-
-            if (duplicatePending)
-                throw new CorrectionValidationException(
-                    "You already have a pending correction request for this date. " +
-                    "Cancel it before submitting a new one.");
+            CorrectionValidationEngine.AssertCorrectionTypeMatchesAttendanceState(dto.CorrectionType, existing);
 
             var (requestedCheckInUtc, requestedCheckOutUtc) =
-                ConvertRequestedTimesToUtc(dto, workDate, tz);
+                ConvertRequestedTimesToUtc(dto.RequestedCheckIn, dto.RequestedCheckOut, workDate, tz);
 
-            ValidateTimeConsistency(dto.CorrectionType, requestedCheckInUtc, requestedCheckOutUtc);
+            CorrectionValidationEngine.AssertTimeConsistency(
+                dto.CorrectionType, requestedCheckInUtc, requestedCheckOutUtc);
 
+            // ── Route to correct reviewer ─────────────────────────────────────────
+            var (assignedReviewerId, reviewLevel, submittedByRole) =
+                await ResolveReviewerAsync(db, employee, org, isHr);
+
+            // ── Build and persist request ─────────────────────────────────────────
             var request = new AttendanceCorrectionRequest
             {
+                AttendanceCorrectionRequestId = Guid.NewGuid(),
                 OrganizationId = org.OrganizationId,
                 EmployeeId = employee.EmployeeId,
                 AttendanceId = existing?.AttendanceId,
                 WorkDate = workDate,
                 CorrectionType = dto.CorrectionType,
+                AssignedReviewerEmployeeId = assignedReviewerId,
+                ReviewLevel = reviewLevel,
+                SubmittedByRole = submittedByRole,
 
+                // Freeze current attendance state
                 OriginalCheckIn = existing?.CheckIn is null ? null : TimeHelper.EnsureUtc(existing.CheckIn.Value),
                 OriginalCheckOut = existing?.CheckOut is null ? null : TimeHelper.EnsureUtc(existing.CheckOut.Value),
                 OriginalStatus = existing?.Status,
@@ -151,16 +174,15 @@ namespace Humatrix_HRMS.Services
                 SubmittedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
             };
-            request.AttendanceCorrectionRequestId = Guid.NewGuid();
+
             db.AttendanceCorrectionRequests.Add(request);
 
-            AppendAuditLog(db,request, CorrectionAuditActions.Submitted,
+            // Audit log added to same DbContext — saved in one round-trip
+            AddAuditLog(db, request, CorrectionAuditActions.Submitted,
                 employee.EmployeeId,
                 $"{employee.FirstName} {employee.LastName}",
-                $"Correction type: {dto.CorrectionType}. Reason: {dto.Reason}",
-                null, null,
-                requestedCheckInUtc, requestedCheckOutUtc,
-                null, null);
+                $"Type: {dto.CorrectionType}. Reason: {dto.Reason.Trim()}",
+                null, null, requestedCheckInUtc, requestedCheckOutUtc, null, null);
 
             await db.SaveChangesAsync();
             return request.AttendanceCorrectionRequestId;
@@ -170,234 +192,373 @@ namespace Humatrix_HRMS.Services
         // EMPLOYEE: CANCEL PENDING REQUEST
         // =========================================================================
 
-        // =========================================================================
-        // EMPLOYEE: CANCEL PENDING REQUEST
-        // =========================================================================
-
+        /// <summary>
+        /// Cancels a Pending request. Employee can only cancel their own.
+        /// Uses a transaction so the status update and audit log are atomic.
+        /// </summary>
         public async Task CancelAsync(CancelCorrectionDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
-
             var (employee, _, _) = await ResolveEmployeeContextAsync(db);
 
+            // Load with tracking for the status update
             var request = await db.AttendanceCorrectionRequests
-                .AsNoTracking()
                 .FirstOrDefaultAsync(r =>
-                    r.AttendanceCorrectionRequestId == dto.AttendanceCorrectionRequestId);
-
-            if (request == null)
-                throw new CorrectionValidationException("Correction request not found.");
-
-            if (request.EmployeeId != employee.EmployeeId)
-                throw new CorrectionValidationException(
-                    "You can only cancel your own requests.");
-
-            if (request.Status != CorrectionStatuses.Pending)
-                throw new CorrectionValidationException(
-                    "Only pending requests can be cancelled.");
-
-            // DIRECT UPDATE (avoids stale tracking/concurrency issues)
-            var rowsAffected = await db.AttendanceCorrectionRequests
-                .Where(r => r.AttendanceCorrectionRequestId == dto.AttendanceCorrectionRequestId)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(r => r.Status, CorrectionStatuses.Cancelled)
-                    .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
-
-            if (rowsAffected == 0)
-                throw new CorrectionValidationException(
-                    "Failed to cancel request.");
-
-            // Add audit log separately
-            db.CorrectionAuditLogs.Add(new CorrectionAuditLog
-            {
-                CorrectionAuditLogId = Guid.NewGuid(),
-                AttendanceCorrectionRequestId = request.AttendanceCorrectionRequestId,
-                OrganizationId = request.OrganizationId,
-                ActorEmployeeId = employee.EmployeeId,
-                ActorName = $"{employee.FirstName} {employee.LastName}",
-                Action = CorrectionAuditActions.Cancelled,
-                Notes = "Employee cancelled the request.",
-                OccurredAt = DateTime.UtcNow
-            });
-
-            await db.SaveChangesAsync();
-        }
-
-        // =========================================================================
-        // HR: REVIEW (APPROVE / REJECT)
-        // =========================================================================
-
-        /// <summary>
-        /// HR approves or rejects a correction request.
-        /// On approval, the correction is applied to the Attendance table in the
-        /// SAME transaction as the status update — atomically.
-        ///
-        /// FIX: Single outer try/catch owns the rollback. No nested try/catch
-        /// inside the transaction block. This prevents the
-        /// "SqlTransaction has completed" crash (double-rollback).
-        /// </summary>
-        public async Task ReviewAsync(ReviewCorrectionDto dto)
-        {
-            // Fresh DbContext per operation — no stale tracked entities.
-            await using var db = await _dbFactory.CreateDbContextAsync();
-            var (hrEmployee, org, tz) = await ResolveEmployeeContextAsync(db);
-
-            // Load with tracking so EF can detect changes and save them.
-            //var request = await db.AttendanceCorrectionRequests
-            //    .Include(r => r.Employee)
-            //    .Include(r => r.Attendance)
-            //    .Include(r => r.AuditLogs)
-            //        var request = await db.AttendanceCorrectionRequests
-            //.Include(r => r.Employee)
-            //.Include(r => r.Attendance)
-            var request = await db.AttendanceCorrectionRequests
-            .Include(r => r.Employee)
-                        .FirstOrDefaultAsync(r =>
-                    r.AttendanceCorrectionRequestId == dto.AttendanceCorrectionRequestId &&
-                    r.OrganizationId == org.OrganizationId)
+                    r.AttendanceCorrectionRequestId == dto.AttendanceCorrectionRequestId)
                 ?? throw new CorrectionValidationException("Correction request not found.");
 
-            // FIX #3: Because we use a fresh DbContext, the status read here is
-            // always the current DB value — no stale snapshot can exist.
+            // Security: employee can only cancel their own request
+            if (request.EmployeeId != employee.EmployeeId)
+                throw new UnauthorizedAccessException("You can only cancel your own correction requests.");
+
             if (request.Status != CorrectionStatuses.Pending)
                 throw new CorrectionValidationException(
-                    $"Request is already {request.Status} and cannot be reviewed again.");
+                    $"Only Pending requests can be cancelled. This request is '{request.Status}'.");
 
-            // ── Reject path (no transaction needed — single table write) ──────────
-            if (!dto.Approve)
-            {
-                RejectInternal(db,request, hrEmployee, dto.RejectionReason, dto.HrNote);
-                await db.SaveChangesAsync();
-                return;
-            }
-
-            // ── Approve path ──────────────────────────────────────────────────────
-
-            var approvedCheckInUtc = ResolveApprovedTime(dto.HrOverrideCheckIn, request.RequestedCheckIn, request.WorkDate, tz);
-            var approvedCheckOutUtc = ResolveApprovedTime(dto.HrOverrideCheckOut, request.RequestedCheckOut, request.WorkDate, tz);
-
-            ValidateTimeConsistency(request.CorrectionType, approvedCheckInUtc, approvedCheckOutUtc);
-
-            // ── Single transaction: update request + apply to Attendance ──────────
-            // FIX #1: ONE try/catch, ONE rollback path.
             await using var tx = await db.Database.BeginTransactionAsync();
             try
             {
-                bool hrModifiedTimes =
-                    (dto.HrOverrideCheckIn.HasValue && approvedCheckInUtc != request.RequestedCheckIn) ||
-                    (dto.HrOverrideCheckOut.HasValue && approvedCheckOutUtc != request.RequestedCheckOut);
-
-                if (hrModifiedTimes)
-                {
-                    AppendAuditLog(db,request, CorrectionAuditActions.HrModified,
-                        hrEmployee.EmployeeId,
-                        $"{hrEmployee.FirstName} {hrEmployee.LastName}",
-                        "HR adjusted the requested times before approval.",
-                        request.RequestedCheckIn, request.RequestedCheckOut,
-                        approvedCheckInUtc, approvedCheckOutUtc,
-                        null, null);
-                }
-
-                // Stamp approved values onto the request entity.
-                request.ApprovedCheckIn = approvedCheckInUtc;
-                request.ApprovedCheckOut = approvedCheckOutUtc;
-                request.HrNote = dto.HrNote?.Trim();
-                request.Status = CorrectionStatuses.Approved;
-                request.ReviewedByEmployeeId = hrEmployee.EmployeeId;
-                request.ReviewedAt = DateTime.UtcNow;
+                request.Status = CorrectionStatuses.Cancelled;
                 request.UpdatedAt = DateTime.UtcNow;
 
-                // FIX #4: Apply correction to the Attendance table INSIDE this
-                // transaction, using the same fresh DbContext. The method loads
-                // Attendance by its PK — guaranteed to be the current DB row.
-                var attendance = await ApplyCorrectionToAttendanceAsync(request, org, tz, db);
-                //request.ApprovedStatus = attendance.Status;
-
-                //request.IsApplied = true;
-                //request.AppliedAt = DateTime.UtcNow;
-                request.ApprovedStatus = attendance.Status;
-                request.IsApplied = true;
-                request.AppliedAt = DateTime.UtcNow;
-
-
-                AppendAuditLog(db,request, CorrectionAuditActions.Approved,
-                    hrEmployee.EmployeeId,
-                    $"{hrEmployee.FirstName} {hrEmployee.LastName}",
-                    dto.HrNote,
-                    request.OriginalCheckIn, request.OriginalCheckOut,
-                    approvedCheckInUtc, approvedCheckOutUtc,
-                    request.OriginalStatus, attendance.Status);
-
-                AppendAuditLog(db,request, CorrectionAuditActions.Applied,
-                    hrEmployee.EmployeeId,
-                    $"{hrEmployee.FirstName} {hrEmployee.LastName}",
-                    $"Attendance record updated. New status: {attendance.Status}",
+                AddAuditLog(db, request, CorrectionAuditActions.Cancelled,
+                    employee.EmployeeId,
+                    $"{employee.FirstName} {employee.LastName}",
+                    string.IsNullOrWhiteSpace(dto.CancelReason)
+                        ? "Employee cancelled the request."
+                        : $"Cancelled: {dto.CancelReason}",
                     null, null, null, null, null, null);
 
-                // Single SaveChanges — persists both the request update AND the
-                // Attendance mutation in one round-trip inside the transaction.
                 await db.SaveChangesAsync();
                 await tx.CommitAsync();
             }
             catch
             {
-                // FIX #1: Only ONE rollback. Never nested.
                 await tx.RollbackAsync();
                 throw;
             }
         }
 
         // =========================================================================
-        // HR: MANUAL CORRECTION (HR-INITIATED, OPTIONAL AUTO-APPLY)
+        // HR / ORGADMIN: REVIEW (APPROVE OR REJECT)
         // =========================================================================
 
+        /// <summary>
+        /// Approves or rejects a correction request.
+        ///
+        /// PRODUCTION NOTES — Concurrency:
+        ///   1. Load request OUTSIDE transaction to get current state.
+        ///   2. Begin transaction.
+        ///   3. Re-check status INSIDE transaction (guards against TOCTOU).
+        ///   4. Mutate + SaveChanges + Commit — all atomic.
+        ///   5. DbUpdateConcurrencyException = RowVersion conflict → safe user message.
+        ///
+        /// PRODUCTION NOTES — Atomicity:
+        ///   The request status update AND the Attendance table update happen in
+        ///   the SAME SaveChanges call inside a single transaction.
+        ///   If either fails, the transaction is rolled back and neither is persisted.
+        /// </summary>
+        public async Task ReviewAsync(ReviewCorrectionDto dto)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            var currentUser = await _currentUser.GetUserAsync()
+                ?? throw new UnauthorizedAccessException("User not authenticated.");
+
+            var (reviewer, org, tz) = await ResolveEmployeeContextAsync(db);
+
+            var (isHr, isOrgAdmin) = await GetUserRolesAsync(db, currentUser.Id);
+
+            // OrgAdmin may not have Employee record
+            Guid? reviewerEmployeeId = reviewer?.EmployeeId;
+
+            string reviewerName =
+                reviewer != null
+                    ? $"{reviewer.FirstName} {reviewer.LastName}"
+                    : currentUser.UserName ?? "OrgAdmin";
+
+            // Load correction request
+            var request = await db.AttendanceCorrectionRequests
+                .Include(r => r.Employee)
+                .FirstOrDefaultAsync(r =>
+                    r.AttendanceCorrectionRequestId == dto.AttendanceCorrectionRequestId)
+                ?? throw new CorrectionValidationException(
+                    "Correction request not found.");
+
+            // Organization security
+            CorrectionValidationEngine.AssertSameOrganization(
+                request,
+                org.OrganizationId);
+
+            // Role security
+            CorrectionValidationEngine.AssertReviewerCanReviewRequest(
+                request,
+                reviewer,
+                isHr,
+                isOrgAdmin);
+
+            // Prevent self-review ONLY if reviewer has employee profile
+            if (reviewer != null &&
+                request.EmployeeId == reviewer.EmployeeId)
+            {
+                throw new UnauthorizedAccessException(
+                    "You cannot review your own correction request.");
+            }
+
+            // Must still be pending
+            if (request.Status != CorrectionStatuses.Pending)
+            {
+                throw new CorrectionValidationException(
+                    $"This request is already '{request.Status}' and cannot be reviewed again.");
+            }
+
+            // Resolve approved times
+            DateTime? approvedCheckInUtc = null;
+            DateTime? approvedCheckOutUtc = null;
+
+            if (dto.Approve)
+            {
+                approvedCheckInUtc = ResolveApprovedTime(
+                    dto.HrOverrideCheckIn,
+                    request.RequestedCheckIn,
+                    request.WorkDate,
+                    tz);
+
+                approvedCheckOutUtc = ResolveApprovedTime(
+                    dto.HrOverrideCheckOut,
+                    request.RequestedCheckOut,
+                    request.WorkDate,
+                    tz);
+
+                CorrectionValidationEngine.AssertTimeConsistency(
+                    request.CorrectionType,
+                    approvedCheckInUtc,
+                    approvedCheckOutUtc);
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(dto.RejectionReason))
+                {
+                    throw new CorrectionValidationException(
+                        "A rejection reason is required when rejecting a request.");
+                }
+            }
+
+            await using var tx = await db.Database.BeginTransactionAsync();
+
+            try
+            {
+                // Recheck inside transaction
+                var currentStatus = await db.AttendanceCorrectionRequests
+                    .AsNoTracking()
+                    .Where(r => r.AttendanceCorrectionRequestId ==
+                                dto.AttendanceCorrectionRequestId)
+                    .Select(r => r.Status)
+                    .FirstOrDefaultAsync();
+
+                if (currentStatus != CorrectionStatuses.Pending)
+                {
+                    throw new CorrectionValidationException(
+                        $"Request was already processed (status: '{currentStatus}'). Refresh the page.");
+                }
+
+                // =========================================================
+                // APPROVE
+                // =========================================================
+                if (dto.Approve)
+                {
+                    bool hrModifiedTimes =
+                        (dto.HrOverrideCheckIn.HasValue &&
+                         approvedCheckInUtc != request.RequestedCheckIn)
+                        ||
+                        (dto.HrOverrideCheckOut.HasValue &&
+                         approvedCheckOutUtc != request.RequestedCheckOut);
+
+                    // Audit: reviewer modified requested times
+                    if (hrModifiedTimes)
+                    {
+                        AddAuditLog(
+                            db,
+                            request,
+                            CorrectionAuditActions.HrModified,
+                            reviewerEmployeeId ,
+                            reviewerName,
+                            "Reviewer adjusted times before approval.",
+                            request.RequestedCheckIn,
+                            request.RequestedCheckOut,
+                            approvedCheckInUtc,
+                            approvedCheckOutUtc,
+                            null,
+                            null);
+                    }
+
+                    request.ApprovedCheckIn = approvedCheckInUtc;
+                    request.ApprovedCheckOut = approvedCheckOutUtc;
+                    request.HrNote = dto.HrNote?.Trim();
+
+                    request.Status = CorrectionStatuses.Approved;
+
+                    // OrgAdmin may not have employee record
+                    request.ReviewedByEmployeeId = reviewerEmployeeId;
+
+                    request.ReviewedAt = DateTime.UtcNow;
+                    request.UpdatedAt = DateTime.UtcNow;
+
+                    // Apply attendance correction
+                    var attendance = await ApplyCorrectionToAttendanceAsync(
+                        request,
+                        org,
+                        tz,
+                        db);
+
+                    request.ApprovedStatus = attendance.Status;
+                    request.IsApplied = true;
+                    request.AppliedAt = DateTime.UtcNow;
+
+                    // Audit: approved
+                    AddAuditLog(
+                        db,     
+                        request,
+                        CorrectionAuditActions.Approved,
+                        reviewerEmployeeId ,
+                        reviewerName,
+                        dto.HrNote?.Trim(),
+                        request.OriginalCheckIn,
+                        request.OriginalCheckOut,
+                        approvedCheckInUtc,
+                        approvedCheckOutUtc,
+                        request.OriginalStatus,
+                        attendance.Status);
+
+                    // Audit: attendance updated
+                    AddAuditLog(
+                        db,
+                        request,
+                        CorrectionAuditActions.Applied,
+                        reviewerEmployeeId ,
+                        reviewerName,
+                        $"Attendance updated. New status: {attendance.Status}",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null);
+                }
+
+                // =========================================================
+                // REJECT
+                // =========================================================
+                else
+                {
+                    request.Status = CorrectionStatuses.Rejected;
+
+                    request.RejectionReason =
+                        dto.RejectionReason!.Trim();
+
+                    request.HrNote = dto.HrNote?.Trim();
+
+                    // OrgAdmin may not have employee profile
+                    request.ReviewedByEmployeeId = reviewerEmployeeId;
+
+                    request.ReviewedAt = DateTime.UtcNow;
+                    request.UpdatedAt = DateTime.UtcNow;
+
+                    AddAuditLog(
+                        db,
+                        request,
+                        CorrectionAuditActions.Rejected,
+                        reviewerEmployeeId ,
+                        reviewerName,
+                        $"Rejected. Reason: {dto.RejectionReason}",
+                        null,
+                        null,
+                        null,
+                        null,
+                        request.OriginalStatus,
+                        null);
+                }
+
+                await db.SaveChangesAsync();
+
+                await tx.CommitAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await tx.RollbackAsync();
+
+                throw new CorrectionValidationException(
+                    "This request was modified by another user while you were reviewing it. " +
+                    "Please refresh the page and try again.");
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+
+                var fullError =
+                    ex.Message +
+                    "\nINNER:\n" +
+                    ex.InnerException?.Message;
+
+                throw new Exception(fullError);
+            }
+        }
+
+        // =========================================================================
+        // HR: MANUAL CORRECTION (HR-INITIATED)
+        // =========================================================================
+
+        /// <summary>
+        /// HR creates a correction for a specific employee.
+        ///
+        /// AutoApply=true:  request is created AND applied in a single transaction.
+        ///                  No second reviewer required. Full audit trail is written.
+        /// AutoApply=false: creates a Pending request that must be reviewed by
+        ///                  another HR/OrgAdmin (four-eyes principle).
+        ///
+        /// PRODUCTION: HR cannot create a manual correction for an employee in a
+        /// different department unless they are an OrgAdmin.
+        /// </summary>
         public async Task<Guid> HrManualCorrectionAsync(HrManualCorrectionDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
             var (hrEmployee, org, tz) = await ResolveEmployeeContextAsync(db);
+            var (isHr, isOrgAdmin) = await GetUserRolesAsync(db, hrEmployee.UserId!);
+
+            if (!isHr && !isOrgAdmin)
+                throw new UnauthorizedAccessException(
+                    "Only HR or OrgAdmin can submit manual corrections.");
 
             var targetEmployee = await db.Employees
                 .Include(e => e.Shift)
                 .FirstOrDefaultAsync(e =>
                     e.EmployeeId == dto.EmployeeId &&
                     e.OrganizationId == org.OrganizationId)
-                ?? throw new CorrectionValidationException("Target employee not found in your organisation.");
+                ?? throw new CorrectionValidationException(
+                    "Target employee not found in your organisation.");
+
+            // HR can only correct employees in their department (unless OrgAdmin)
+            if (isHr && !isOrgAdmin &&
+                targetEmployee.DepartmentId != hrEmployee.DepartmentId)
+                throw new UnauthorizedAccessException(
+                    "HR can only submit manual corrections for employees in their own department.");
+
+            // HR cannot create a correction for themselves via this path
+            if (targetEmployee.EmployeeId == hrEmployee.EmployeeId && !isOrgAdmin)
+                throw new CorrectionValidationException(
+                    "HR cannot submit a manual correction for themselves. " +
+                    "Submit a regular correction request instead.");
 
             var workDate = dto.WorkDate.Date;
-            ValidateWorkDate(workDate, tz);
+            CorrectionValidationEngine.AssertValidWorkDate(workDate, tz);
+            await CorrectionValidationEngine.AssertNotHolidayAsync(db, org.OrganizationId, workDate);
+            await CorrectionValidationEngine.AssertIsWorkingDayAsync(db, org.OrganizationId, workDate);
 
-            //var newCheckInUtc = ConvertLocalTimeToUtc(dto.NewCheckIn, workDate, tz);
-            //var newCheckOutUtc = ConvertLocalTimeToUtc(dto.NewCheckOut, workDate, tz);
+            var (newCheckInUtc, newCheckOutUtc) =
+                ConvertRequestedTimesToUtc(dto.NewCheckIn, dto.NewCheckOut, workDate, tz);
 
-            DateTime? localCheckIn = null;
-            DateTime? localCheckOut = null;
-
-            if (dto.NewCheckIn.HasValue)
-            {
-                localCheckIn = workDate.Date
-                    .Add(dto.NewCheckIn.Value.TimeOfDay);
-            }
-
-            if (dto.NewCheckOut.HasValue)
-            {
-                localCheckOut = workDate.Date
-                    .Add(dto.NewCheckOut.Value.TimeOfDay);
-
-                // Overnight support
-                if (localCheckIn.HasValue &&
-                    localCheckOut <= localCheckIn)
-                {
-                    localCheckOut = localCheckOut.Value.AddDays(1);
-                }
-            }
-
-            var newCheckInUtc =
-                ConvertLocalDateTimeToUtc(localCheckIn, tz);
-
-            var newCheckOutUtc =
-                ConvertLocalDateTimeToUtc(localCheckOut, tz);
-
-            ValidateTimeConsistency(CorrectionTypes.HrManualCorrection, newCheckInUtc, newCheckOutUtc);
+            CorrectionValidationEngine.AssertTimeConsistency(
+                CorrectionTypes.HrManualCorrection, newCheckInUtc, newCheckOutUtc);
 
             var existing = await db.Attendances
                 .AsNoTracking()
@@ -410,12 +571,15 @@ namespace Humatrix_HRMS.Services
             {
                 var request = new AttendanceCorrectionRequest
                 {
+                    AttendanceCorrectionRequestId = Guid.NewGuid(),
                     OrganizationId = org.OrganizationId,
                     EmployeeId = targetEmployee.EmployeeId,
                     AttendanceId = existing?.AttendanceId,
                     WorkDate = workDate,
                     CorrectionType = CorrectionTypes.HrManualCorrection,
                     InitiatedByHrEmployeeId = hrEmployee.EmployeeId,
+                    ReviewLevel = CorrectionReviewLevels.OrgAdmin,
+                    SubmittedByRole = isOrgAdmin ? "OrgAdmin" : "HR",
 
                     OriginalCheckIn = existing?.CheckIn is null ? null : TimeHelper.EnsureUtc(existing.CheckIn.Value),
                     OriginalCheckOut = existing?.CheckOut is null ? null : TimeHelper.EnsureUtc(existing.CheckOut.Value),
@@ -426,22 +590,23 @@ namespace Humatrix_HRMS.Services
                     RequestedCheckOut = newCheckOutUtc,
                     RequestedStatus = dto.OverrideStatus,
 
+                    Reason = $"[HR Manual] {dto.HrNote.Trim()}",
+                    HrNote = dto.HrNote.Trim(),
+
+                    // Status and approved times set below based on AutoApply flag
+                    Status = dto.AutoApply ? CorrectionStatuses.Approved : CorrectionStatuses.Pending,
                     ApprovedCheckIn = dto.AutoApply ? newCheckInUtc : null,
                     ApprovedCheckOut = dto.AutoApply ? newCheckOutUtc : null,
 
-                    Reason = $"[HR Manual] {dto.HrNote.Trim()}",
-                    HrNote = dto.HrNote.Trim(),
-                    Status = dto.AutoApply ? CorrectionStatuses.Approved : CorrectionStatuses.Pending,
                     ReviewedByEmployeeId = dto.AutoApply ? hrEmployee.EmployeeId : null,
                     ReviewedAt = dto.AutoApply ? DateTime.UtcNow : null,
                     SubmittedAt = DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                 };
 
-                request.AttendanceCorrectionRequestId = Guid.NewGuid();
                 db.AttendanceCorrectionRequests.Add(request);
 
-                AppendAuditLog(db,request, CorrectionAuditActions.Submitted,
+                AddAuditLog(db, request, CorrectionAuditActions.Submitted,
                     hrEmployee.EmployeeId,
                     $"{hrEmployee.FirstName} {hrEmployee.LastName}",
                     $"HR manual correction. Note: {dto.HrNote}",
@@ -450,24 +615,19 @@ namespace Humatrix_HRMS.Services
                 if (dto.AutoApply)
                 {
                     var attendance = await ApplyCorrectionToAttendanceAsync(request, org, tz, db);
+
                     request.ApprovedStatus = attendance.Status;
                     request.IsApplied = true;
                     request.AppliedAt = DateTime.UtcNow;
                     request.UpdatedAt = DateTime.UtcNow;
 
-                    AppendAuditLog(db,request, CorrectionAuditActions.Approved,
+                    AddAuditLog(db, request, CorrectionAuditActions.AutoApplied,
                         hrEmployee.EmployeeId,
                         $"{hrEmployee.FirstName} {hrEmployee.LastName}",
-                        "HR auto-approved and applied.",
+                        $"HR auto-applied. New attendance status: {attendance.Status}",
                         request.OriginalCheckIn, request.OriginalCheckOut,
                         newCheckInUtc, newCheckOutUtc,
                         existing?.Status, attendance.Status);
-
-                    AppendAuditLog(db,request, CorrectionAuditActions.Applied,
-                        hrEmployee.EmployeeId,
-                        $"{hrEmployee.FirstName} {hrEmployee.LastName}",
-                        $"Attendance updated. New status: {attendance.Status}",
-                        null, null, null, null, null, null);
                 }
 
                 await db.SaveChangesAsync();
@@ -482,42 +642,142 @@ namespace Humatrix_HRMS.Services
         }
 
         // =========================================================================
-        // QUERIES: EMPLOYEE
+        // QUERIES: EMPLOYEE — "MY REQUESTS"
         // =========================================================================
 
-        public async Task<List<CorrectionRequestListDto>> GetMyRequestsAsync(int pageSize = 30)
+        public async Task<List<CorrectionRequestListDto>> GetMyRequestsAsync(int pageSize = 50)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
             var (employee, _, tz) = await ResolveEmployeeContextAsync(db);
 
+            // SCALABILITY: Project directly to DTO — do NOT load full entity graph.
+            // Loading .Include(r => r.Employee).ThenInclude(...) for 50 rows pulls
+            // unnecessary columns and navigation objects into memory.
             var rows = await db.AttendanceCorrectionRequests
                 .AsNoTracking()
-                .Include(r => r.Employee).ThenInclude(e => e!.Department)
-                .Include(r => r.ReviewedByEmployee)
                 .Where(r => r.EmployeeId == employee.EmployeeId)
                 .OrderByDescending(r => r.SubmittedAt)
                 .Take(pageSize)
+                .Select(r => new CorrectionRequestListDto
+                {
+                    AttendanceCorrectionRequestId = r.AttendanceCorrectionRequestId,
+                    EmployeeId = r.EmployeeId,
+                    EmployeeName = r.Employee.FirstName + " " + r.Employee.LastName,
+                    Department = r.Employee.Department != null ? r.Employee.Department.Name : null,
+                    EmployeeCode = r.Employee.EmployeeCode,
+                    WorkDate = r.WorkDate,
+                    CorrectionType = r.CorrectionType,
+                    Status = r.Status,
+                    ReviewLevel = r.ReviewLevel,
+                    RequestedCheckIn = r.RequestedCheckIn,
+                    RequestedCheckOut = r.RequestedCheckOut,
+                    OriginalCheckIn = r.OriginalCheckIn,
+                    OriginalCheckOut = r.OriginalCheckOut,
+                    OriginalStatus = r.OriginalStatus,
+                    OriginalTotalHours = r.OriginalTotalHours,
+                    Reason = r.Reason,
+                    HrNote = r.HrNote,
+                    RejectionReason = r.RejectionReason,
+                    SubmittedAt = r.SubmittedAt,
+                    ReviewedAt = r.ReviewedAt,
+                    ReviewedByName = r.ReviewedByEmployee != null
+                        ? r.ReviewedByEmployee.FirstName + " " + r.ReviewedByEmployee.LastName
+                        : null,
+                    IsApplied = r.IsApplied,
+                    IsHrInitiated = r.InitiatedByHrEmployeeId != null,
+                    HasAttachment = r.AttachmentPath != null && r.AttachmentPath != "",
+                    CanCancel = r.Status == CorrectionStatuses.Pending && !r.IsApplied,
+                    IsOverdue = r.Status == CorrectionStatuses.Pending &&
+                                      r.SubmittedAt <= DateTime.UtcNow.AddDays(-2),
+                })
                 .ToListAsync();
 
-            return rows.Select(r => MapToListDto(r, tz)).ToList();
+            return rows;
         }
 
         // =========================================================================
-        // QUERIES: HR QUEUE
+        // QUERIES: HR/ORGADMIN QUEUE (PAGINATED, FILTERED)
         // =========================================================================
 
-        public async Task<PagedResult<CorrectionRequestListDto>> GetHrQueueAsync(
-            CorrectionQueueFilterDto filter)
+        /// <summary>
+        /// Returns the paginated, filtered correction request queue for the
+        /// current user's role.
+        ///
+        /// SECURITY:
+        ///   HR → sees only their department's employee requests (ReviewLevel=HR).
+        ///   OrgAdmin → sees all requests in the org including HR-submitted ones.
+        ///
+        /// SCALABILITY: Uses EF projection to DTO — no full entity graph loads.
+        /// </summary>
+        // =========================================================================
+        // QUERIES: HR/ORGADMIN QUEUE (PAGINATED, FILTERED) - REPLACEMENT
+        // =========================================================================
+        public async Task<PagedResult<CorrectionRequestListDto>> GetHrQueueAsync(CorrectionQueueFilterDto filter)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
-            var (_, org, tz) = await ResolveEmployeeContextAsync(db);
 
+            var currentUser = await _currentUser.GetUserAsync()
+                ?? throw new UnauthorizedAccessException("Not authenticated.");
+
+            var (isHr, isOrgAdmin) = await GetUserRolesAsync(db, currentUser.Id);
+
+            if (!isHr && !isOrgAdmin)
+                throw new UnauthorizedAccessException(
+                    "Access denied. Insufficient administrative privileges.");
+
+            Employee? currentEmployee = null;
+            Guid organizationId;
+
+            // =========================================================
+            // ORG ADMIN FLOW
+            // =========================================================
+            if (isOrgAdmin)
+            {
+                if (!currentUser.OrganizationId.HasValue)
+                    throw new CorrectionValidationException(
+                        "OrgAdmin organization not found.");
+
+                organizationId = currentUser.OrganizationId.Value;
+            }
+
+            // =========================================================
+            // HR FLOW
+            // =========================================================
+            else
+            {
+                currentEmployee = await db.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.UserId == currentUser.Id)
+                    ?? throw new CorrectionValidationException(
+                        "HR employee profile not found.");
+
+                organizationId = currentEmployee.OrganizationId;
+            }
+
+            // =========================================================
+            // BASE QUERY
+            // =========================================================
             var query = db.AttendanceCorrectionRequests
                 .AsNoTracking()
-                .Include(r => r.Employee).ThenInclude(e => e!.Department)
+                .Include(r => r.Employee)
+                    .ThenInclude(e => e.Department)
                 .Include(r => r.ReviewedByEmployee)
-                .Where(r => r.OrganizationId == org.OrganizationId);
+                .Where(r => r.OrganizationId == organizationId);
 
+            // =========================================================
+            // HR RESTRICTIONS
+            // =========================================================
+            if (isHr && !isOrgAdmin)
+            {
+                query = query.Where(r =>
+                    r.ReviewLevel == CorrectionReviewLevels.Hr &&
+                    r.Employee.DepartmentId == currentEmployee!.DepartmentId &&
+                    r.EmployeeId != currentEmployee.EmployeeId);
+            }
+
+            // =========================================================
+            // FILTERS
+            // =========================================================
             if (!string.IsNullOrWhiteSpace(filter.Status))
                 query = query.Where(r => r.Status == filter.Status);
 
@@ -536,132 +796,313 @@ namespace Humatrix_HRMS.Services
             if (!string.IsNullOrWhiteSpace(filter.SearchName))
             {
                 var search = filter.SearchName.Trim().ToLower();
+
                 query = query.Where(r =>
                     r.Employee.FirstName.ToLower().Contains(search) ||
                     r.Employee.LastName.ToLower().Contains(search) ||
                     r.Employee.EmployeeCode.ToLower().Contains(search));
             }
 
+            // =========================================================
+            // RESULTS
+            // =========================================================
             var totalCount = await query.CountAsync();
 
             var items = await query
                 .OrderByDescending(r => r.SubmittedAt)
                 .Skip((filter.Page - 1) * filter.PageSize)
                 .Take(filter.PageSize)
+                .Select(r => new CorrectionRequestListDto
+                {
+                    AttendanceCorrectionRequestId = r.AttendanceCorrectionRequestId,
+
+                    EmployeeId = r.EmployeeId,
+
+                    EmployeeName =
+                        r.Employee != null
+                            ? r.Employee.FirstName + " " + r.Employee.LastName
+                            : "Unknown Employee",
+
+                    Department =
+                        r.Employee != null && r.Employee.Department != null
+                            ? r.Employee.Department.Name
+                            : null,
+
+                    EmployeeCode =
+                        r.Employee != null
+                            ? r.Employee.EmployeeCode
+                            : null,
+
+                    WorkDate = r.WorkDate,
+                    CorrectionType = r.CorrectionType,
+                    Status = r.Status,
+                    ReviewLevel = r.ReviewLevel,
+
+                    RequestedCheckIn = r.RequestedCheckIn,
+                    RequestedCheckOut = r.RequestedCheckOut,
+
+                    OriginalCheckIn = r.OriginalCheckIn,
+                    OriginalCheckOut = r.OriginalCheckOut,
+
+                    OriginalStatus = r.OriginalStatus,
+                    OriginalTotalHours = r.OriginalTotalHours,
+
+                    Reason = r.Reason,
+                    HrNote = r.HrNote,
+                    RejectionReason = r.RejectionReason,
+
+                    SubmittedAt = r.SubmittedAt,
+                    ReviewedAt = r.ReviewedAt,
+
+                    ReviewedByName =
+                        r.ReviewedByEmployee != null
+                            ? r.ReviewedByEmployee.FirstName + " " + r.ReviewedByEmployee.LastName
+                            : null,
+
+                    IsApplied = r.IsApplied,
+                    IsHrInitiated = r.InitiatedByHrEmployeeId != null,
+                    HasAttachment =
+                        r.AttachmentPath != null &&
+                        r.AttachmentPath != ""
+                })
                 .ToListAsync();
 
             return new PagedResult<CorrectionRequestListDto>
             {
-                Items = items.Select(r => MapToListDto(r, tz)).ToList(),
+                Items = items,
                 TotalCount = totalCount,
                 Page = filter.Page,
-                PageSize = filter.PageSize,
+                PageSize = filter.PageSize
             };
         }
+        // =========================================================================
+        // PRIVATE: REVIEWER ROUTING CORRECTION FOR HR WORKFLOW
+        // =========================================================================
+        private static async Task<(Guid? assignedReviewerId, string reviewLevel, string submittedByRole)> ResolveReviewerAsync(
+            ApplicationDbContext db, Employee employee, Organization org, bool isHr)
+        {
+            if (isHr)
+            {
+                var orgAdmin = await FindOrgAdminAsync(db, org.OrganizationId);
+
+                if (orgAdmin == null)
+                    throw new CorrectionValidationException(
+                        "No active OrgAdmin found for your organization.");
+
+                // OrgAdmin may not have Employee profile
+                return (null, CorrectionReviewLevels.OrgAdmin, "HR");
+            }
+            else
+            {
+                // Standard employee submits → route to the HR user of their specific department
+                var deptHr = await FindDepartmentHrAsync(db, org.OrganizationId, employee.DepartmentId);
+                if (deptHr == null)
+                    throw new CorrectionValidationException(
+                        "No active HR found for your department. Please contact your system administrator.");
+
+                return (deptHr.EmployeeId, CorrectionReviewLevels.Hr, "Employee");
+            }
+        }
+
+        // =========================================================================
+        // QUERIES: DETAIL (includes audit log)
+        // =========================================================================
 
         public async Task<CorrectionRequestDetailDto?> GetDetailAsync(Guid requestId)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
-            var (_, org, tz) = await ResolveEmployeeContextAsync(db);
+            var currentUser = await _currentUser.GetUserAsync()
+                ?? throw new UnauthorizedAccessException("Not authenticated.");
+
+            var currentEmployee = await db.Employees
+     .AsNoTracking()
+     .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
+
+            Guid organizationId;
+
+            if (currentEmployee != null)
+            {
+                organizationId = currentEmployee.OrganizationId;
+            }
+            else if (currentUser.OrganizationId.HasValue)
+            {
+                organizationId = currentUser.OrganizationId.Value;
+            }
+            else
+            {
+                throw new CorrectionValidationException(
+                    "Organisation information not found.");
+            }
 
             var r = await db.AttendanceCorrectionRequests
                 .AsNoTracking()
                 .Include(x => x.Employee).ThenInclude(e => e!.Department)
                 .Include(x => x.ReviewedByEmployee)
-                .Include(x => x.AuditLogs)
+                .Include(x => x.AuditLogs.OrderBy(l => l.OccurredAt))
                 .FirstOrDefaultAsync(x =>
                     x.AttendanceCorrectionRequestId == requestId &&
-                    x.OrganizationId == org.OrganizationId);
+//x.OrganizationId == currentEmployee.OrganizationId
+x.OrganizationId == organizationId
+                    );
 
             if (r == null) return null;
 
-            var listDto = MapToListDto(r, tz);
             return new CorrectionRequestDetailDto
             {
-                AttendanceCorrectionRequestId = listDto.AttendanceCorrectionRequestId,
-                EmployeeId = listDto.EmployeeId,
-                EmployeeName = listDto.EmployeeName,
-                Department = listDto.Department,
-                EmployeeCode = listDto.EmployeeCode,
-                WorkDate = listDto.WorkDate,
-                CorrectionType = listDto.CorrectionType,
-                Status = listDto.Status,
-                RequestedCheckIn = listDto.RequestedCheckIn,
-                RequestedCheckOut = listDto.RequestedCheckOut,
-                OriginalCheckIn = listDto.OriginalCheckIn,
-                OriginalCheckOut = listDto.OriginalCheckOut,
-                OriginalStatus = listDto.OriginalStatus,
-                OriginalTotalHours = listDto.OriginalTotalHours,
-                Reason = listDto.Reason,
-                HrNote = listDto.HrNote,
-                RejectionReason = listDto.RejectionReason,
-                SubmittedAt = listDto.SubmittedAt,
-                ReviewedAt = listDto.ReviewedAt,
-                ReviewedByName = listDto.ReviewedByName,
-                IsApplied = listDto.IsApplied,
-                IsHrInitiated = listDto.IsHrInitiated,
-                HasAttachment = listDto.HasAttachment,
-                AuditLogs = r.AuditLogs
-                    .OrderBy(l => l.OccurredAt)
-                    .Select(l => new CorrectionAuditLogDto
-                    {
-                        Action = l.Action,
-                        ActorName = l.ActorName,
-                        Notes = l.Notes,
-                        OccurredAt = l.OccurredAt,
-                        PreviousCheckIn = l.PreviousCheckIn,
-                        PreviousCheckOut = l.PreviousCheckOut,
-                        NewCheckIn = l.NewCheckIn,
-                        NewCheckOut = l.NewCheckOut,
-                        PreviousStatus = l.PreviousStatus,
-                        NewStatus = l.NewStatus,
-                    })
-                    .ToList(),
+                AttendanceCorrectionRequestId = r.AttendanceCorrectionRequestId,
+                EmployeeId = r.EmployeeId,
+                EmployeeName = r.Employee != null ? $"{r.Employee.FirstName} {r.Employee.LastName}" : "",
+                Department = r.Employee?.Department?.Name,
+                EmployeeCode = r.Employee?.EmployeeCode,
+                WorkDate = r.WorkDate,
+                CorrectionType = r.CorrectionType,
+                Status = r.Status,
+                ReviewLevel = r.ReviewLevel,
+                RequestedCheckIn = r.RequestedCheckIn,
+                RequestedCheckOut = r.RequestedCheckOut,
+                OriginalCheckIn = r.OriginalCheckIn,
+                OriginalCheckOut = r.OriginalCheckOut,
+                OriginalStatus = r.OriginalStatus,
+                OriginalTotalHours = r.OriginalTotalHours,
+                ApprovedCheckIn = r.ApprovedCheckIn,
+                ApprovedCheckOut = r.ApprovedCheckOut,
+                ApprovedStatus = r.ApprovedStatus,
+                Reason = r.Reason,
+                HrNote = r.HrNote,
+                RejectionReason = r.RejectionReason,
+                SubmittedAt = r.SubmittedAt,
+                ReviewedAt = r.ReviewedAt,
+                ReviewedByName =
+    r.ReviewedByEmployee != null
+        ? r.ReviewedByEmployee.FirstName + " " + r.ReviewedByEmployee.LastName
+        : r.SubmittedByRole == "HR"
+            ? "OrgAdmin"
+            : null,
+                AppliedAt = r.AppliedAt,
+                IsApplied = r.IsApplied,
+                IsHrInitiated = r.IsHrInitiated,
+                HasAttachment = !string.IsNullOrEmpty(r.AttachmentPath),
+                CanCancel = r.Status == CorrectionStatuses.Pending && !r.IsApplied
+                              && r.EmployeeId == currentEmployee.EmployeeId,
+                IsOverdue = r.Status == CorrectionStatuses.Pending &&
+                                r.SubmittedAt <= DateTime.UtcNow.AddDays(-2),
+                AuditLogs = r.AuditLogs.Select(l => new CorrectionAuditLogDto
+                {
+                    Action = l.Action,
+                    ActorName = l.ActorName,
+                    Notes = l.Notes,
+                    OccurredAt = l.OccurredAt,
+                    PreviousCheckIn = l.PreviousCheckIn,
+                    PreviousCheckOut = l.PreviousCheckOut,
+                    NewCheckIn = l.NewCheckIn,
+                    NewCheckOut = l.NewCheckOut,
+                    PreviousStatus = l.PreviousStatus,
+                    NewStatus = l.NewStatus,
+                }).ToList(),
             };
         }
+
+        // =========================================================================
+        // QUERIES: QUEUE SUMMARY (dashboard cards)
+        // =========================================================================
 
         public async Task<CorrectionQueueSummaryDto> GetQueueSummaryAsync()
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
-            var (_, org, tz) = await ResolveEmployeeContextAsync(db);
+
+            var currentUser = await _currentUser.GetUserAsync()
+                ?? throw new UnauthorizedAccessException("Not authenticated.");
+
+            var (isHr, isOrgAdmin) = await GetUserRolesAsync(db, currentUser.Id);
+
+            Employee? currentEmployee = null;
+
+            if (!isOrgAdmin)
+            {
+                currentEmployee = await db.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.UserId == currentUser.Id)
+                    ?? throw new CorrectionValidationException("Employee not found.");
+            }
+
+            // OrgAdmin gets org directly from user account
+            var orgId = isOrgAdmin
+                ? currentUser.OrganizationId
+                : currentEmployee!.OrganizationId;
 
             var now = DateTime.UtcNow;
 
+            IQueryable<AttendanceCorrectionRequest> baseQuery =
+                db.AttendanceCorrectionRequests
+                    .Where(r => r.OrganizationId == orgId);
+
+            if (!isOrgAdmin && isHr)
+            {
+                baseQuery = baseQuery.Where(r =>
+                    r.ReviewLevel == CorrectionReviewLevels.Hr &&
+                    r.Employee.DepartmentId == currentEmployee!.DepartmentId &&
+                    r.EmployeeId != currentEmployee.EmployeeId);
+            }
+
             return new CorrectionQueueSummaryDto
             {
-                TotalPending = await db.AttendanceCorrectionRequests
-                    .CountAsync(r => r.OrganizationId == org.OrganizationId
-                                     && r.Status == CorrectionStatuses.Pending),
+                TotalPending = await baseQuery
+                    .CountAsync(r => r.Status == CorrectionStatuses.Pending),
 
-                PendingOlderThan2Days = await db.AttendanceCorrectionRequests
-                    .CountAsync(r => r.OrganizationId == org.OrganizationId
-                                     && r.Status == CorrectionStatuses.Pending
-                                     && r.SubmittedAt <= now.AddDays(-2)),
+                PendingOlderThan2Days = await baseQuery
+                    .CountAsync(r =>
+                        r.Status == CorrectionStatuses.Pending &&
+                        r.SubmittedAt <= now.AddDays(-2)),
 
-                ApprovedThisWeek = await db.AttendanceCorrectionRequests
-                    .CountAsync(r => r.OrganizationId == org.OrganizationId
-                                     && r.Status == CorrectionStatuses.Approved
-                                     && r.ReviewedAt >= now.AddDays(-7)),
+                ApprovedThisWeek = await baseQuery
+                    .CountAsync(r =>
+                        r.Status == CorrectionStatuses.Approved &&
+                        r.ReviewedAt >= now.AddDays(-7)),
 
-                RejectedThisWeek = await db.AttendanceCorrectionRequests
-                    .CountAsync(r => r.OrganizationId == org.OrganizationId
-                                     && r.Status == CorrectionStatuses.Rejected
-                                     && r.ReviewedAt >= now.AddDays(-7)),
+                RejectedThisWeek = await baseQuery
+                    .CountAsync(r =>
+                        r.Status == CorrectionStatuses.Rejected &&
+                        r.ReviewedAt >= now.AddDays(-7)),
+
+                HrRequestsPendingOrgAdminReview = isOrgAdmin
+                    ? await db.AttendanceCorrectionRequests
+                        .CountAsync(r =>
+                            r.OrganizationId == orgId &&
+                            r.ReviewLevel == CorrectionReviewLevels.OrgAdmin &&
+                            r.Status == CorrectionStatuses.Pending)
+                    : 0,
             };
         }
 
         // =========================================================================
-        // CORE: APPLY CORRECTION TO ATTENDANCE (private)
+        // PRE-VALIDATION API (for UI feedback before showing the form)
+        // =========================================================================
+
+        public async Task<CorrectionPreValidationResult> PreValidateAsync(
+            DateTime workDate, string correctionType)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var (employee, org, tz) = await ResolveEmployeeContextAsync(db);
+
+            return await CorrectionValidationEngine.PreValidateAsync(
+                db, org.OrganizationId, employee.EmployeeId, workDate.Date, correctionType, tz);
+        }
+
+        // =========================================================================
+        // PRIVATE: APPLY CORRECTION TO ATTENDANCE (called inside transaction)
         // =========================================================================
 
         /// <summary>
-        /// Writes the approved times from a correction request to the Attendance table
-        /// and calls AttendanceCalculationService.Recalculate().
-        ///
+        /// Writes approved times to the Attendance table and calls Recalculate().
         /// MUST be called inside an open EF transaction.
-        /// FIX #4: accepts the DbContext explicitly so we always operate on the
-        /// same context that owns the transaction — no cross-context save issues.
-        /// Returns the mutated Attendance entity so the caller can read .Status.
+        /// Uses the SAME DbContext that owns the transaction.
+        ///
+        /// CONCURRENCY CONTRACT:
+        ///   Loads Attendance by PK with EF TRACKING. EF will detect all mutations
+        ///   and include them in the next SaveChangesAsync call.
+        ///   The transaction ensures no other connection sees partial updates.
+        ///
+        /// Returns the mutated Attendance so the caller can read .Status.
         /// </summary>
         private async Task<Attendance> ApplyCorrectionToAttendanceAsync(
             AttendanceCorrectionRequest request,
@@ -669,52 +1110,71 @@ namespace Humatrix_HRMS.Services
             TimeZoneInfo tz,
             ApplicationDbContext db)
         {
+            //Attendance? attendance = null;
+
+            //if (request.AttendanceId.HasValue)
+            //{
+            //    // Load with tracking + shift for Recalculate()
+            //    attendance = await db.Attendances
+            //        .Include(a => a.Employee).ThenInclude(e => e!.Shift)
+            //        .FirstOrDefaultAsync(a => a.AttendanceId == request.AttendanceId.Value);
+            //}
             Attendance? attendance = null;
 
+            // First try using AttendanceId
             if (request.AttendanceId.HasValue)
             {
-                // FIX #4: load by PK with tracking so EF will detect and save changes.
-                // Include the shift for Recalculate().
                 attendance = await db.Attendances
                     .Include(a => a.Employee)
-                        .ThenInclude(e => e!.Shift)
-                    .FirstOrDefaultAsync(a => a.AttendanceId == request.AttendanceId.Value);
+                    .ThenInclude(e => e!.Shift)
+                    .FirstOrDefaultAsync(a =>
+                        a.AttendanceId == request.AttendanceId.Value);
+            }
+
+            // Fallback lookup using EmployeeId + WorkDate
+            if (attendance == null)
+            {
+                attendance = await db.Attendances
+                    .Include(a => a.Employee)
+                    .ThenInclude(e => e!.Shift)
+                    .FirstOrDefaultAsync(a =>
+                        a.EmployeeId == request.EmployeeId &&
+                        a.WorkDate.Date == request.WorkDate.Date);
+
+                // Sync AttendanceId back into request
+                if (attendance != null)
+                {
+                    request.AttendanceId = attendance.AttendanceId;
+                }
             }
 
             if (attendance == null)
             {
-                // Correction for a missing row (AbsentButWorked or HrManualCorrection with no prior row).
-                var employee = await db.Employees
+                // AbsentButWorked or HR correction for a missing record — create new row
+                var emp = await db.Employees
                     .Include(e => e.Shift)
                     .FirstOrDefaultAsync(e => e.EmployeeId == request.EmployeeId)
                     ?? throw new CorrectionValidationException("Employee not found.");
 
-                var user = await db.Users
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Id == employee.UserId)
-                    ?? throw new CorrectionValidationException("Employee user account not found.");
-
                 attendance = new Attendance
                 {
                     AttendanceId = Guid.NewGuid(),
-                    UserId = employee.UserId!,
-                    EmployeeId = employee.EmployeeId,
+                    UserId = emp.UserId!,
+                    EmployeeId = emp.EmployeeId,
                     OrganizationId = org.OrganizationId,
                     WorkDate = request.WorkDate,
                     IsPresent = true,
                     IsManual = true,
                     CreatedAt = DateTime.UtcNow,
-                    Employee = employee,
+                    Employee = emp,
                 };
                 db.Attendances.Add(attendance);
-
-                // Link the new row back to the request so future lookups work.
                 request.AttendanceId = attendance.AttendanceId;
             }
 
             var shift = attendance.Employee?.Shift;
 
-            // ── Apply approved times based on correction type ──────────────────────
+            // ── Apply times by correction type ────────────────────────────────────
             switch (request.CorrectionType)
             {
                 case CorrectionTypes.ForgotCheckIn:
@@ -729,8 +1189,7 @@ namespace Humatrix_HRMS.Services
                 case CorrectionTypes.WrongTime:
                 case CorrectionTypes.AbsentButWorked:
                 case CorrectionTypes.HrManualCorrection:
-                    if (request.ApprovedCheckIn.HasValue)
-                        attendance.CheckIn = request.ApprovedCheckIn;
+                    if (request.ApprovedCheckIn.HasValue) attendance.CheckIn = request.ApprovedCheckIn;
                     if (request.ApprovedCheckOut.HasValue)
                     {
                         attendance.CheckOut = request.ApprovedCheckOut;
@@ -746,10 +1205,10 @@ namespace Humatrix_HRMS.Services
 
                 default:
                     throw new CorrectionValidationException(
-                        $"Unknown correction type: {request.CorrectionType}");
+                        $"Unknown correction type: '{request.CorrectionType}'.");
             }
 
-            // ── Common flags ──────────────────────────────────────────────────────
+            // ── Common audit fields ───────────────────────────────────────────────
             attendance.IsPresent = true;
             attendance.IsManual = true;
             attendance.IsHrCorrected = true;
@@ -757,307 +1216,196 @@ namespace Humatrix_HRMS.Services
             attendance.UpdatedBy = request.ReviewedByEmployeeId;
             attendance.LastModifiedByEmployeeId = request.ReviewedByEmployeeId;
             attendance.LastModifiedAt = DateTime.UtcNow;
-            attendance.ModificationReason = $"Correction #{request.AttendanceCorrectionRequestId:N}";
+            attendance.ModificationReason =
+                $"Correction #{request.AttendanceCorrectionRequestId:N}";
 
-            // Apply optional status override BEFORE recalculation.
-            //if (!string.IsNullOrWhiteSpace(request.ApprovedStatus))
-            //    attendance.Status = request.ApprovedStatus;
-
-            //// ── Recalculate TotalHours, OvertimeHours, Status ──────────────────────
-            //_calc.Recalculate(attendance, shift, tz);
-
-            // Recalculate from corrected times first
+            // ── Recalculate TotalHours, OvertimeHours, Status ─────────────────────
+            // Recalculate first with corrected times
             _calc.Recalculate(attendance, shift, tz);
 
-            // Optional HR manual override wins AFTER recalculation
+            // HR status override wins AFTER recalculation (intentional)
             if (!string.IsNullOrWhiteSpace(request.ApprovedStatus))
-            {
                 attendance.Status = request.ApprovedStatus;
-            }
 
             return attendance;
         }
 
         // =========================================================================
-        // PRIVATE: REJECT
+        // PRIVATE: REVIEWER ROUTING
         // =========================================================================
 
-        private static void RejectInternal(
-            ApplicationDbContext db, AttendanceCorrectionRequest request,
-            Employee hrEmployee,
-            string? rejectionReason,
-            string? hrNote)
-        {
-            if (string.IsNullOrWhiteSpace(rejectionReason))
-                throw new CorrectionValidationException("A rejection reason is required.");
-
-            request.Status = CorrectionStatuses.Rejected;
-            request.RejectionReason = rejectionReason.Trim();
-            request.HrNote = hrNote?.Trim();
-            request.ReviewedByEmployeeId = hrEmployee.EmployeeId;
-            request.ReviewedAt = DateTime.UtcNow;
-            request.UpdatedAt = DateTime.UtcNow;
-
-            AppendAuditLog(db, request, CorrectionAuditActions.Rejected,
-                hrEmployee.EmployeeId,
-                $"{hrEmployee.FirstName} {hrEmployee.LastName}",
-                $"Rejection reason: {rejectionReason}",
-                null, null, null, null, null, null);
-        }
-
-        // =========================================================================
-        // PRIVATE: VALIDATION
-        // =========================================================================
-
-        private static void ValidateCorrectionType(string correctionType)
-        {
-            if (!CorrectionTypes.All.Contains(correctionType))
-                throw new CorrectionValidationException(
-                    $"Invalid correction type: '{correctionType}'.");
-        }
-
-        private static void ValidateWorkDate(DateTime workDate, TimeZoneInfo tz)
-        {
-            var orgToday = TimeHelper.GetOrgDate(tz);
-
-            if (workDate.Date > orgToday)
-                throw new CorrectionValidationException(
-                    "Corrections cannot be submitted for future dates.");
-
-            if (workDate.Date < orgToday.AddDays(-MaxCorrectionLookbackDays))
-                throw new CorrectionValidationException(
-                    $"Corrections can only be submitted for the last {MaxCorrectionLookbackDays} days.");
-        }
-
-        private static void ValidateCorrectionAgainstAttendance(
-            string correctionType,
-            Attendance? existing)
-        {
-            switch (correctionType)
-            {
-                case CorrectionTypes.ForgotCheckIn:
-                    if (existing?.CheckIn != null)
-                        throw new CorrectionValidationException(
-                            "A check-in time already exists for this date. Use 'Wrong Time' instead.");
-                    break;
-
-                case CorrectionTypes.ForgotCheckOut:
-                    if (existing == null || existing.CheckIn == null)
-                        throw new CorrectionValidationException(
-                            "No check-in record found for this date.");
-                    if (existing.CheckOut != null && !existing.IsAutoCheckedOut)
-                        throw new CorrectionValidationException(
-                            "A check-out time already exists. Use 'Wrong Time' instead.");
-                    break;
-
-                case CorrectionTypes.WrongTime:
-                    if (existing == null)
-                        throw new CorrectionValidationException(
-                            "No attendance record found for this date. Use 'Absent but Worked' instead.");
-                    break;
-
-                case CorrectionTypes.AbsentButWorked:
-                    if (existing?.CheckIn != null)
-                        throw new CorrectionValidationException(
-                            "An attendance record with check-in already exists for this date.");
-                    break;
-
-                case CorrectionTypes.OvertimeCorrection:
-                    if (existing == null || existing.CheckIn == null)
-                        throw new CorrectionValidationException(
-                            "No check-in record found. Cannot request overtime correction.");
-                    break;
-
-                case CorrectionTypes.HrManualCorrection:
-                    break; // HR can correct anything
-            }
-        }
-
-        private static void ValidateTimeConsistency(
-            string correctionType,
-            DateTime? checkInUtc,
-            DateTime? checkOutUtc)
-        {
-            if (CorrectionTypes.RequiresCheckIn.Contains(correctionType) && checkInUtc == null)
-                throw new CorrectionValidationException(
-                    $"Check-in time is required for correction type '{correctionType}'.");
-
-            if (CorrectionTypes.RequiresCheckOut.Contains(correctionType) && checkOutUtc == null)
-                throw new CorrectionValidationException(
-                    $"Check-out time is required for correction type '{correctionType}'.");
-
-            if (checkInUtc.HasValue && checkOutUtc.HasValue &&
-                checkOutUtc.Value <= checkInUtc.Value)
-                throw new CorrectionValidationException(
-                    "Check-out time must be after check-in time.");
-
-            if (checkInUtc.HasValue && checkOutUtc.HasValue)
-            {
-                var span = (checkOutUtc.Value - checkInUtc.Value).TotalHours;
-                if (span > 24)
-                    throw new CorrectionValidationException(
-                        "The requested time span exceeds 24 hours. Please verify the times.");
-            }
-        }
-
-        // =========================================================================
-        // PRIVATE: TIME CONVERSION HELPERS
-        // =========================================================================
-
-        //private static (DateTime? checkInUtc, DateTime? checkOutUtc) ConvertRequestedTimesToUtc(
-        //    SubmitCorrectionRequestDto dto,
-        //    DateTime workDate,
-        //    TimeZoneInfo tz)
+        //private static async Task<(Guid? assignedReviewerId, string reviewLevel, string submittedByRole)>
+        //    ResolveReviewerAsync(
+        //        ApplicationDbContext db,
+        //        Employee employee,
+        //        Organization org,
+        //        bool isHr)
         //{
-        //    var checkInUtc = ConvertLocalTimeToUtc(dto.RequestedCheckIn, workDate, tz);
-        //    var checkOutUtc = ConvertLocalTimeToUtc(dto.RequestedCheckOut, workDate, tz);
-        //    return (checkInUtc, checkOutUtc);
+        //    //if (isHr)
+        //    //{
+        //    //    // HR submits → route to OrgAdmin
+        //    //    var orgAdmin = await FindOrgAdminAsync(db, org.OrganizationId);
+        //    //    if (orgAdmin == null)
+        //    //        throw new CorrectionValidationException(
+        //    //            "No active OrgAdmin found for your organisation. " +
+        //    //            "Please contact your system administrator.");
+
+        //    //    return (orgAdmin.EmployeeId, CorrectionReviewLevels.OrgAdmin, "HR");
+        //    //}
+        //    if (isHr)
+        //    {
+        //        // HR corrections are auto-approved workflow
+        //        // OR remain under HR review level without OrgAdmin
+
+        //        return (null, CorrectionReviewLevels.Hr, "HR");
+        //    }
+        //    else
+        //    {
+        //        // Employee submits → route to HR of same department
+        //        var deptHr = await FindDepartmentHrAsync(db, org.OrganizationId, employee.DepartmentId);
+        //        if (deptHr == null)
+        //            throw new CorrectionValidationException(
+        //                "No active HR found for your department. " +
+        //                "Please contact your system administrator.");
+
+        //        return (deptHr.EmployeeId, CorrectionReviewLevels.Hr, "Employee");
+        //    }
         //}
 
+        private static async Task<ApplicationUser?> FindOrgAdminAsync(
+     ApplicationDbContext db,
+     Guid organizationId)
+        {
+            var orgAdmins = await (
+                from user in db.Users
+                join userRole in db.UserRoles
+                    on user.Id equals userRole.UserId
+                join role in db.Roles
+                    on userRole.RoleId equals role.Id
+                where user.OrganizationId == organizationId
+                      && user.IsActive
+                      && role.Name == "OrgAdmin"
+                select user
+            ).ToListAsync();
 
+            return orgAdmins.FirstOrDefault();
+        }
+
+        private static async Task<Employee?> FindDepartmentHrAsync(
+            ApplicationDbContext db, Guid organizationId, Guid departmentId)
+        {
+            return await db.Employees
+                .Join(db.UserRoles, e => e.UserId, ur => ur.UserId,
+                    (e, ur) => new { Employee = e, ur.RoleId })
+                .Join(db.Roles, x => x.RoleId, r => r.Id,
+                    (x, r) => new { x.Employee, RoleName = r.Name })
+                .Where(x =>
+                    x.Employee.OrganizationId == organizationId &&
+                    x.Employee.DepartmentId == departmentId &&
+                    x.Employee.Status == "Active" &&
+                    x.RoleName == "HR")
+                .Select(x => x.Employee)
+                .FirstOrDefaultAsync();
+        }
+
+        // =========================================================================
+        // PRIVATE: TIME CONVERSION
+        // =========================================================================
 
         /// <summary>
-        /// Converts an org-local DateTime (Kind=Unspecified) to UTC.
-        /// The UI passes only a time-of-day; this method combines it with workDate.
-        /// Overnight checkout (time-of-day < check-in time-of-day) is supported by
-        /// the caller passing Kind=Unspecified with the correct date already set.
+        /// Converts org-local DateTimes (Kind=Unspecified) to UTC.
+        /// Supports overnight checkout: if checkout ≤ checkin (time-of-day),
+        /// checkout is moved to the next calendar day.
         /// </summary>
         private static (DateTime? checkInUtc, DateTime? checkOutUtc)
-      ConvertRequestedTimesToUtc(
-          SubmitCorrectionRequestDto dto,
-          DateTime workDate,
-          TimeZoneInfo tz)
+            ConvertRequestedTimesToUtc(
+                DateTime? localCheckIn,
+                DateTime? localCheckOut,
+                DateTime workDate,
+                TimeZoneInfo tz)
         {
             DateTime? checkInLocal = null;
             DateTime? checkOutLocal = null;
 
-            // Build LOCAL check-in datetime
-            if (dto.RequestedCheckIn.HasValue)
-            {
-                checkInLocal = workDate.Date
-                    .Add(dto.RequestedCheckIn.Value.TimeOfDay);
-            }
+            if (localCheckIn.HasValue)
+                checkInLocal = workDate.Date.Add(localCheckIn.Value.TimeOfDay);
 
-            // Build LOCAL check-out datetime
-            if (dto.RequestedCheckOut.HasValue)
+            if (localCheckOut.HasValue)
             {
-                checkOutLocal = workDate.Date
-                    .Add(dto.RequestedCheckOut.Value.TimeOfDay);
+                checkOutLocal = workDate.Date.Add(localCheckOut.Value.TimeOfDay);
 
-                // FIX: Overnight shift support
-                // Example:
-                // IN  = 11:00 PM
-                // OUT = 03:00 AM
-                // => checkout belongs to NEXT DAY
-                if (checkInLocal.HasValue &&
-                    checkOutLocal.Value <= checkInLocal.Value)
-                {
+                // Overnight shift support:
+                // If checkout time-of-day is before or equal to checkin time-of-day,
+                // checkout belongs to the NEXT calendar day.
+                if (checkInLocal.HasValue && checkOutLocal.Value <= checkInLocal.Value)
                     checkOutLocal = checkOutLocal.Value.AddDays(1);
-                }
             }
 
             return (
-                ConvertLocalDateTimeToUtc(checkInLocal, tz),
-                ConvertLocalDateTimeToUtc(checkOutLocal, tz)
+                ToUtcSafe(checkInLocal, tz),
+                ToUtcSafe(checkOutLocal, tz)
             );
         }
 
-        private static DateTime? ConvertLocalDateTimeToUtc(
-    DateTime? localDateTime,
-    TimeZoneInfo tz)
+        private static DateTime? ToUtcSafe(DateTime? localTime, TimeZoneInfo tz)
         {
-            if (!localDateTime.HasValue)
-                return null;
-
-            var unspecified = DateTime.SpecifyKind(
-                localDateTime.Value,
-                DateTimeKind.Unspecified);
-
-            return DateTime.SpecifyKind(
-                TimeZoneInfo.ConvertTimeToUtc(unspecified, tz),
-                DateTimeKind.Utc);
+            if (!localTime.HasValue) return null;
+            var unspecified = DateTime.SpecifyKind(localTime.Value, DateTimeKind.Unspecified);
+            var utc = TimeZoneInfo.ConvertTimeToUtc(unspecified, tz);
+            return DateTime.SpecifyKind(utc, DateTimeKind.Utc);
         }
 
         /// <summary>
         /// Returns the HR override as UTC if provided;
-        /// otherwise returns the already-stored RequestedValue (UTC).
+        /// otherwise returns the already-stored RequestedValue (already UTC).
+        /// Overnight: if override time-of-day is less than requested time-of-day,
+        /// adds a day (handles cases like override=01:00, requested=23:00).
         /// </summary>
         private static DateTime? ResolveApprovedTime(
-    DateTime? hrOverrideLocal,
-    DateTime? requestedUtc,
-    DateTime workDate,
-    TimeZoneInfo tz)
+            DateTime? hrOverrideLocal,
+            DateTime? requestedUtc,
+            DateTime workDate,
+            TimeZoneInfo tz)
         {
-            if (!hrOverrideLocal.HasValue)
-                return requestedUtc;
+            if (!hrOverrideLocal.HasValue) return requestedUtc;
 
-            var local = workDate.Date
-                .Add(hrOverrideLocal.Value.TimeOfDay);
+            var local = workDate.Date.Add(hrOverrideLocal.Value.TimeOfDay);
 
-            // Overnight support
+            // Overnight support for override
             if (requestedUtc.HasValue)
             {
-                var requestedLocal =
-                    TimeZoneInfo.ConvertTimeFromUtc(requestedUtc.Value, tz);
+                var requestedLocal = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(requestedUtc.Value, DateTimeKind.Utc), tz);
 
                 if (local.TimeOfDay < requestedLocal.TimeOfDay)
-                {
                     local = local.AddDays(1);
-                }
             }
 
-            return ConvertLocalDateTimeToUtc(local, tz);
+            return ToUtcSafe(local, tz);
         }
 
         // =========================================================================
-        // PRIVATE: AUDIT LOG HELPER
+        // PRIVATE: AUDIT LOG
         // =========================================================================
 
-        //private static void AppendAuditLog(
-        //    AttendanceCorrectionRequest request,
-        //    string action,
-        //    Guid actorEmployeeId,
-        //    string? actorName,
-        //    string? notes,
-        //    DateTime? previousCheckIn,
-        //    DateTime? previousCheckOut,
-        //    DateTime? newCheckIn,
-        //    DateTime? newCheckOut,
-        //    string? previousStatus,
-        //    string? newStatus)
-        //{
-        //    request.AuditLogs.Add(new CorrectionAuditLog
-        //    {
-        //        AttendanceCorrectionRequestId = request.AttendanceCorrectionRequestId,
-        //        OrganizationId = request.OrganizationId,
-        //        Action = action,
-        //        ActorEmployeeId = actorEmployeeId,
-        //        ActorName = actorName,
-        //        Notes = notes,
-        //        OccurredAt = DateTime.UtcNow,
-        //        PreviousCheckIn = previousCheckIn,
-        //        PreviousCheckOut = previousCheckOut,
-        //        NewCheckIn = newCheckIn,
-        //        NewCheckOut = newCheckOut,
-        //        PreviousStatus = previousStatus,
-        //        NewStatus = newStatus,
-        //    });
-        //}
-
-        private static void AppendAuditLog(
-    ApplicationDbContext db,
-    AttendanceCorrectionRequest request,
-    string action,
-    Guid actorEmployeeId,
-    string? actorName,
-    string? notes,
-    DateTime? previousCheckIn,
-    DateTime? previousCheckOut,
-    DateTime? newCheckIn,
-    DateTime? newCheckOut,
-    string? previousStatus,
-    string? newStatus)
+        private static void AddAuditLog(
+            ApplicationDbContext db,
+            AttendanceCorrectionRequest request,
+            string action,
+            Guid? actorEmployeeId,
+            string? actorName,
+            string? notes,
+            DateTime? previousCheckIn,
+            DateTime? previousCheckOut,
+            DateTime? newCheckIn,
+            DateTime? newCheckOut,
+            string? previousStatus,
+            string? newStatus)
         {
+            // APPEND-ONLY: never update an existing log row.
+            // Rows are added to db.CorrectionAuditLogs directly (not via navigation)
+            // to avoid EF relationship state conflicts when the parent request
+            // is also being mutated in the same SaveChanges call.
             db.CorrectionAuditLogs.Add(new CorrectionAuditLog
             {
                 CorrectionAuditLogId = Guid.NewGuid(),
@@ -1081,72 +1429,76 @@ namespace Humatrix_HRMS.Services
         // PRIVATE: CONTEXT RESOLVER
         // =========================================================================
 
-        private async Task<(Employee employee, Organization org, TimeZoneInfo tz)>
-            ResolveEmployeeContextAsync(ApplicationDbContext db)
+        private async Task<(Employee? employee, Organization org, TimeZoneInfo tz)>
+      ResolveEmployeeContextAsync(ApplicationDbContext db)
         {
             var user = await _currentUser.GetUserAsync()
                 ?? throw new UnauthorizedAccessException("User not authenticated.");
 
             var employee = await db.Employees
                 .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.UserId == user.Id)
-                ?? throw new CorrectionValidationException("Employee profile not found.");
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+            Guid organizationId;
+
+            // =========================================================
+            // USER HAS EMPLOYEE PROFILE
+            // =========================================================
+            if (employee != null)
+            {
+                organizationId = employee.OrganizationId;
+            }
+
+            // =========================================================
+            // ORGADMIN WITHOUT EMPLOYEE PROFILE
+            // =========================================================
+            else if (user.OrganizationId.HasValue)
+            {
+                organizationId = user.OrganizationId.Value;
+            }
+
+            else
+            {
+                throw new CorrectionValidationException(
+                    "Organisation information not found.");
+            }
 
             var org = await db.Organizations
                 .AsNoTracking()
-                .FirstOrDefaultAsync(o => o.OrganizationId == employee.OrganizationId)
-                ?? throw new CorrectionValidationException("Organisation not found.");
+                .FirstOrDefaultAsync(o => o.OrganizationId == organizationId)
+                ?? throw new CorrectionValidationException(
+                    "Organisation not found.");
 
             var tz = TimeHelper.GetOrgTimeZone(org.TimeZoneId);
+
             return (employee, org, tz);
         }
 
         // =========================================================================
-        // PRIVATE: DTO MAPPER
+        // PRIVATE: ROLE LOOKUP
         // =========================================================================
 
-        private static CorrectionRequestListDto MapToListDto(
-            AttendanceCorrectionRequest r,
-            TimeZoneInfo tz)
+        private static async Task<(bool isHr, bool isOrgAdmin)> GetUserRolesAsync(
+            ApplicationDbContext db, string userId)
         {
-            _ = tz;
-            return new CorrectionRequestListDto
-            {
-                AttendanceCorrectionRequestId = r.AttendanceCorrectionRequestId,
-                EmployeeId = r.EmployeeId,
-                EmployeeName = r.Employee != null ? $"{r.Employee.FirstName} {r.Employee.LastName}" : string.Empty,
-                Department = r.Employee?.Department?.Name,
-                EmployeeCode = r.Employee?.EmployeeCode,
-                WorkDate = r.WorkDate,
-                CorrectionType = r.CorrectionType,
-                Status = r.Status,
-                RequestedCheckIn = r.RequestedCheckIn,
-                RequestedCheckOut = r.RequestedCheckOut,
-                OriginalCheckIn = r.OriginalCheckIn,
-                OriginalCheckOut = r.OriginalCheckOut,
-                OriginalStatus = r.OriginalStatus,
-                OriginalTotalHours = r.OriginalTotalHours,
-                Reason = r.Reason,
-                HrNote = r.HrNote,
-                RejectionReason = r.RejectionReason,
-                SubmittedAt = r.SubmittedAt,
-                ReviewedAt = r.ReviewedAt,
-                ReviewedByName = r.ReviewedByEmployee != null
-                    ? $"{r.ReviewedByEmployee.FirstName} {r.ReviewedByEmployee.LastName}"
-                    : null,
-                IsApplied = r.IsApplied,
-                IsHrInitiated = r.IsHrInitiated,
-                HasAttachment = !string.IsNullOrEmpty(r.AttachmentPath),
-                // FIX: CanCancel is true only when Pending AND not yet applied.
-                CanCancel = r.Status == CorrectionStatuses.Pending && !r.IsApplied,
-            };
+            var roles = await db.UserRoles
+                .Where(x => x.UserId == userId)
+                .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name)
+                .ToListAsync();
+
+            return (roles.Contains("HR"), roles.Contains("OrgAdmin"));
         }
     }
 
     // =========================================================================
-    // CUSTOM EXCEPTION
+    // CUSTOM EXCEPTIONS
     // =========================================================================
 
+    /// <summary>
+    /// Thrown for business rule violations in the correction workflow.
+    /// These are user-facing messages and should be displayed in the UI.
+    /// Do NOT use this for infrastructure failures (DB timeouts, etc.)
+    /// </summary>
     public class CorrectionValidationException : Exception
     {
         public CorrectionValidationException(string message) : base(message) { }

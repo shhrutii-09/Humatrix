@@ -27,7 +27,13 @@ namespace Humatrix_HRMS.Models
 
         // "Pending" | "Approved" | "Rejected" | "Cancelled"
         public string Status { get; set; } = "Pending";
+        // LeaveRequest.cs — ADD THIS FIELD after the Status field
 
+        /// <summary>
+        /// Role of the person who submitted this leave ("Employee", "HR", "OrgAdmin").
+        /// Used for routing notifications to the correct approver.
+        /// </summary>
+        public string ApplicantRole { get; set; } = "Employee";
         public Guid? ApprovedBy { get; set; }
         public DateTime AppliedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ReviewedAt { get; set; }

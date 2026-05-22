@@ -11,9 +11,7 @@ namespace Humatrix_HRMS.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly CurrentUserService _currentUser;
-
         private readonly HRPolicyValidationService _policy;
-
         private readonly NotificationService _notificationService;
         private readonly IHubContext<NotificationHub> _hubContext;
 
@@ -22,9 +20,7 @@ namespace Humatrix_HRMS.Services
             CurrentUserService currentUser,
             HRPolicyValidationService policy,
             NotificationService notificationService,
-            IHubContext<NotificationHub> hubContext
-
-            )
+            IHubContext<NotificationHub> hubContext)
         {
             _context = context;
             _currentUser = currentUser;
@@ -32,6 +28,7 @@ namespace Humatrix_HRMS.Services
             _notificationService = notificationService;
             _hubContext = hubContext;
         }
+
         // ─────────────────────────────────────
         // APPLY
         // ─────────────────────────────────────
@@ -41,20 +38,44 @@ namespace Humatrix_HRMS.Services
                 ?? throw new Exception("Unauthorized");
 
             var employee = await _context.Employees
+                .Include(e => e.Department)
                 .FirstOrDefaultAsync(e => e.UserId == user.Id)
                 ?? throw new Exception("Employee not found");
 
+            // GET USER ROLES
+            var userRoles = await _context.UserRoles
+                .Where(x => x.UserId == user.Id)
+                .Join(
+                    _context.Roles,
+                    ur => ur.RoleId,
+                    r => r.Id,
+                    (ur, r) => r.Name)
+                .ToListAsync();
+
+            var isHr = userRoles.Contains("HR");
+            var isOrgAdmin = userRoles.Contains("OrgAdmin");
+
+            var requesterRole =
+                isOrgAdmin ? "OrgAdmin" :
+                isHr ? "HR" :
+                "Employee";
+
             var orgId = employee.OrganizationId;
+
             var orgToday = await _policy.GetOrgTodayAsync(orgId);
 
+            // PAST DATE CHECK
             if (request.Date.Date < orgToday)
                 throw new Exception("Cannot apply for past date");
 
-            // ── CENTRAL POLICY CHECK ──────────────────────────────────────────────────
-            // Checks: holiday, non-working day, leave conflict
-            await _policy.AssertEmployeeCanActAsync(orgId, employee.EmployeeId, request.Date, "WFH");
+            // CENTRAL POLICY CHECK
+            await _policy.AssertEmployeeCanActAsync(
+                orgId,
+                employee.EmployeeId,
+                request.Date,
+                "WFH");
 
-            // ── Duplicate WFH guard ───────────────────────────────────────────────────
+            // DUPLICATE WFH CHECK
             var wfhExists = await _context.WorkFromHomeRequests.AnyAsync(w =>
                 w.EmployeeId == employee.EmployeeId &&
                 w.Date.Date == request.Date.Date &&
@@ -64,7 +85,7 @@ namespace Humatrix_HRMS.Services
             if (wfhExists)
                 throw new Exception("WFH already applied for this date");
 
-            // ── Existing attendance guard ─────────────────────────────────────────────
+            // ATTENDANCE ALREADY EXISTS
             var attendanceExists = await _context.Attendances.AnyAsync(a =>
                 a.EmployeeId == employee.EmployeeId &&
                 a.WorkDate == request.Date);
@@ -72,56 +93,132 @@ namespace Humatrix_HRMS.Services
             if (attendanceExists)
                 throw new Exception("Attendance already marked for this date");
 
+            // SAVE REQUEST
             request.EmployeeId = employee.EmployeeId;
             request.Status = "Pending";
             request.AppliedAt = DateTime.UtcNow;
 
+            //request.RequestedByRole = requesterRole;
+
+            //request.ApprovalLevel =
+            //    requesterRole == "HR"
+            //        ? "OrgAdmin"
+            //        : "HR";
+
+            request.RequestedByRole = requesterRole;
+
+            request.ApprovalLevel =
+                requesterRole == "HR"
+                    ? "OrgAdmin"
+                    : "HR";
+
+            // SAFETY FOR OLD DATA CONSISTENCY
+            if (string.IsNullOrWhiteSpace(request.RequestedByRole))
+            {
+                request.RequestedByRole = "Employee";
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ApprovalLevel))
+            {
+                request.ApprovalLevel = "HR";
+            }
+
             _context.WorkFromHomeRequests.Add(request);
+
             await _context.SaveChangesAsync();
 
-            // =========================
-            // NOTIFY HR ONLY
-            // =========================
+            // ==========================================
+            // NOTIFICATIONS
+            // ==========================================
 
-            var hrUsers = await _context.Users
-                .Where(u => u.OrganizationId == employee.OrganizationId)
-                .ToListAsync();
-
-            foreach (var hr in hrUsers)
+            // ==========================================
+            // EMPLOYEE REQUEST -> HR OF SAME DEPARTMENT
+            // ==========================================
+            if (requesterRole == "Employee")
             {
-                var roles = await _context.UserRoles
-                    .Where(x => x.UserId == hr.Id)
-                    .Join(
-                        _context.Roles,
-                        ur => ur.RoleId,
-                        r => r.Id,
-                        (ur, r) => r.Name)
+                var hrUsers = await _context.Users
+                    .Where(u => u.OrganizationId == employee.OrganizationId)
                     .ToListAsync();
 
-                if (roles.Contains("HR"))
+                foreach (var hr in hrUsers)
                 {
+                    var roles = await _context.UserRoles
+                        .Where(x => x.UserId == hr.Id)
+                        .Join(
+                            _context.Roles,
+                            ur => ur.RoleId,
+                            r => r.Id,
+                            (ur, r) => r.Name)
+                        .ToListAsync();
+
+                    if (!roles.Contains("HR"))
+                        continue;
+
+                    var hrEmployee = await _context.Employees
+                        .FirstOrDefaultAsync(e => e.UserId == hr.Id);
+
+                    if (hrEmployee == null)
+                        continue;
+
+                    // SAME DEPARTMENT ONLY
+                    if (hrEmployee.DepartmentId != employee.DepartmentId)
+                        continue;
+
                     await _notificationService.CreateNotificationAsync(
                         hr.Id,
-
                         "New WFH Request",
-
                         $"{employee.FirstName} {employee.LastName} applied for Work From Home",
-
                         "/hr/wfh"
                     );
 
-                    // LIVE SIGNALR NOTIFICATION
                     await _hubContext.Clients.User(hr.Id)
                         .SendAsync("ReceiveNotification");
                 }
             }
 
+            // ==========================================
+            // HR REQUEST -> ORGADMIN
+            // ==========================================
+            else if (requesterRole == "HR")
+            {
+                var orgAdmins = await _context.Users
+                    .Where(u => u.OrganizationId == employee.OrganizationId)
+                    .ToListAsync();
+
+                foreach (var admin in orgAdmins)
+                {
+                    var roles = await _context.UserRoles
+                        .Where(x => x.UserId == admin.Id)
+                        .Join(
+                            _context.Roles,
+                            ur => ur.RoleId,
+                            r => r.Id,
+                            (ur, r) => r.Name)
+                        .ToListAsync();
+
+                    if (!roles.Contains("OrgAdmin"))
+                        continue;
+
+                    await _notificationService.CreateNotificationAsync(
+                        admin.Id,
+                        "New WFH Request",
+                        $"{employee.FirstName} {employee.LastName} applied for Work From Home",
+                        "/hr/wfh"
+                    );
+
+                    await _hubContext.Clients.User(admin.Id)
+                        .SendAsync("ReceiveNotification");
+                }
+            }
         }
 
         // ─────────────────────────────────────
         // APPROVE / REJECT
         // ─────────────────────────────────────
-        public async Task UpdateStatusAsync(Guid id, string status, string? reason = null)
+        public async Task UpdateStatusAsync(
+            Guid id,
+            string status,
+            string? reason = null)
         {
             if (status != "Approved" && status != "Rejected")
                 throw new Exception("Invalid status");
@@ -131,15 +228,52 @@ namespace Humatrix_HRMS.Services
 
             var req = await _context.WorkFromHomeRequests
                 .Include(r => r.Employee)
+                .ThenInclude(e => e.Department)
                 .FirstOrDefaultAsync(r => r.Id == id)
                 ?? throw new Exception("Request not found");
 
+            // ORG SECURITY
             if (req.Employee.OrganizationId != user.OrganizationId)
                 throw new Exception("Unauthorized");
 
+            // CURRENT USER ROLES
+            var userRoles = await _context.UserRoles
+                .Where(x => x.UserId == user.Id)
+                .Join(
+                    _context.Roles,
+                    ur => ur.RoleId,
+                    r => r.Id,
+                    (ur, r) => r.Name)
+                .ToListAsync();
+
+            var isOrgAdmin = userRoles.Contains("OrgAdmin");
+            var isHR = userRoles.Contains("HR");
+
+            // ==========================================
+            // HR RESTRICTIONS
+            // ==========================================
+            if (isHR && !isOrgAdmin)
+            {
+                var currentEmployee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                    ?? throw new Exception("HR employee profile not found");
+
+                // HR CANNOT APPROVE HR REQUESTS
+                if (req.RequestedByRole != "Employee")
+                    throw new Exception("HR cannot process HR requests");
+
+                // HR ONLY SAME DEPARTMENT
+                if (req.Employee.DepartmentId != currentEmployee.DepartmentId)
+                    throw new Exception("Unauthorized department access");
+            }
+
+            // ALREADY PROCESSED
             if (req.Status != "Pending")
                 throw new Exception("Already processed");
 
+            // ==========================================
+            // APPROVE
+            // ==========================================
             if (status == "Approved")
             {
                 var exists = await _context.Attendances.AnyAsync(a =>
@@ -164,54 +298,43 @@ namespace Humatrix_HRMS.Services
                 req.Status = "Approved";
                 req.ApprovedBy = Guid.Parse(user.Id);
 
-                // =========================
-                // NOTIFY EMPLOYEE APPROVED
-                // =========================
-
                 await _notificationService.CreateNotificationAsync(
                     req.Employee.UserId,
-
                     "WFH Approved",
-
                     $"Your Work From Home request for {req.Date:dd MMM yyyy} was approved",
-
                     "/employee/wfh"
                 );
 
-                // LIVE SIGNALR NOTIFICATION
                 await _hubContext.Clients.User(req.Employee.UserId)
                     .SendAsync("ReceiveNotification");
             }
+
+            // ==========================================
+            // REJECT
+            // ==========================================
             else
             {
                 req.Status = "Rejected";
                 req.RejectionReason = reason;
 
-                // =========================
-                // NOTIFY EMPLOYEE REJECTED
-                // =========================
-
                 await _notificationService.CreateNotificationAsync(
                     req.Employee.UserId,
-
                     "WFH Rejected",
-
                     $"Your Work From Home request for {req.Date:dd MMM yyyy} was rejected",
-
                     "/employee/wfh"
                 );
 
-                // LIVE SIGNALR NOTIFICATION
                 await _hubContext.Clients.User(req.Employee.UserId)
                     .SendAsync("ReceiveNotification");
             }
 
             req.ReviewedAt = DateTime.UtcNow;
+
             await _context.SaveChangesAsync();
         }
 
         // ─────────────────────────────────────
-        // CANCEL (EMPLOYEE)
+        // CANCEL
         // ─────────────────────────────────────
         public async Task CancelAsync(Guid id)
         {
@@ -232,49 +355,12 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Only pending request can be cancelled");
 
             req.Status = "Cancelled";
+
             await _context.SaveChangesAsync();
-
-            // =========================
-            // NOTIFY HR
-            // =========================
-
-            var hrUsers = await _context.Users
-                .Where(u => u.OrganizationId == employee.OrganizationId)
-                .ToListAsync();
-
-            foreach (var hr in hrUsers)
-            {
-                var roles = await _context.UserRoles
-                    .Where(x => x.UserId == hr.Id)
-                    .Join(
-                        _context.Roles,
-                        ur => ur.RoleId,
-                        r => r.Id,
-                        (ur, r) => r.Name)
-                    .ToListAsync();
-
-                if (roles.Contains("HR"))
-                {
-                    await _notificationService.CreateNotificationAsync(
-                        hr.Id,
-
-                        "WFH Cancelled",
-
-                        $"{employee.FirstName} {employee.LastName} cancelled WFH request",
-
-                        "/hr/wfh"
-                    );
-
-                    // LIVE SIGNALR NOTIFICATION
-                    await _hubContext.Clients.User(hr.Id)
-                        .SendAsync("ReceiveNotification");
-                }
-            }
-
         }
 
         // ─────────────────────────────────────
-        // GET MY REQUESTS
+        // MY REQUESTS
         // ─────────────────────────────────────
         public async Task<List<WorkFromHomeRequest>> GetMyAsync()
         {
@@ -288,33 +374,100 @@ namespace Humatrix_HRMS.Services
             return await _context.WorkFromHomeRequests
                 .Where(r => r.EmployeeId == employee.EmployeeId)
                 .OrderByDescending(r => r.AppliedAt)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         // ─────────────────────────────────────
-        // HR VIEW
+        // HR / ORGADMIN VIEW
+        // ─────────────────────────────────────
+        // ─────────────────────────────────────
+        // HR / ORGADMIN VIEW
+        // ─────────────────────────────────────
+        // ─────────────────────────────────────
+        // HR / ORGADMIN VIEW
         // ─────────────────────────────────────
         public async Task<List<WorkFromHomeRequest>> GetAllAsync(string? status = null)
         {
             var user = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
 
+            // GET USER ROLES
+            var userRoles = await _context.UserRoles
+                .Where(x => x.UserId == user.Id)
+                .Join(
+                    _context.Roles,
+                    ur => ur.RoleId,
+                    r => r.Id,
+                    (ur, r) => r.Name)
+                .ToListAsync();
+
+            var isOrgAdmin = userRoles.Contains("OrgAdmin");
+            var isHR = userRoles.Contains("HR");
+
+            // BASE QUERY
             var query = _context.WorkFromHomeRequests
                 .Include(r => r.Employee)
+                .ThenInclude(e => e.Department)
                 .Where(r => r.Employee.OrganizationId == user.OrganizationId);
 
-            if (!string.IsNullOrEmpty(status))
+            // ==========================================
+            // HR VIEW
+            // ==========================================
+            if (isHR && !isOrgAdmin)
+            {
+                var currentEmployee = await _context.Employees
+                    .FirstOrDefaultAsync(e => e.UserId == user.Id)
+                    ?? throw new Exception("HR employee profile not found");
+
+                query = query.Where(r =>
+
+                    // SAME DEPARTMENT
+                    r.Employee.DepartmentId == currentEmployee.DepartmentId
+
+                    // HR SHOULD NOT SEE OWN REQUESTS
+                    && r.EmployeeId != currentEmployee.EmployeeId
+
+                    // ONLY EMPLOYEE REQUESTS
+                    &&
+                    (
+                        r.RequestedByRole == "Employee"
+                        ||
+                        string.IsNullOrWhiteSpace(r.RequestedByRole)
+                    )
+                );
+            }
+
+            // ==========================================
+            // ORGADMIN VIEW
+            // ==========================================
+            else if (isOrgAdmin)
+            {
+                // ORGADMIN CAN SEE ALL
+            }
+
+            // STATUS FILTER
+            if (!string.IsNullOrWhiteSpace(status))
+            {
                 query = query.Where(r => r.Status == status);
+            }
 
             return await query
                 .OrderByDescending(r => r.AppliedAt)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         private TimeZoneInfo GetOrgTimezone(string timeZoneId)
         {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
-            catch { return TimeZoneInfo.Utc; }
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            }
+            catch
+            {
+                return TimeZoneInfo.Utc;
+            }
         }
     }
 }

@@ -99,6 +99,7 @@ builder.Services.AddScoped<OvertimeService>();
 builder.Services.AddScoped<WorkFromHomeService>();
 
 builder.Services.AddScoped<AttendanceCorrectionService>();
+builder.Services.AddScoped<CorrectionValidationEngine>();
 builder.Services.AddHostedService<AttendanceBackgroundService>();
 builder.Services.AddScoped<AttendanceCalculationService>();
 builder.Services.AddScoped<HRPolicyValidationService>();

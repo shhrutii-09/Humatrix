@@ -8,7 +8,7 @@
 @using System.Security.Claims
 
 @attribute [Authorize(Roles = "HR")]
-
+@inject LeaveService LeaveService
 @inject EmployeeService EmployeeService
 @inject CurrentUserService CurrentUserService
 
@@ -78,7 +78,7 @@
         </div>
 
         <!-- ACTIVE -->
-        <div class="col-md-4">
+        @* <div class="col-md-4">
 
             <div class="card border-0 shadow-sm p-3 border-start border-success border-4">
 
@@ -92,6 +92,17 @@
 
             </div>
 
+        </div> *@
+        <!-- PENDING LEAVE APPROVALS -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm p-3 border-start border-warning border-4">
+                <h6 class="text-muted small fw-bold">Pending Leave Approvals</h6>
+                <h2 class="text-warning mb-0 fw-bold">@pendingLeaveCount</h2>
+                @if (pendingLeaveCount > 0)
+                {
+                    <a href="/hr/leaves" class="small text-warning">Review now →</a>
+                }
+            </div>
         </div>
 
     </div>
@@ -404,23 +415,38 @@
     private ApplicationUser? currentUser;
 
     private string searchTerm = "";
-
     private string? error;
+    private int pendingLeaveCount;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            currentUser = await CurrentUserService.GetUserAsync();
+            // currentUser = await CurrentUserService.GetUserAsync();
 
+            // await LoadEmployees();
+            currentUser = await CurrentUserService.GetUserAsync();
             await LoadEmployees();
+            await LoadPendingLeaveCount();
         }
         catch (Exception ex)
         {
             error = ex.ToString();
         }
     }
-
+    private async Task LoadPendingLeaveCount()
+    {
+        try
+        {
+            // Inject LeaveService at top of file: @inject LeaveService LeaveService
+            var allLeaves = await LeaveService.GetAllForHRAsync("Pending");
+            pendingLeaveCount = allLeaves.Count;
+        }
+        catch
+        {
+            pendingLeaveCount = 0;
+        }
+    }
     private async Task LoadEmployees()
     {
         try

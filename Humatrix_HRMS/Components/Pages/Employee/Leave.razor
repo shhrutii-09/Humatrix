@@ -3,7 +3,7 @@
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "Employee")]
+@attribute [Authorize(Roles = "Employee,HR")]
 @inject LeaveService LeaveService
 @inject NavigationManager Nav
 
@@ -232,29 +232,36 @@
     }
 
     // ── Cancel flow ──────────────────────────────────────────────────────────────
+    // STEP 1: This opens the modal pop-up and safely stores the ID to cancel
     private void ConfirmCancel(Guid id)
     {
         selectedLeaveId = id;
+        message = null; // Clear any old error banners
         showCancelModal = true;
     }
 
     private void CloseCancel() => showCancelModal = false;
 
+    // STEP 2: This runs only when they click "Yes, Cancel Leave" inside the modal
     private async Task CancelLeaveConfirmed()
     {
         actionLoading = true;
         try
         {
+            // Executes cancellation using the stored ID
             await LeaveService.CancelRequestAsync(selectedLeaveId);
+
             isError = false;
             message = "Leave request cancelled successfully.";
             showCancelModal = false;
+
+            // Reload all data so changes are updated on the UI
             await LoadData();
         }
         catch (Exception ex)
         {
             isError = true;
-            message = ex.Message;
+            message = ex.Message; // If the backend throws an exception, it maps here safely
         }
         finally
         {

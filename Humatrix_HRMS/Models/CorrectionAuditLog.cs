@@ -18,6 +18,8 @@ namespace Humatrix_HRMS.Models
         [ForeignKey(nameof(ActorEmployeeId))]
         public Employee? ActorEmployee { get; set; }
 
+        public const string AutoApplied = "AutoApplied";
+
         [MaxLength(200)]
         public string? ActorName { get; set; }
 

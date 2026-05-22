@@ -29,5 +29,8 @@
 
         // ❌ Rejection
         public string? RejectionReason { get; set; }
+
+        public string? ReviewerName { get; set; }
+        //public DateTime? ReviewedAt { get; set; }
     }
 }

@@ -46,14 +46,14 @@
     else if (!requests.Any())
     {
         <div class="alert alert-info shadow-sm border-0">
-            <i class="bi bi-info-circle me-2"></i>No pending overtime requests.
+            <i class="bi bi-info-circle me-2"></i>No overtime requests found.
         </div>
     }
     else
     {
         <div class="card shadow-sm border-0">
             <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center py-3">
-                <span class="text-muted small fw-bold">@requests.Count PENDING REQUEST(S)</span>
+                <span class="text-muted small fw-bold">@requests.Count REQUEST(S)</span>
             </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -65,12 +65,15 @@
                             <th>REQ. HOURS</th>
                             <th>ACTUAL OUT</th>
                             <th>REASON</th>
+                            <th>STATUS</th>
                             <th class="text-end pe-4">ACTION</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var r in requests)
-                        {
+                        @foreach (var r in requests
+                                            .OrderBy(x => x.Status != "Pending")
+                                            .ThenByDescending(x => x.AppliedAt))
+{
                             <tr>
                                 <td class="ps-4">
                                     <strong>@r.Employee.FirstName @r.Employee.LastName</strong>
@@ -91,22 +94,35 @@
                                     @FormatTime(r.ActualCheckOut)
 
                                 </td>
-                                <td class="text-muted small text-truncate"
+                               <td class="text-muted small text-truncate"
                                     style="max-width:180px;"
                                     title="@r.Reason">
                                     @r.Reason
                                 </td>
+
+                                <td>
+                                    <span class="badge @GetStatusClass(r.Status)">
+                                        @r.Status
+                                    </span>
+                                </td>
+
                                 <td class="text-end pe-4">
-                                    <button class="btn btn-sm btn-success me-1"
-                                            disabled="@actionLoading"
-                                            @onclick="() => Review(r.OvertimeRequestId, true)">
-                                        <i class="bi bi-check-circle me-1"></i>Approve
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            disabled="@actionLoading"
-                                            @onclick="() => Review(r.OvertimeRequestId, false)">
-                                        <i class="bi bi-x-circle me-1"></i>Reject
-                                    </button>
+
+                                    @if (r.Status == "Pending")
+                                    {
+                                        <button class="btn btn-sm btn-success me-1"
+                                                disabled="@actionLoading"
+                                                @onclick="() => Review(r.OvertimeRequestId, true)">
+                                            <i class="bi bi-check-circle me-1"></i>Approve
+                                        </button>
+
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                disabled="@actionLoading"
+                                                @onclick="() => Review(r.OvertimeRequestId, false)">
+                                            <i class="bi bi-x-circle me-1"></i>Reject
+                                        </button>
+                                    }
+
                                 </td>
                             </tr>
                         }
@@ -176,7 +192,7 @@
         loading = true;
         try
         {
-            requests = await OvertimeService.GetPendingAsync(allDepartments: isOrgAdmin);
+            requests = await OvertimeService.GetAllAsync(allDepartments: isOrgAdmin);
         }
         catch (Exception ex)
         {
@@ -216,4 +232,12 @@
             actionLoading = false;
         }
     }
+
+    private static string GetStatusClass(string? status) => status switch
+    {
+        "Approved" => "bg-success",
+        "Rejected" => "bg-danger",
+        "Cancelled" => "bg-secondary",
+        _ => "bg-warning text-dark"
+    };
 }

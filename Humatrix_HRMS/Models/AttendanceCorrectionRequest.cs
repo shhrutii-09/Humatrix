@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Humatrix_HRMS.Helpers;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Humatrix_HRMS.Models
@@ -161,6 +162,16 @@ namespace Humatrix_HRMS.Models
         [ForeignKey(nameof(InitiatedByHrEmployeeId))]
         public Employee? InitiatedByHrEmployee { get; set; }
 
+        public Guid? AssignedReviewerEmployeeId { get; set; }
+
+        public Employee? AssignedReviewerEmployee { get; set; }
+
+        public bool IsPayrollPeriodLocked { get; set; } = false;
+
+        public string? ReviewLevel { get; set; }
+
+        public string? SubmittedByRole { get; set; }
+
         // ── Optional attachment ───────────────────────────────────────────────────
 
         [MaxLength(500)]
@@ -172,6 +183,15 @@ namespace Humatrix_HRMS.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = default!;
+        public bool IsHrSelfRequest { get; set; }
+
+        //public Guid? AssignedReviewerEmployeeId { get; set; }
+
+        //public string ReviewLevel { get; set; } = default!;
+
+        //public string SubmittedByRole { get; set; } = default!;
         // ── Convenience ───────────────────────────────────────────────────────────
 
         [NotMapped]

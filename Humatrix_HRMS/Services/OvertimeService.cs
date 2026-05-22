@@ -61,6 +61,25 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync(e => e.UserId == user.Id)
                 ?? throw new Exception("Employee profile not found.");
 
+
+            // ── USER ROLES ─────────────────────────────────────────────
+            var userRoles = await _context.UserRoles
+                .Where(x => x.UserId == user.Id)
+                .Join(
+                    _context.Roles,
+                    ur => ur.RoleId,
+                    r => r.Id,
+                    (ur, r) => r.Name)
+                .ToListAsync();
+
+            var isHr = userRoles.Contains("HR");
+            var isOrgAdmin = userRoles.Contains("OrgAdmin");
+
+            var requesterRole =
+                isOrgAdmin ? "OrgAdmin" :
+                isHr ? "HR" :
+                "Employee";
+
             // ── Load attendance record ────────────────────────────────────────────
             var attendance = await _context.Attendances
                 .Include(a => a.Employee)
@@ -150,7 +169,14 @@ namespace Humatrix_HRMS.Services
                 ActualCheckOut = actualCheckOutUtc,
                 Reason = dto.Reason.Trim(),
                 Status = "Pending",
-                AppliedAt = DateTime.UtcNow
+                AppliedAt = DateTime.UtcNow,
+
+                RequestedByRole = requesterRole,
+
+                ApprovalLevel =
+         requesterRole == "HR"
+             ? "OrgAdmin"
+             : "HR"
             };
 
             // Keep flag set so the HR dashboard shows it
@@ -184,7 +210,7 @@ namespace Humatrix_HRMS.Services
         // HR — View pending requests
         // allDepartments = true for OrgAdmin; false for HR (own dept only)
         // =========================================================================
-        public async Task<List<OvertimeRequest>> GetPendingAsync(bool allDepartments = false)
+        public async Task<List<OvertimeRequest>> GetAllAsync(bool allDepartments = false)
         {
             var user = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
@@ -195,23 +221,36 @@ namespace Humatrix_HRMS.Services
                 .Include(r => r.Employee)
                     .ThenInclude(e => e!.Department)
                 .Include(r => r.Attendance)
-                .Where(r =>
-                    r.Employee.OrganizationId == orgId &&
-                    r.Status == "Pending");
+                .Where(r => r.Employee.OrganizationId == orgId);
 
+            // HR → only own department
             if (!allDepartments)
             {
                 var currentEmployee = await _context.Employees
                     .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
-                if (currentEmployee?.DepartmentId != null)
-                    query = query.Where(r => r.Employee.DepartmentId == currentEmployee.DepartmentId);
-                else
+                // SAFETY FOR ORGADMIN WITHOUT EMPLOYEE PROFILE
+                if (currentEmployee == null)
                     return new List<OvertimeRequest>();
+
+                query = query.Where(r =>
+                    r.Employee.DepartmentId == currentEmployee.DepartmentId
+
+                    // HR should only see employee requests
+                    && (
+                        r.RequestedByRole == "Employee" ||
+                        r.RequestedByRole == null
+                    )
+
+                    // HR should not see own requests
+                    && r.Employee.UserId != user.Id
+                );
             }
 
-            return await query.OrderBy(r => r.Date).ToListAsync();
+            return await query
+                .OrderByDescending(r => r.AppliedAt)
+                .ToListAsync();
         }
 
         // =========================================================================
@@ -240,6 +279,39 @@ namespace Humatrix_HRMS.Services
 
                 if (request.Employee.OrganizationId != orgId)
                     throw new Exception("Unauthorized — request belongs to a different organisation.");
+
+                // ── CURRENT USER ROLES ─────────────────────────────────
+                var userRoles = await _context.UserRoles
+                    .Where(x => x.UserId == user.Id)
+                    .Join(
+                        _context.Roles,
+                        ur => ur.RoleId,
+                        r => r.Id,
+                        (ur, r) => r.Name)
+                    .ToListAsync();
+
+                var isOrgAdmin = userRoles.Contains("OrgAdmin");
+                var isHR = userRoles.Contains("HR");
+
+                // ======================================================
+                // HR RESTRICTIONS
+                // ======================================================
+                if (isHR && !isOrgAdmin)
+                {
+                    var currentEmployee = await _context.Employees
+                        .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+                    if (currentEmployee == null)
+                        throw new Exception("HR employee profile not found.");
+
+                    // HR CANNOT REVIEW HR REQUESTS
+                    if (request.RequestedByRole != "Employee")
+                        throw new Exception("HR cannot process HR overtime requests.");
+
+                    // SAME DEPARTMENT ONLY
+                    if (request.Employee.DepartmentId != currentEmployee.DepartmentId)
+                        throw new Exception("Unauthorized department access.");
+                }
 
                 var attendance = request.Attendance
                     ?? throw new Exception("Associated attendance record is missing — cannot process.");

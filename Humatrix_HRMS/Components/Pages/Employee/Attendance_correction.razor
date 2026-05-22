@@ -15,6 +15,7 @@
    IDbContextFactory creates a fresh context per query. *@
 @inject AttendanceCorrectionService CorrectionService
 @inject CurrentUserService CurrentUserService
+@using System.Globalization
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Attendance Corrections | Humatrix HRMS</PageTitle>
@@ -103,10 +104,46 @@
                                 <td class="text-center font-monospace small text-muted">@FormatTime(req.OriginalCheckOut)</td>
                                 <td class="text-center font-monospace small">@FormatTime(req.RequestedCheckIn)</td>
                                 <td class="text-center font-monospace small">@FormatTime(req.RequestedCheckOut)</td>
-                                <td>
+                                @* <td>
                                     <span class="badge rounded-pill @GetStatusClass(req.Status)">@req.Status</span>
+                                </td> *@
+                                <td>
+                                    <span class="badge rounded-pill @GetStatusClass(req.Status)">
+                                        @req.Status
+                                    </span>
+
+                                    @if (!string.IsNullOrWhiteSpace(req.ReviewLevel))
+                                    {
+                                        <div class="small text-muted">
+                                            → @req.ReviewLevel
+                                        </div>
+                                    }
                                 </td>
-                                <td class="small text-muted">@req.SubmittedAt.ToString("dd MMM, hh:mm tt")</td>
+                                @* <td class="small text-muted">@req.SubmittedAt.ToString("dd MMM, hh:mm tt")</td> *@
+                                @* <td class="small text-muted">@FormatTime(req.SubmittedAt)</td> *@
+
+                                @* <td class="small text-muted">
+                                    @{
+                                        var localSubmittedAt = TimeZoneInfo.ConvertTimeFromUtc(req.SubmittedAt, orgTimeZone);
+                                    }
+                                    @localSubmittedAt.ToString("dd MMM yyyy, hh:mm tt")
+                                </td> *@
+                                <td class="small text-muted">
+                                    @{
+                                        var localSubmittedAt = TimeZoneInfo.ConvertTimeFromUtc(req.SubmittedAt, orgTimeZone);
+                                    }
+
+                                    @localSubmittedAt.ToString("dd MMM yyyy, hh:mm tt")
+
+                                    @if (req.IsOverdue)
+                                    {
+                                        <span class="badge bg-danger ms-1"
+                                              title="Pending for more than 2 days">
+                                            !
+                                        </span>
+                                    }
+                                </td>
+
                                 <td>
                                     @* FIX: CanCancel comes from the DTO (set in service).
                                        No need to re-check status here — keeps logic in one place. *@
@@ -151,10 +188,48 @@
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>@modalError
                         </div>
                     }
+                    @if (preValidation != null && !preValidation.IsAllowed)
+                    {
+                        <div class="alert alert-warning border-0 shadow-sm">
+                            <i class="bi bi-exclamation-circle-fill me-2"></i>
+
+                            <strong>Cannot submit request:</strong>
+                            @preValidation.BlockReason
+
+                            @if (preValidation.IsHoliday)
+                            {
+                                <div class="small mt-1">• This date is a public holiday.</div>
+                            }
+
+                            @if (preValidation.IsWeeklyOff)
+                            {
+                                <div class="small">• This is a weekly off / non-working day.</div>
+                            }
+
+                            @if (preValidation.IsOnLeave)
+                            {
+                                <div class="small">• You already have approved leave.</div>
+                            }
+
+                            @if (preValidation.IsOnWfh)
+                            {
+                                <div class="small">• You already have approved WFH.</div>
+                            }
+
+                            @if (preValidation.HasExistingPending)
+                            {
+                                <div class="small">• A pending correction already exists.</div>
+                            }
+                        </div>
+                    }
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Work Date <span class="text-danger">*</span></label>
-                        <InputDate @bind-Value="submitDto.WorkDate" class="form-control" />
+                        @* <InputDate @bind-Value="submitDto.WorkDate" class="form-control" /> *@
+                        <InputDate @bind-Value="submitDto.WorkDate"
+                                   @bind-Value:after="OnWorkDateChanged"
+                                   class="form-control" />
+
                         <div class="form-text">Cannot be a future date or older than 30 days.</div>
                     </div>
 
@@ -173,6 +248,17 @@
                             <option value="@CorrectionTypes.OvertimeCorrection">Overtime Correction</option>
                         </select>
                     </div>
+
+                    @if (!string.IsNullOrWhiteSpace(submitDto.CorrectionType)
+                                    && preValidation?.AttendanceRecordExists == true)
+                    {
+                        <div class="alert alert-info border-0 small mt-3">
+                            <i class="bi bi-info-circle me-1"></i>
+
+                            Current attendance status:
+                            <strong>@(preValidation.ExistingStatus ?? "Unknown")</strong>
+                        </div>
+                    }
 
                     @* FIX: Time inputs — use @bind:event="oninput" so the value is
                        captured immediately on every keystroke, not just on blur.
@@ -196,9 +282,12 @@
                             </label>
                             <input type="text"
                                    class="form-control"
-                                   placeholder="hh:mm AM/PM"
-                                   @bind="requestedCheckInText" />
-                            @* <input type="time"
+                                   placeholder="e.g. 09:30 AM or 18:30" @bind="requestedCheckInText" />
+
+                            <div class="form-text">
+                                Overnight shifts are supported (example: 02:00 AM next day).
+                            </div>
+                                   @* <input type="time"
                                    class="form-control"
                                    value="@(requestedCheckInTime?.ToString("HH:mm"))"
                                    @onchange="e => requestedCheckInTime = ParseTimeOnly(e.Value?.ToString())" /> *@
@@ -223,8 +312,7 @@
 
                             <input type="text"
                                    class="form-control"
-                                   placeholder="hh:mm AM/PM"
-                                   @bind="requestedCheckOutText" />
+                                   placeholder="e.g. 09:30 AM or 18:30" @bind="requestedCheckOutText" />
                                
                                </div>
                     }
@@ -245,7 +333,7 @@
                     <button class="btn btn-primary px-4"
                             style="background:#5c4ac7;border:none;"
                             @onclick="HandleSubmit"
-                            disabled="@isSubmitting">
+                            disabled="@(isSubmitting || preValidation?.IsAllowed == false)">
                         @if (isSubmitting)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
@@ -268,6 +356,12 @@
                     <i class="bi bi-exclamation-triangle-fill text-warning fs-2 mb-3 d-block"></i>
                     <h5 class="fw-bold">Cancel Correction Request?</h5>
                     <p class="text-muted">This action cannot be undone.</p>
+                    <div class="mb-3">
+                        <textarea @bind="cancelReason"
+                                  class="form-control"
+                                  rows="2"
+                                  placeholder="Optional cancellation reason"></textarea>
+                    </div>
                     <div class="d-flex justify-content-center gap-3 mt-4">
                         <button class="btn btn-outline-secondary px-4"
                                 @onclick="() => cancelRequestId = null"
@@ -314,6 +408,15 @@
     private string? requestedCheckOutText;
 
     private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
+    private CorrectionPreValidationResult? preValidation;
+    private string? cancelReason;
+    private async Task OnWorkDateChanged()
+    {
+        if (!string.IsNullOrWhiteSpace(submitDto.CorrectionType))
+        {
+            await RunPreValidation();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -370,6 +473,8 @@
     private async Task HandleSubmit()
     {
         modalError = null;
+        preValidation = null;
+        cancelReason = null;
         isSubmitting = true;
         try
         {
@@ -385,11 +490,15 @@
             //     ? DateTime.SpecifyKind(baseDate.Add(requestedCheckOutTime.Value.ToTimeSpan()), DateTimeKind.Unspecified)
             //     : null;
 
-            submitDto.RequestedCheckIn = ParseUserDateTime(baseDate, requestedCheckInText);
-            submitDto.RequestedCheckOut = ParseUserDateTime(baseDate, requestedCheckOutText);
+            // submitDto.RequestedCheckIn = ParseUserDateTime(baseDate, requestedCheckInText);
+            // submitDto.RequestedCheckOut = ParseUserDateTime(baseDate, requestedCheckOutText);
+            submitDto.RequestedCheckIn = ParseLocalTime(baseDate, requestedCheckInText);
+            submitDto.RequestedCheckOut = ParseLocalTime(baseDate, requestedCheckOutText);
 
             await CorrectionService.SubmitAsync(submitDto);
+            // successMessage = "Correction request submitted successfully.";
             successMessage = "Correction request submitted successfully.";
+            _ = AutoClearSuccess();
             showSubmitModal = false;
             ResetForm();
             await LoadRequests();
@@ -414,15 +523,33 @@
     // FIX: When the correction type changes, clear the time fields so a previously
     // entered time (for a different type that showed different fields) is not
     // silently sent to the service.
-    private void OnCorrectionTypeChanged(ChangeEventArgs e)
+    private async Task OnCorrectionTypeChanged(ChangeEventArgs e)
     {
         submitDto.CorrectionType = e.Value?.ToString();
-        // requestedCheckInTime = null;
-        // requestedCheckOutTime = null;
+
         requestedCheckInText = null;
         requestedCheckOutText = null;
-    }
 
+        preValidation = null;
+
+        if (!string.IsNullOrWhiteSpace(submitDto.CorrectionType))
+        {
+            await RunPreValidation();
+        }
+    }
+    private async Task RunPreValidation()
+    {
+        try
+        {
+            preValidation = await CorrectionService.PreValidateAsync(
+                submitDto.WorkDate,
+                submitDto.CorrectionType ?? "");
+        }
+        catch
+        {
+            preValidation = null;
+        }
+    }
     // ── Cancel flow ───────────────────────────────────────────────────────────
 
     private void ConfirmCancel(Guid requestId)
@@ -430,6 +557,13 @@
         errorMessage = null;
         successMessage = null;
         cancelRequestId = requestId;
+    }
+
+    private async Task AutoClearSuccess()
+    {
+        await Task.Delay(5000);
+        successMessage = null;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task HandleCancel()
@@ -444,9 +578,12 @@
         {
             await CorrectionService.CancelAsync(new CancelCorrectionDto
             {
-                AttendanceCorrectionRequestId = cancelRequestId.Value
+                AttendanceCorrectionRequestId = cancelRequestId.Value,
+                CancelReason = cancelReason
             });
+            // successMessage = "Request cancelled successfully.";
             successMessage = "Request cancelled successfully.";
+            _ = AutoClearSuccess();
             // Reload so the table reflects the new Cancelled status immediately.
             await LoadRequests();
         }
@@ -515,7 +652,7 @@
         _ => "bg-light text-dark border"
     };
 
-    private static DateTime? ParseUserDateTime(DateTime baseDate, string? input)
+    private static DateTime? ParseLocalTime(DateTime baseDate, string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
             return null;

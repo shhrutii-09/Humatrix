@@ -13,6 +13,12 @@
 
         // Pending | Approved | Rejected | Cancelled
         public string Status { get; set; } = "Pending";
+        //public string RequestedByRole { get; set; } = string.Empty;
+        //public string ApprovalLevel { get; set; } = string.Empty;
+
+        public string RequestedByRole { get; set; } = "Employee";
+
+        public string ApprovalLevel { get; set; } = "HR";
 
         public DateTime AppliedAt { get; set; } = DateTime.UtcNow;
         public Guid? ApprovedBy { get; set; }

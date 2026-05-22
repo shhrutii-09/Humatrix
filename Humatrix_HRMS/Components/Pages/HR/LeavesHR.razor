@@ -17,6 +17,20 @@
             <small class="text-muted">Review and manage employee leave requests</small>
         </div>
         <div class="d-flex gap-2 align-items-center">
+            @* <select class="form-select form-select-sm w-auto shadow-sm"
+                    @onchange="HandleFilterChange">
+                <option value="">All Requests</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+            </select> *@
+            <input type="text"
+                   class="form-control form-control-sm shadow-sm"
+                   style="max-width:220px"
+                   placeholder="Search employee..."
+                   @bind="searchTerm"
+                   @bind:event="oninput" />
+
             <select class="form-select form-select-sm w-auto shadow-sm"
                     @onchange="HandleFilterChange">
                 <option value="">All Requests</option>
@@ -52,7 +66,9 @@
                 else
                 {
 
-                    <text>@leaves.Count RESULT(S)</text>
+                    @* <text>@leaves.Count RESULT(S)</text> *@
+
+                    <text>@FilteredLeaves.Count() RESULT(S)</text>
                 }
             </span>
         </div>
@@ -91,7 +107,8 @@
                         }
                         else
                         {
-                            @foreach (var l in leaves.OrderBy(x => x.Status != "Pending").ThenByDescending(x => x.AppliedAt))
+                            @* @foreach (var l in leaves.OrderBy(x => x.Status != "Pending").ThenByDescending(x => x.AppliedAt)) *@
+                            @foreach (var l in FilteredLeaves.OrderBy(x => x.Status != "Pending").ThenByDescending(x => x.AppliedAt))
                             {
                                 <tr class="@(l.Status == "Pending" ? "table-warning" : "")">
                                     <td class="ps-4">
@@ -205,6 +222,14 @@
     private string messageType = "success";
     private string? selectedStatus;
     private string rejectReason = string.Empty;
+    private string searchTerm = string.Empty;
+
+    private IEnumerable<LeaveRequestDto> FilteredLeaves =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? leaves
+            : leaves.Where(l =>
+                l.EmployeeName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (l.Department ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
 
     // ── Lifecycle ────────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync() => await LoadData();

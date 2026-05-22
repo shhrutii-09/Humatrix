@@ -7,7 +7,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 
-@attribute [Authorize(Roles = "HR,OrgAdmin")]
+@attribute [Authorize(Roles = "OrgAdmin")]
 
 @inject CurrentUserService CurrentUser
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
