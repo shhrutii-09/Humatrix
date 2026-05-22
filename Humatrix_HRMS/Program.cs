@@ -82,6 +82,12 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSe
 // ✅ Correct HttpContextAccessor registration
 builder.Services.AddHttpContextAccessor();
 
+
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
+
+builder.Services.AddScoped<EmailService>();
+
 // Custom Services
 builder.Services.AddScoped<OrganizationService>();
 builder.Services.AddScoped<AttendanceService>();

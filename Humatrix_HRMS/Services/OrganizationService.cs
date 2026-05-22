@@ -8,15 +8,21 @@ namespace Humatrix_HRMS.Services
 {
     public class OrganizationService
     {
+        //private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+        //private readonly UserManager<ApplicationUser> _userManager;
+
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly EmailService _emailService;
 
         public OrganizationService(
-            IDbContextFactory<ApplicationDbContext> contextFactory,
-            UserManager<ApplicationUser> userManager)
+    IDbContextFactory<ApplicationDbContext> contextFactory,
+    UserManager<ApplicationUser> userManager,
+    EmailService emailService)
         {
             _contextFactory = contextFactory;
             _userManager = userManager;
+            _emailService = emailService;
         }
 
         public async Task<string> CreateOrganizationAsync(CreateOrganizationDto dto)
@@ -77,11 +83,25 @@ namespace Humatrix_HRMS.Services
                 _context.UserInvites.Add(invite);
                 await _context.SaveChangesAsync();
 
+                //await transaction.CommitAsync();
+
+                //var baseUrl = "https://localhost:7057";
+
+                //return $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
                 await transaction.CommitAsync();
 
                 var baseUrl = "https://localhost:7057";
 
-                return $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+                var setupLink =
+                    $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+                await _emailService.SendOrganizationInviteAsync(
+                    dto.AdminEmail,
+                    dto.Name,
+                    setupLink);
+
+                return setupLink;
             }
             catch
             {

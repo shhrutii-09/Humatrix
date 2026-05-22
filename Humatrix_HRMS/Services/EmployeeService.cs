@@ -21,17 +21,20 @@ namespace Humatrix_HRMS.Services
         private readonly CurrentUserService _currentUser;
         private readonly IConfiguration _config;
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+        private readonly EmailService _emailService;
 
         public EmployeeService(
-            UserManager<ApplicationUser> userManager,
-            CurrentUserService currentUser,
-            IDbContextFactory<ApplicationDbContext> contextFactory,
-            IConfiguration config)
+     UserManager<ApplicationUser> userManager,
+     CurrentUserService currentUser,
+     IDbContextFactory<ApplicationDbContext> contextFactory,
+     IConfiguration config,
+     EmailService emailService)
         {
             _userManager = userManager;
             _currentUser = currentUser;
             _contextFactory = contextFactory;
             _config = config;
+            _emailService = emailService;
         }
 
         #region Dashboard Data
@@ -387,6 +390,8 @@ namespace Humatrix_HRMS.Services
         public async Task<string> CreateEmployeeAsync(CreateEmployeeDto dto)
         {
             var currentUser = await _currentUser.GetUserAsync();
+            var inviterName =
+    $"{currentUser.FirstName} {currentUser.LastName}";
             if (currentUser?.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
@@ -476,10 +481,27 @@ namespace Humatrix_HRMS.Services
                 context.UserInvites.Add(invite);
                 await context.SaveChangesAsync();
 
+                //await transaction.CommitAsync();
+
+                //var baseUrl = _config["AppBaseUrl"] ?? "https://localhost:7057";
+                //return $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
                 await transaction.CommitAsync();
 
                 var baseUrl = _config["AppBaseUrl"] ?? "https://localhost:7057";
-                return $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+                var setupLink =
+                    $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+                await _emailService.SendEmployeeInviteAsync(
+                    dto.Email,
+                    $"{dto.FirstName} {dto.LastName}",
+                    dto.Role ?? "Employee",
+                    setupLink,
+                    inviterName);
+
+                return setupLink;
+
             }
             catch
             {
