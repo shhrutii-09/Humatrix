@@ -277,16 +277,38 @@
         _ => "text-primary"
     };
 
+    // private static string TimeAgo(DateTime dt)
+    // {
+    //     var diff = DateTime.UtcNow - dt.ToUniversalTime();
+    //     if (diff.TotalMinutes < 1) return "just now";
+    //     if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+    //     if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+    //     if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+    //     return dt.ToString("dd MMM");
+    // }
     private static string TimeAgo(DateTime dt)
     {
-        var diff = DateTime.UtcNow - dt.ToUniversalTime();
-        if (diff.TotalMinutes < 1) return "just now";
-        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
-        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
-        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
-        return dt.ToString("dd MMM");
-    }
+        // 1. Force treat the input as UTC if its kind is unassigned
+        var utcDateTime = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
 
+        // 2. Identify the Indian Standard Timezone mapping
+        var indiaZone = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "India Standard Time" : "Asia/Kolkata");
+
+        // 3. Convert both the notification stamp and the current clock cleanly to Indian time
+        var indiaTime = TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, indiaZone);
+        var nowIndia = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, indiaZone);
+
+        // 4. Calculate the true mathematical difference
+        var diff = nowIndia - indiaTime;
+
+        if (diff.TotalSeconds < 60) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+
+        return indiaTime.ToString("dd MMM");
+    }
     public async ValueTask DisposeAsync()
     {
         if (_hub is not null) await _hub.DisposeAsync();

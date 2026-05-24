@@ -1,0 +1,448 @@
+﻿@page "/notifications"
+@rendermode InteractiveServer
+@implements IDisposable
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Infrastructure.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+
+@inject NotificationEngine NotificationEngine
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Notifications</PageTitle>
+
+<div class="container-fluid py-4">
+
+    <!-- HEADER -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+
+        <div>
+            <h3 class="fw-bold mb-1">
+                Notifications
+            </h3>
+
+            <div class="text-muted">
+                View all your recent activity and updates
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+
+            @if (notifications.Any(x => !x.IsRead))
+            {
+                <button type="button"
+                        class="btn btn-primary"
+                        @onclick="MarkAllRead">
+
+                    <i class="bi bi-check2-all me-1"></i>
+                    Mark all read
+
+                </button>
+            }
+
+            @if (notifications.Any())
+            {
+                <button type="button"
+                        class="btn btn-outline-danger"
+                        @onclick="ClearAll">
+
+                    <i class="bi bi-trash me-1"></i>
+                    Clear all
+
+                </button>
+            }
+
+        </div>
+
+    </div>
+
+    <!-- FILTERS -->
+    <div class="card shadow-sm border-0 mb-3">
+
+        <div class="card-body d-flex flex-wrap gap-2">
+
+            <button type="button"
+                    class="btn @(activeTab == "All" ? "btn-primary" : "btn-outline-primary")"
+                    @onclick='() => SetTab("All")'>
+                All
+            </button>
+
+            <button type="button"
+                    class="btn @(activeTab == "Unread" ? "btn-primary" : "btn-outline-primary")"
+                    @onclick='() => SetTab("Unread")'>
+                Unread
+            </button>
+
+            <button type="button"
+                    class="btn @(activeTab == "Read" ? "btn-primary" : "btn-outline-primary")"
+                    @onclick='() => SetTab("Read")'>
+                Read
+            </button>
+
+        </div>
+
+    </div>
+
+    <!-- LIST -->
+    <div class="card shadow-sm border-0">
+
+        <div class="card-body p-0">
+
+            @{
+                var visible = activeTab switch
+                {
+                    "Unread" => notifications.Where(x => !x.IsRead).ToList(),
+                    "Read" => notifications.Where(x => x.IsRead).ToList(),
+                    _ => notifications
+                };
+            }
+
+            @if (!visible.Any())
+            {
+                <div class="text-center py-5">
+
+                    <i class="bi bi-bell-slash fs-1 text-muted"></i>
+
+                    <div class="mt-3 fw-semibold">
+                        No notifications found
+                    </div>
+
+                    <div class="text-muted small">
+                        You're all caught up.
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                @foreach (var n in visible)
+                {
+                    <div class="notification-row d-flex align-items-start p-4 border-bottom @(!n.IsRead ? "notification-unread" : "")"
+                         @onclick="() => Open(n)">
+
+                        <!-- ICON -->
+                        <div class="me-3 fs-4 flex-shrink-0">
+
+                            <i class="bi @GetIcon(n.NotificationType) @GetIconColor(n.NotificationType)"></i>
+
+                        </div>
+
+                        <!-- CONTENT -->
+                        <div class="flex-grow-1 overflow-hidden">
+
+                            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+
+                                <div class="overflow-hidden">
+
+                                    <div class="fw-semibold text-break">
+                                        @n.Title
+                                    </div>
+
+                                    <div class="text-muted mt-1 text-break">
+                                        @n.Message
+                                    </div>
+
+                                </div>
+
+                                <div class="small text-muted text-nowrap">
+                                    @TimeAgo(n.CreatedAt)
+                                </div>
+
+                            </div>
+
+                            @if (!n.IsRead)
+                            {
+                                <span class="badge bg-primary mt-2">
+                                    Unread
+                                </span>
+                            }
+
+                        </div>
+
+                        <!-- DELETE -->
+                        <button type="button"
+                                class="btn btn-sm btn-light ms-3 flex-shrink-0"
+                                title="Delete"
+                                @onclick:stopPropagation="true"
+                                @onclick="() => Delete(n.NotificationId)">
+
+                            <i class="bi bi-x-lg"></i>
+
+                        </button>
+
+                    </div>
+                }
+            }
+
+        </div>
+
+    </div>
+
+</div>
+
+<style>
+
+    .notification-row {
+        transition: all 0.15s ease;
+        cursor: pointer;
+    }
+
+        .notification-row:hover {
+            background-color: #f8f9fa;
+        }
+
+    .notification-unread {
+        background-color: #eef6ff;
+    }
+
+        .notification-unread:hover {
+            background-color: #e4f0ff;
+        }
+
+</style>
+
+@code {
+    private HubConnection? _hub;
+    private PeriodicTimer? _timer;
+    private bool _connected;
+    private List<NotificationDto> notifications = new();
+    private string activeTab = "All";
+    private string? currentUserId;
+
+    // =========================================================
+    // INITIALIZE (Lightweight metadata fetch only)
+    // =========================================================
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUser();
+    }
+
+    // =========================================================
+    // LIFECYCLE & SIGNALR (Where interactive setup belongs!)
+    // =========================================================
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // 1. Load the data now that the UI is interactive
+        await LoadNotifications();
+
+        // 2. Start the background time-ago ticker safely
+        StartLiveTimeRefresh();
+
+        // 3. Connect to SignalR
+        if (_connected || string.IsNullOrWhiteSpace(currentUserId))
+            return;
+
+        _connected = true;
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // RECEIVE REAL-TIME PUSH
+        _hub.On<NotificationPushDto>("ReceiveNotification", async push =>
+        {
+            try
+            {
+                notifications.Insert(0, new NotificationDto
+                {
+                    NotificationId = push.NotificationId,
+                    Title = push.Title,
+                    Message = push.Message,
+                    RedirectUrl = push.RedirectUrl,
+                    NotificationType = push.NotificationType,
+                    Priority = push.Priority,
+                    CreatedAt = push.CreatedAt,
+                    IsRead = false
+                });
+
+                await JS.InvokeVoidAsync(
+                    "showToastNotification",
+                    push.Title,
+                    push.Message,
+                    push.RedirectUrl,
+                    push.Priority);
+
+                await JS.InvokeVoidAsync("playNotificationSound");
+
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Notification error: {ex.Message}");
+            }
+        });
+
+        await _hub.StartAsync();
+
+        await _hub.SendAsync("JoinUserGroup", currentUserId);
+    }
+
+    // =========================================================
+    // LOAD USER
+    // =========================================================
+    private async Task LoadUser()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        currentUserId = auth.User
+            .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)
+            ?.Value;
+    }
+
+    // =========================================================
+    // LOAD NOTIFICATIONS
+    // =========================================================
+    private async Task LoadNotifications()
+    {
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            return;
+
+        notifications = await NotificationEngine.GetMyNotificationsAsync(currentUserId);
+        notifications = notifications.OrderByDescending(x => x.CreatedAt).ToList();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // =========================================================
+    // OPEN
+    // =========================================================
+    private async Task Open(NotificationDto n)
+    {
+        if (!n.IsRead)
+        {
+            await NotificationEngine.MarkAsReadAsync(n.NotificationId, currentUserId!);
+            n.IsRead = true;
+        }
+
+        StateHasChanged();
+
+        if (!string.IsNullOrWhiteSpace(n.RedirectUrl))
+        {
+            Nav.NavigateTo(n.RedirectUrl);
+        }
+    }
+
+    // =========================================================
+    // DELETE
+    // =========================================================
+    private async Task Delete(int id)
+    {
+        await NotificationEngine.DeleteAsync(id, currentUserId!);
+        notifications.RemoveAll(x => x.NotificationId == id);
+        StateHasChanged();
+    }
+
+    // =========================================================
+    // MARK ALL READ
+    // =========================================================
+    private async Task MarkAllRead()
+    {
+        await NotificationEngine.MarkAllReadAsync(currentUserId!);
+        foreach (var n in notifications)
+        {
+            n.IsRead = true;
+        }
+        StateHasChanged();
+    }
+
+    // =========================================================
+    // CLEAR ALL
+    // =========================================================
+    private async Task ClearAll()
+    {
+        await NotificationEngine.ClearAllAsync(currentUserId!);
+        notifications.Clear();
+        StateHasChanged();
+    }
+
+    // =========================================================
+    // TABS
+    // =========================================================
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    // =========================================================
+    // ICONS
+    // =========================================================
+    private static string GetIcon(string type) => type switch
+    {
+        var t when t.StartsWith("leave") => "bi-calendar-check",
+        var t when t.StartsWith("wfh") => "bi-house-check",
+        var t when t.StartsWith("overtime") => "bi-clock-history",
+        var t when t.StartsWith("attendance") => "bi-person-check",
+        var t when t.StartsWith("task") => "bi-check2-square",
+        _ => "bi-bell"
+    };
+
+    private static string GetIconColor(string type) => type switch
+    {
+        var t when t.Contains("approved") => "text-success",
+        var t when t.Contains("rejected") => "text-danger",
+        _ => "text-primary"
+    };
+
+    // =========================================================
+    // REAL INDIAN TIME
+    // =========================================================
+    private static string TimeAgo(DateTime utcDateTime)
+    {
+        utcDateTime = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
+
+        var indiaZone = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "India Standard Time" : "Asia/Kolkata");
+
+        var indiaTime = TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, indiaZone);
+        var nowIndia = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, indiaZone);
+        var diff = nowIndia - indiaTime;
+
+        if (diff.TotalSeconds < 60) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+
+        return indiaTime.ToString("dd MMM yyyy hh:mm tt");
+    }
+
+    // =========================================================
+    // LIVE REFRESH OF TIME LABELS
+    // =========================================================
+    private void StartLiveTimeRefresh()
+    {
+        _timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (await _timer.WaitForNextTickAsync())
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch
+            {
+                // Suppress background thread errors on disposal
+            }
+        });
+    }
+
+    // =========================================================
+    // DISPOSE
+    // =========================================================
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        if (_hub is not null)
+        {
+            _ = _hub.DisposeAsync();
+        }
+    }
+}
