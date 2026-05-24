@@ -2,6 +2,7 @@
 using Humatrix_HRMS.Components.Account;
 using Humatrix_HRMS.Data;
 using Humatrix_HRMS.Hubs;
+using Humatrix_HRMS.Infrastructure.Services;
 using Humatrix_HRMS.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -109,6 +110,13 @@ builder.Services.AddScoped<CorrectionValidationEngine>();
 builder.Services.AddHostedService<AttendanceBackgroundService>();
 builder.Services.AddScoped<AttendanceCalculationService>();
 builder.Services.AddScoped<HRPolicyValidationService>();
+
+builder.Services.AddScoped<NotificationRecipientResolver>();
+builder.Services.AddScoped<NotificationEngine>();
+builder.Services.AddScoped<ApprovalWorkflowService>();
+builder.Services.AddScoped<ActivityLogService>();
+builder.Services.AddScoped<DashboardBroadcastService>();
+
 
 builder.Services.AddScoped<OfficeLocationService>();
 

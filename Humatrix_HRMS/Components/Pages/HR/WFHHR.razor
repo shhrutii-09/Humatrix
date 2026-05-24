@@ -226,13 +226,39 @@
     }
 
     // ── Actions ──────────────────────────────────────────────────────────────────
+    // private async Task Approve(Guid id)
+    // {
+    //     actionLoading = true;
+    //     message = null;
+    //     try
+    //     {
+    //         await 
+    //         Service.UpdateStatusAsync(id, "Approved");
+    //         isError = false;
+    //         message = "WFH request approved.";
+    //         await LoadData();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         isError = true;
+    //         message = ex.Message;
+    //     }
+    //     finally
+    //     {
+    //         actionLoading = false;
+    //     }
+    // }
+
+    // ── Actions ──────────────────────────────────────────────────────────────────
     private async Task Approve(Guid id)
     {
         actionLoading = true;
         message = null;
         try
         {
+            // Changed from Service to WfhService
             await WfhService.UpdateStatusAsync(id, "Approved");
+
             isError = false;
             message = "WFH request approved.";
             await LoadData();

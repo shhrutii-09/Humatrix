@@ -1,6 +1,8 @@
 ﻿using Humatrix_HRMS.Data;
 using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Helpers;
+using Humatrix_HRMS.Infrastructure.Constants;
+using Humatrix_HRMS.Infrastructure.Services;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +13,9 @@ namespace Humatrix_HRMS.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly CurrentUserService _currentUser;
+
+        private readonly ApprovalWorkflowService _approvalWorkflowService;
+        private readonly NotificationEngine _notificationEngine;
 
         private readonly HRPolicyValidationService _policy;
 
@@ -33,17 +38,22 @@ namespace Humatrix_HRMS.Services
 
         // UPDATE constructor signature:
         public LeaveService(
-            ApplicationDbContext context,
-            CurrentUserService currentUser,
-            HRPolicyValidationService policy,
-            NotificationService notificationService,
-            UserManager<ApplicationUser> userManager)   // ← ADD THIS
+      ApplicationDbContext context,
+      CurrentUserService currentUser,
+      HRPolicyValidationService policy,
+      NotificationService notificationService,
+      UserManager<ApplicationUser> userManager,
+      ApprovalWorkflowService approvalWorkflowService,
+      NotificationEngine notificationEngine)
         {
             _context = context;
             _currentUser = currentUser;
             _policy = policy;
             _notificationService = notificationService;
-            _userManager = userManager;   // ← ADD THIS
+            _userManager = userManager;
+
+            _approvalWorkflowService = approvalWorkflowService;
+            _notificationEngine = notificationEngine;
         }
 
 
@@ -228,76 +238,78 @@ namespace Humatrix_HRMS.Services
             //        approverId, notifyTitle, notifyMsg, notifyUrl);
             //}
             _context.LeaveRequests.Add(request);
+
             await _context.SaveChangesAsync();
+
+            // ==========================================
+            // CREATE APPROVAL WORKFLOW
+            // ==========================================
+
+            await _approvalWorkflowService.SubmitAsync(
+                _context,
+                ApprovalRequestTypes.Leave,
+                request.LeaveRequestId,
+                employee.OrganizationId,
+                employee.EmployeeId,
+                applicantRole: request.ApplicantRole);
+
+            // Commit DB transaction FIRST
+            // Commit DB transaction FIRST
             await tx.CommitAsync();
 
-            // =========================
-            // NOTIFY APPROVERS (role-aware, no N+1, outside tx is acceptable for notifications)
-            // =========================
             // ==========================================
-            // ROLE-BASED + DEPARTMENT-BASED NOTIFICATIONS
+            // SEND NOTIFICATIONS (OUTSIDE TRANSACTION)
             // ==========================================
 
-            // HR APPLIED → ONLY ORGADMINS
-            if (applicantIsHR)
-            {
-                var orgAdminIds = await GetRoleUserIdsAsync(
-                    employee.OrganizationId,
-                    "OrgAdmin");
+            await _notificationEngine.SendLeaveAppliedAsync(
+                employeeFullName: $"{employee.FirstName} {employee.LastName}",
+                leaveTypeName: leaveType.Name,
+                leaveRequestId: request.LeaveRequestId,
+                organizationId: employee.OrganizationId,
+                departmentId: employee.DepartmentId,
+                applicantRole: request.ApplicantRole,
+                actorUserId: employee.UserId);
 
-                foreach (var approverId in orgAdminIds)
-                {
-                    await _notificationService.CreateNotificationAsync(
-                        approverId,
-                        "New Leave Request",
-                        $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
-                        "/hr/leaves");
-                }
+            // ==========================================
+            // ALSO NOTIFY ORG ADMIN
+            // ==========================================
+
+            await _notificationService.CreateOrgAdminNotificationsAsync(
+                employee.OrganizationId,
+                "New Leave Request",
+                $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
+                "/hr/leaves");
+
+            // ──────────────────────────────────────────────────────────────────
+            // 🚀 ADDED: CREATE TARGETED ORG ADMIN NOTIFICATIONS FOR HR REQUESTS
+            // ──────────────────────────────────────────────────────────────────
+            if (request.ApplicantRole == "HR")
+            {
+                //await _notificationService.CreateOrgAdminNotificationsAsync(
+                //    employee.OrganizationId,
+                //    "New Leave Request",
+                //    $"{employee.FirstName} {employee.LastName} requested leave from {request.FromDate:dd MMM yyyy} to {request.ToDate:dd MMM yyyy}",
+                //    "/hr/leaves");
+                // Employee request → HR + OrgAdmin
+                // HR request → OrgAdmin only
+
+                await _notificationService.CreateOrgAdminNotificationsAsync(
+                    employee.OrganizationId,
+                    "New Leave Request",
+                    $"{employee.FirstName} {employee.LastName} requested leave from {request.FromDate:dd MMM yyyy} to {request.ToDate:dd MMM yyyy}",
+                    "/hr/leaves");
             }
 
-            // EMPLOYEE APPLIED → SAME DEPARTMENT HR + ORGADMIN
-            else
-            {
-                // SAME DEPARTMENT HR
-                var hrUsers = await _context.Employees
-                    .Where(e =>
-                        e.OrganizationId == employee.OrganizationId &&
-                        e.DepartmentId == employee.DepartmentId)
-                    .Join(
-                        _context.Users,
-                        e => e.UserId,
-                        u => u.Id,
-                        (e, u) => new { e, u })
-                    .ToListAsync();
+            // ──────────────────────────────────────────────────────────────────
+            // 🚀 ADDED: BROADCAST DASHBOARD REAL-TIME REFRESHES
+            // ──────────────────────────────────────────────────────────────────
+            await _notificationService.BroadcastOrgDashboardRefreshAsync(
+                employee.OrganizationId);
 
-                foreach (var item in hrUsers)
-                {
-                    var roles = await _userManager.GetRolesAsync(item.u);
-
-                    if (roles.Contains("HR"))
-                    {
-                        await _notificationService.CreateNotificationAsync(
-                            item.u.Id,
-                            "New Leave Request",
-                            $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
-                            "/hr/leaves");
-                    }
-                }
-
-                // ORGADMINS
-                var orgAdminIds = await GetRoleUserIdsAsync(
-                    employee.OrganizationId,
-                    "OrgAdmin");
-
-                foreach (var approverId in orgAdminIds)
-                {
-                    await _notificationService.CreateNotificationAsync(
-                        approverId,
-                        "New Leave Request",
-                        $"{employee.FirstName} {employee.LastName} applied for {leaveType.Name}",
-                        "/hr/leaves");
-                }
-            }
+            await _notificationService.BroadcastHrDashboardRefreshAsync(
+                employee.OrganizationId,
+                employee.DepartmentId);
+        
         }
 
         // =========================
@@ -463,7 +475,20 @@ namespace Humatrix_HRMS.Services
 
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
+
+            // ──────────────────────────────────────────────────────────────────
+            // 🚀 ADDED: BROADCAST REFRESHES POST-APPROVAL/REJECTION
+            // ──────────────────────────────────────────────────────────────────
+            // Refresh OrgAdmin dashboards
+            await _notificationService.BroadcastOrgDashboardRefreshAsync(
+                employee.OrganizationId);
+
+            // Refresh HR dashboards
+            await _notificationService.BroadcastHrDashboardRefreshAsync(
+                employee.OrganizationId,
+                employee.DepartmentId);
         }
+        
 
         // =========================
         // CANCEL
@@ -610,6 +635,15 @@ namespace Humatrix_HRMS.Services
                         "/hr/leaves");
                 }
             }
+            // ──────────────────────────────────────────────────────────────────
+            // 🚀 ADDED: BROADCAST REFRESHES POST-CANCELLATION
+            // ──────────────────────────────────────────────────────────────────
+            await _notificationService.BroadcastOrgDashboardRefreshAsync(
+                employee.OrganizationId);
+
+            await _notificationService.BroadcastHrDashboardRefreshAsync(
+                employee.OrganizationId,
+                employee.DepartmentId);
 
         }
 

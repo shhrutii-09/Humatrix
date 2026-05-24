@@ -1,93 +1,53 @@
-﻿window.playNotificationSound = () => {
+﻿// wwwroot/js/site.js
 
+// ── Audio — preloaded ONCE globally ──────────────────────────────────────────
+const _notificationAudio = (() => {
     const audio = new Audio('/sounds/notification.mp3');
+    audio.preload = 'auto';
+    return audio;
+})();
 
-    audio.play();
+window.playNotificationSound = () => {
+    try {
+        _notificationAudio.currentTime = 0;
+        _notificationAudio.play().catch(() => {/* autoplay blocked — ignore */ });
+    } catch (e) { /* ignore */ }
 };
 
-window.showToastNotification = (title, message, url) => {
-
-    // ===== Browser Notification =====
-    try {
-
-        if ("Notification" in window) {
-
-            if (Notification.permission === "granted") {
-
-                const notification = new Notification(title, {
-                    body: message,
-                    icon: "/favicon.png"
-                });
-
-                notification.onclick = function () {
-
-                    window.focus();
-
-                    if (url && url.trim() !== "") {
-
-                        window.location.href = url;
-                    }
-                };
-            }
-            else if (Notification.permission !== "denied") {
-
-                Notification.requestPermission().then(permission => {
-
-                    if (permission === "granted") {
-
-                        const notification = new Notification(title, {
-                            body: message,
-                            icon: "/favicon.png"
-                        });
-
-                        notification.onclick = function () {
-
-                            window.focus();
-
-                            if (url && url.trim() !== "") {
-
-                                window.location.href = url;
-                            }
-                        };
-                    }
-                });
-            }
-        }
-
-    }
-    catch (err) {
-
-        console.error("Browser notification error:", err);
+// ── Toast notifications ───────────────────────────────────────────────────────
+window.showToastNotification = (title, message, url, priority) => {
+    // Browser Notification API
+    if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+            const n = new Notification(title, { body: message, icon: '/favicon.png' });
+            n.onclick = () => { window.focus(); if (url) window.location.href = url; };
+        } catch (e) { /* ignore */ }
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+        Notification.requestPermission();
     }
 
-    // ===== In-App Toast =====
-    const toast = document.createElement("div");
+    // In-app toast
+    const priorityClass = (priority === 'Urgent' || priority === 'High')
+        ? 'toast-notification--urgent' : '';
 
-    toast.className = "toast-notification shadow";
-
-    toast.style.cursor = "pointer";
-
+    const toast = document.createElement('div');
+    toast.className = `toast-notification shadow ${priorityClass}`;
+    toast.style.cursor = url ? 'pointer' : 'default';
     toast.innerHTML = `
-        <div class="fw-bold">${title}</div>
-        <div>${message}</div>
+        <div class="toast-notification__title">${title}</div>
+        <div class="toast-notification__body">${message}</div>
     `;
-
-    // CLICK REDIRECT
-    toast.onclick = () => {
-
-        if (url && url.trim() !== "") {
-
-            window.location.href = url;
-        }
-    };
+    if (url) toast.onclick = () => { window.location.href = url; };
 
     document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => toast.remove(), 5000);
+};
 
-    setTimeout(() => {
-        toast.classList.add("show");
-    }, 100);
-
-    setTimeout(() => {
-        toast.remove();
-    }, 5000);
+// ── Notification permission request ─────────────────────────────────────────
+window.requestNotificationPermission = async () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+        return await Notification.requestPermission();
+    }
+    return Notification.permission ?? 'denied';
 };

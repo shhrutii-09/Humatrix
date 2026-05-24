@@ -45,6 +45,10 @@ namespace Humatrix_HRMS.Data
         //public DbSet<CorrectionAuditLog> AttendanceAuditLogs { get; set; }
 
         public DbSet<CorrectionAuditLog> CorrectionAuditLogs { get; set; }
+        public DbSet<NotificationPreferences> NotificationPreferences { get; set; }
+        public DbSet<ApprovalRequest> ApprovalRequests { get; set; }
+        public DbSet<ApprovalHistory> ApprovalHistories { get; set; }
+        public DbSet<ActivityLog> ActivityLogs { get; set; }
 
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
@@ -159,22 +163,42 @@ namespace Humatrix_HRMS.Data
             // ATTENDANCE CORRECTION INDEXES
             // =========================================================================
 
+            //modelBuilder.Entity<AttendanceCorrectionRequest>()
+            //    .HasIndex(x => new
+            //    {
+            //        x.EmployeeId,
+            //        x.WorkDate,
+            //        x.Status
+            //    });
+
+            //modelBuilder.Entity<AttendanceCorrectionRequest>()
+            //    .HasIndex(x => x.OrganizationId);
+
+            //modelBuilder.Entity<AttendanceCorrectionRequest>()
+            //    .HasIndex(x => x.AssignedReviewerEmployeeId);
+
+            //modelBuilder.Entity<AttendanceCorrectionRequest>()
+            //    .HasIndex(x => x.SubmittedAt);
+
+            //modelBuilder.Entity<AttendanceCorrectionRequest>()
+            //    .HasIndex(x => new
+            //    {
+            //        x.OrganizationId,
+            //        x.Status,
+            //        x.ReviewLevel
+            //    });
+            // =========================================================================
+            // ATTENDANCE CORRECTION INDEXES
+            // =========================================================================
+
             modelBuilder.Entity<AttendanceCorrectionRequest>()
                 .HasIndex(x => new
                 {
                     x.EmployeeId,
                     x.WorkDate,
+                    x.CorrectionType,
                     x.Status
                 });
-
-            modelBuilder.Entity<AttendanceCorrectionRequest>()
-                .HasIndex(x => x.OrganizationId);
-
-            modelBuilder.Entity<AttendanceCorrectionRequest>()
-                .HasIndex(x => x.AssignedReviewerEmployeeId);
-
-            modelBuilder.Entity<AttendanceCorrectionRequest>()
-                .HasIndex(x => x.SubmittedAt);
 
             modelBuilder.Entity<AttendanceCorrectionRequest>()
                 .HasIndex(x => new
@@ -184,6 +208,25 @@ namespace Humatrix_HRMS.Data
                     x.ReviewLevel
                 });
 
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasIndex(x => new
+                {
+                    x.OrganizationId,
+                    x.SubmittedAt
+                });
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasIndex(x => x.AssignedReviewerEmployeeId);
+
+            modelBuilder.Entity<AttendanceCorrectionRequest>()
+                .HasIndex(x => new
+                {
+                    x.EmployeeId,
+                    x.WorkDate,
+                    x.CorrectionType
+                })
+                .HasFilter("[Status] = 'Pending'")
+                .IsUnique();
             // =========================================================================
             // CORRECTION AUDIT LOG
             // =========================================================================
@@ -206,6 +249,102 @@ namespace Humatrix_HRMS.Data
 
             modelBuilder.Entity<CorrectionAuditLog>()
                 .HasIndex(x => x.OccurredAt);
+
+
+            // =========================================================================
+            // NOTIFICATION
+            // =========================================================================
+
+            modelBuilder.Entity<Notification>()
+                .HasIndex(x => new { x.UserId, x.IsRead, x.CreatedAt });
+
+            modelBuilder.Entity<Notification>()
+                .HasIndex(x => new { x.OrganizationId, x.NotificationType });
+
+            modelBuilder.Entity<NotificationPreferences>()
+                .HasIndex(x => x.UserId)
+                .IsUnique();
+
+
+            // =========================================================================
+            // APPROVAL REQUEST
+            // =========================================================================
+
+            modelBuilder.Entity<ApprovalRequest>()
+                .HasOne(x => x.RequestedByEmployee)
+                .WithMany()
+                .HasForeignKey(x => x.RequestedByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ApprovalRequest>()
+                .HasOne(x => x.CurrentApprover)
+                .WithMany()
+                .HasForeignKey(x => x.CurrentApproverEmployeeId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ApprovalRequest>()
+                .HasIndex(x => new
+                {
+                    x.OrganizationId,
+                    x.RequestType,
+                    x.Status
+                });
+
+            modelBuilder.Entity<ApprovalRequest>()
+                .HasIndex(x => new
+                {
+                    x.RequestType,
+                    x.RequestId
+                })
+                .IsUnique();
+
+
+            // =========================================================================
+            // APPROVAL HISTORY
+            // =========================================================================
+
+            modelBuilder.Entity<ApprovalHistory>()
+                .HasOne(x => x.ApprovalRequest)
+                .WithMany(x => x.History)
+                .HasForeignKey(x => x.ApprovalRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ApprovalHistory>()
+                .HasOne(x => x.PerformedByEmployee)
+                .WithMany()
+                .HasForeignKey(x => x.PerformedByEmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ApprovalHistory>()
+                .HasIndex(x => x.ApprovalRequestId);
+
+
+            // =========================================================================
+            // ACTIVITY LOG
+            // =========================================================================
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(x => new
+                {
+                    x.OrganizationId,
+                    x.Module,
+                    x.OccurredAt
+                });
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(x => new
+                {
+                    x.EntityType,
+                    x.EntityId
+                });
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(x => new
+                {
+                    x.PerformedByUserId,
+                    x.OrganizationId
+                });
         }
     }
 }

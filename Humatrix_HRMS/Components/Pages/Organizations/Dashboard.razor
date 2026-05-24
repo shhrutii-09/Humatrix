@@ -1,14 +1,23 @@
 ﻿@page "/org/dashboard"
+@implements IAsyncDisposable
 @rendermode InteractiveServer
 
 @using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
+@* @using Humatrix_HRMS.Components.Shared *@
+@using Humatrix_HRMS.Components.Account.Shared
 @using Microsoft.AspNetCore.Authorization
+@using Humatrix_HRMS.DTOs.Dashboard
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Linq
 
 @attribute [Authorize(Roles = "OrgAdmin")]
-
+@inject NotificationService NotificationService
 @inject OrgDashboardService DashboardService
+@inject CurrentUserService CurrentUserService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Admin Dashboard | Humatrix HRMS</PageTitle>
 
@@ -18,16 +27,24 @@
             <h2 class="fw-bold text-dark mb-0">Organization Overview</h2>
             <p class="text-muted mb-0">Welcome back, Admin. Here is what's happening today.</p>
         </div>
-        <div class="d-flex gap-2">
-            @* Fixed the syntax error on line 22 by removing backslashes and ensuring proper lambda format *@
-            @* <button class="btn btn-white border shadow-sm btn-sm py-2 px-3" @onclick='() => Nav.NavigateTo("/org/settings")'>
-                <i class="bi bi-gear me-2"></i>SETTINGS
-            </button> *@
-            <button class="btn btn-white border shadow-sm btn-sm py-2 px-3" @onclick='() => Nav.NavigateTo("/org/profile")'>
-                My Profile
-            </button>
-        </div>
 
+     <div class="d-flex gap-3 align-items-center">
+
+    @if (dashboardContext != null)
+    {
+        <NotificationBell />
+    }
+
+    <span class="badge bg-danger p-2">
+        Org Admin Role
+    </span>
+
+    <button class="btn btn-white border shadow-sm btn-sm py-2 px-3"
+            @onclick='() => Nav.NavigateTo("/org/profile")'>
+        My Profile
+    </button>
+
+</div>
     </div>
 
     @if (data == null)
@@ -205,17 +222,158 @@
     .text-primary {
         color: #5c4ac7 !important;
     }
+
+    .notification-dropdown {
+        width: 360px;
+        z-index: 999;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .notification-body {
+        max-height: 380px;
+        overflow-y: auto;
+    }
+
+    .notification-item {
+        transition: background 0.15s ease;
+        cursor: pointer;
+    }
+
+        .notification-item:hover {
+            background-color: #f8f9fa;
+        }
+
+    .notification-unread {
+        background-color: #f4f7ff;
+        border-left: 3px solid #5c4ac7;
+    }
+
+    .notification-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    .notification-message {
+        font-size: 13px;
+        color: #6c757d;
+        line-height: 1.35;
+    }
+
+    .notification-time {
+        font-size: 11px;
+        color: #999;
+        margin-top: 4px;
+    }
 </style>
 
 @code {
     private OrgDashboardDto? data;
+    // private List<NotificationDto> notifications = new();
+    // private int unreadCount;
+    // private bool showNotifications;
+    private OrgDashboardContextDto? dashboardContext;
+    private HubConnection? _dashHub;
 
     protected override async Task OnInitializedAsync()
     {
+        dashboardContext = await CurrentUserService.GetOrgDashboardContextAsync();
         data = await DashboardService.GetDashboardDataAsync();
+        // await LoadNotificationsAsync();
     }
 
     void GoDepartments() => Nav.NavigateTo("/org/departments");
     void GoDesignations() => Nav.NavigateTo("/org/designations");
     void GoEmployees() => Nav.NavigateTo("/employees");
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dashHub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Dashboard refresh
+        _dashHub.On<object>(
+            "DashboardRefresh",
+            async _ =>
+            {
+                data = await DashboardService.GetDashboardDataAsync();
+
+                await InvokeAsync(StateHasChanged);
+            });
+
+        // RECEIVE NOTIFICATION (FOR SOUND + LIVE UPDATE)
+        _dashHub.On<NotificationPushDto>(
+            "ReceiveNotification",
+            async payload =>
+            {
+                try
+                {
+                    Console.WriteLine($"Notification received: {payload.Title}");
+
+                    // Play notification sound
+                    await JS.InvokeVoidAsync("playNotificationSound");
+
+                    // Show browser/in-app toast
+                    await JS.InvokeVoidAsync(
+                        "showToastNotification",
+                        payload.Title,
+                        payload.Message,
+                        payload.RedirectUrl,
+                        payload.Priority
+                    );
+
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Notification error: {ex.Message}");
+                }
+            });
+
+        // Connection lifecycle logs
+        _dashHub.Reconnecting += error =>
+        {
+            Console.WriteLine("SignalR reconnecting...");
+            return Task.CompletedTask;
+        };
+
+        _dashHub.Reconnected += connectionId =>
+        {
+            Console.WriteLine("SignalR reconnected");
+            return Task.CompletedTask;
+        };
+
+        await _dashHub.StartAsync();
+
+        Console.WriteLine("Org Dashboard SignalR Connected");
+
+        if (dashboardContext != null)
+        {
+            // IMPORTANT
+            await _dashHub.SendAsync(
+                "JoinOrgDashboardGroup",
+                dashboardContext.OrganizationId.ToString());
+
+            await _dashHub.SendAsync(
+                "JoinUserGroup",
+                dashboardContext.UserId);
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dashHub != null)
+        {
+            await _dashHub.DisposeAsync();
+        }
+    }
+
+   
 }

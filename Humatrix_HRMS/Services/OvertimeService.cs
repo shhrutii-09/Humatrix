@@ -3,6 +3,9 @@ using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Helpers;
 using Humatrix_HRMS.Models;
 using Microsoft.EntityFrameworkCore;
+using Humatrix_HRMS.Infrastructure.Services;
+using Microsoft.AspNetCore.Identity;
+using Humatrix_HRMS.Infrastructure.Constants;
 
 namespace Humatrix_HRMS.Services
 {
@@ -34,19 +37,32 @@ namespace Humatrix_HRMS.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly CurrentUserService _currentUser;
+        private readonly ApprovalWorkflowService _approvalWorkflowService;
+        private readonly NotificationEngine _notificationEngine;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly AttendanceCalculationService _calc;
+        private readonly NotificationService _notificationService;
 
         private const double MAX_OT = AttendanceConstants.MaxOvertimeHoursPerDay;
         private const double MIN_OT = AttendanceConstants.MinOvertimeHours;
 
         public OvertimeService(
-            ApplicationDbContext context,
-            CurrentUserService currentUser,
-            AttendanceCalculationService calc)
+    ApplicationDbContext context,
+    CurrentUserService currentUser,
+    AttendanceCalculationService calc,
+    UserManager<ApplicationUser> userManager,
+    ApprovalWorkflowService approvalWorkflowService,
+    NotificationEngine notificationEngine,
+    NotificationService notificationService) // 🚀 ADDED TO SIGNATURE)
         {
             _context = context;
             _currentUser = currentUser;
             _calc = calc;
+
+            _userManager = userManager;
+            _approvalWorkflowService = approvalWorkflowService;
+            _notificationEngine = notificationEngine;
+            _notificationService = notificationService; // 🚀 ASSIGNED
         }
 
         // =========================================================================
@@ -63,14 +79,16 @@ namespace Humatrix_HRMS.Services
 
 
             // ── USER ROLES ─────────────────────────────────────────────
-            var userRoles = await _context.UserRoles
-                .Where(x => x.UserId == user.Id)
-                .Join(
-                    _context.Roles,
-                    ur => ur.RoleId,
-                    r => r.Id,
-                    (ur, r) => r.Name)
-                .ToListAsync();
+            //var userRoles = await _context.UserRoles
+            //    .Where(x => x.UserId == user.Id)
+            //    .Join(
+            //        _context.Roles,
+            //        ur => ur.RoleId,
+            //        r => r.Id,
+            //        (ur, r) => r.Name)
+            //    .ToListAsync();
+
+            var userRoles = await _userManager.GetRolesAsync(user);
 
             var isHr = userRoles.Contains("HR");
             var isOrgAdmin = userRoles.Contains("OrgAdmin");
@@ -182,8 +200,110 @@ namespace Humatrix_HRMS.Services
             // Keep flag set so the HR dashboard shows it
             attendance.NeedsOvertimeApproval = true;
 
+            using var tx = await _context.Database.BeginTransactionAsync();
+
             _context.OvertimeRequests.Add(request);
+
             await _context.SaveChangesAsync();
+
+            // ==========================================
+            // CREATE APPROVAL WORKFLOW
+            // ==========================================
+
+            await _approvalWorkflowService.SubmitAsync(
+                _context,
+                ApprovalRequestTypes.Overtime,
+                request.OvertimeRequestId,
+                employee.OrganizationId,
+                employee.EmployeeId,
+                applicantRole: requesterRole);
+
+            await tx.CommitAsync();
+
+            // ==========================================
+            // SEND NOTIFICATIONS
+            // ==========================================
+
+            await _notificationEngine.SendOvertimeAppliedAsync(
+                employeeFullName: $"{employee.FirstName} {employee.LastName}",
+                hours: request.RequestedHours,
+                requestId: request.OvertimeRequestId,
+                organizationId: employee.OrganizationId,
+                departmentId: employee.DepartmentId,
+                applicantRole: requesterRole,
+                actorUserId: employee.UserId
+            );
+
+            // =====================================================
+            // Employee request → HR + OrgAdmin
+            // =====================================================
+            if (requesterRole == "Employee")
+            {
+                // Find department HR
+                var hrUserIds = await (
+                    from e in _context.Employees
+                    join ur in _context.UserRoles on e.UserId equals ur.UserId
+                    join r in _context.Roles on ur.RoleId equals r.Id
+                    where e.OrganizationId == employee.OrganizationId
+                          && e.DepartmentId == employee.DepartmentId
+                          && r.Name == "HR"
+                    select e.UserId
+                ).ToListAsync();
+
+                // Notify all HRs in department
+                foreach (var hrUserId in hrUserIds)
+                {
+                    if (!string.IsNullOrEmpty(hrUserId))
+                    {
+                        await _notificationService.CreateNotificationAsync(
+                            hrUserId,
+                            "New Overtime Request",
+                            $"{employee.FirstName} {employee.LastName} requested {request.RequestedHours} hours of overtime for {request.Date:dd MMM yyyy}.",
+                            "/hr/overtime");
+                    }
+                }
+
+                // Notify OrgAdmin
+                await _notificationService.CreateOrgAdminNotificationsAsync(
+                    employee.OrganizationId,
+                    "New Overtime Request",
+                    $"{employee.FirstName} {employee.LastName} requested {request.RequestedHours} hours of overtime for {request.Date:dd MMM yyyy}.",
+                    "/hr/overtime");
+            }
+
+            // =====================================================
+            // HR request → OrgAdmin only
+            // =====================================================
+            //if (requesterRole == "HR")
+            //{
+            //    await _notificationService.CreateOrgAdminNotificationsAsync(
+            //        employee.OrganizationId,
+            //        "New Overtime Request",
+            //        $"{employee.FirstName} {employee.LastName} requested {request.RequestedHours} hours of overtime for {request.Date:dd MMM yyyy}.",
+            //        "/orgadmin/overtime");
+            //}
+            // =====================================================
+            // HR / OrgAdmin request → OrgAdmin only
+            // =====================================================
+            if (requesterRole == "HR" || requesterRole == "OrgAdmin")
+            {
+                await _notificationService.CreateOrgAdminNotificationsAsync(
+                    employee.OrganizationId,
+                    "New Overtime Request",
+                    $"{employee.FirstName} {employee.LastName} requested {request.RequestedHours} hours of overtime for {request.Date:dd MMM yyyy}.",
+                    "/hr/overtime");
+            }
+
+            // ──────────────────────────────────────────────────────────────────
+            // 🚀 ADDED: BROADCAST DASHBOARD REAL-TIME REFRESHES
+            // ──────────────────────────────────────────────────────────────────
+            await _notificationService.BroadcastOrgDashboardRefreshAsync(
+                employee.OrganizationId);
+
+            await _notificationService.BroadcastHrDashboardRefreshAsync(
+                employee.OrganizationId,
+                employee.DepartmentId);
+        
         }
 
         // =========================================================================
@@ -281,14 +401,16 @@ namespace Humatrix_HRMS.Services
                     throw new Exception("Unauthorized — request belongs to a different organisation.");
 
                 // ── CURRENT USER ROLES ─────────────────────────────────
-                var userRoles = await _context.UserRoles
-                    .Where(x => x.UserId == user.Id)
-                    .Join(
-                        _context.Roles,
-                        ur => ur.RoleId,
-                        r => r.Id,
-                        (ur, r) => r.Name)
-                    .ToListAsync();
+                //var userRoles = await _context.UserRoles
+                //    .Where(x => x.UserId == user.Id)
+                //    .Join(
+                //        _context.Roles,
+                //        ur => ur.RoleId,
+                //        r => r.Id,
+                //        (ur, r) => r.Name)
+                //    .ToListAsync();
+
+                var userRoles = await _userManager.GetRolesAsync(user);
 
                 var isOrgAdmin = userRoles.Contains("OrgAdmin");
                 var isHR = userRoles.Contains("HR");
@@ -349,10 +471,46 @@ namespace Humatrix_HRMS.Services
                     // Recalculate TotalHours and Status with rolled-back checkout
                     _calc.ReapplyStatusAfterOtReview(attendance, attendance.Employee?.Shift);
 
+                    //await _context.SaveChangesAsync();
+                    //await transaction.CommitAsync();
+                    //return;
+
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
+
+                    // ==========================================
+                    // SEND REJECTION NOTIFICATION
+                    // ==========================================
+                    await _notificationEngine.SendOvertimeRejectedAsync(
+                        employeeUserId: request.Employee.UserId,
+                        hours: request.RequestedHours,
+                        requestId: request.OvertimeRequestId,
+                        organizationId: request.Employee.OrganizationId,
+                        actorUserId: user.Id
+                    );
+
+                    // =====================================================
+                    // NOTIFY EMPLOYEE / HR ABOUT REJECTION
+                    // =====================================================
+
+                    if (!string.IsNullOrEmpty(request.Employee.UserId))
+                    {
+                        await _notificationService.CreateNotificationAsync(
+                            request.Employee.UserId,
+                            "Overtime Request Rejected",
+                            $"Your overtime request for {request.Date:dd MMM yyyy} was rejected.",
+                            "/employee/overtime");
+                    }
+
+                    // ──────────────────────────────────────────────────────────────────
+                    // 🚀 ADDED: BROADCAST REFRESHES POST-REJECTION
+                    // ──────────────────────────────────────────────────────────────────
+                    await _notificationService.BroadcastOrgDashboardRefreshAsync(request.Employee.OrganizationId);
+                    await _notificationService.BroadcastHrDashboardRefreshAsync(request.Employee.OrganizationId, request.Employee.DepartmentId);
+
                     return;
-                }
+                
+            }
 
                 // ── APPROVAL PATH ─────────────────────────────────────────────────
                 request.Status = "Approved";
@@ -389,8 +547,40 @@ namespace Humatrix_HRMS.Services
                 // Recalculate TotalHours and Status with the new checkout time
                 _calc.ReapplyStatusAfterOtReview(attendance, attendance.Employee?.Shift);
 
+                //await _context.SaveChangesAsync();
+                //await transaction.CommitAsync();
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                // ==========================================
+                // SEND APPROVAL NOTIFICATION
+                // ==========================================
+                await _notificationEngine.SendOvertimeApprovedAsync(
+                    employeeUserId: request.Employee.UserId,
+                    hours: request.RequestedHours,
+                    requestId: request.OvertimeRequestId,
+                    organizationId: request.Employee.OrganizationId,
+                    actorUserId: user.Id
+                );
+
+                // =====================================================
+                // NOTIFY EMPLOYEE / HR ABOUT APPROVAL
+                // =====================================================
+
+                if (!string.IsNullOrEmpty(request.Employee.UserId))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        request.Employee.UserId,
+                        "Overtime Request Approved",
+                        $"Your overtime request for {request.Date:dd MMM yyyy} was approved.",
+                        "/employee/overtime");
+                }
+
+                // ──────────────────────────────────────────────────────────────────
+                // 🚀 ADDED: BROADCAST REFRESHES POST-APPROVAL
+                // ──────────────────────────────────────────────────────────────────
+                await _notificationService.BroadcastOrgDashboardRefreshAsync(request.Employee.OrganizationId);
+                await _notificationService.BroadcastHrDashboardRefreshAsync(request.Employee.OrganizationId, request.Employee.DepartmentId);
             }
             catch
             {

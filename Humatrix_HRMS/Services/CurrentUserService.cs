@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+//using Humatrix_HRMS.DTOs.Dashboard;
+using Humatrix_HRMS.DTOs.Dashboard;
 
 namespace Humatrix_HRMS.Services
 {
@@ -9,6 +11,7 @@ namespace Humatrix_HRMS.Services
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+
 
         public CurrentUserService(
             IHttpContextAccessor httpContextAccessor,
@@ -35,6 +38,38 @@ namespace Humatrix_HRMS.Services
             return await context.Users
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Id == userId);
+        }
+
+        public async Task<HrDashboardContextDto?> GetHrDashboardContextAsync()
+        {
+            var user = await GetUserAsync();
+
+            if (user == null)
+                return null;
+
+            return new HrDashboardContextDto
+            {
+                EmployeeId = user.Id,
+                OrganizationId = user.OrganizationId ?? Guid.Empty,
+                DepartmentId = user.DepartmentId ?? Guid.Empty,
+                FullName = $"{user.FirstName} {user.LastName}",
+                Email = user.Email ?? ""
+            };
+        }
+        public async Task<OrgDashboardContextDto?> GetOrgDashboardContextAsync()
+        {
+            var user = await GetUserAsync();
+
+            if (user == null)
+                return null;
+
+            return new OrgDashboardContextDto
+            {
+                UserId = user.Id,
+                OrganizationId = user.OrganizationId ?? Guid.Empty,
+                FullName = $"{user.FirstName} {user.LastName}",
+                Email = user.Email ?? ""
+            };
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿@page "/hr/dashboard"
+@implements IAsyncDisposable
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
@@ -6,9 +7,13 @@
 @using Humatrix_HRMS.Components.Account.Shared
 @using Microsoft.AspNetCore.Authorization
 @using System.Security.Claims
+@using Humatrix_HRMS.DTOs.Dashboard
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.SignalR.Client
 
 @attribute [Authorize(Roles = "HR")]
 @inject LeaveService LeaveService
+@inject NavigationManager Nav
 @inject EmployeeService EmployeeService
 @inject CurrentUserService CurrentUserService
 
@@ -413,7 +418,10 @@
     private List<EmployeeListDto>? employees;
 
     private ApplicationUser? currentUser;
+    private HrDashboardContextDto? dashboardContext;
 
+    private int pendingWfhCount;
+    private int pendingOtCount;
     private string searchTerm = "";
     private string? error;
     private int pendingLeaveCount;
@@ -426,7 +434,9 @@
 
             // await LoadEmployees();
             currentUser = await CurrentUserService.GetUserAsync();
-            await LoadEmployees();
+
+            dashboardContext = await CurrentUserService
+                .GetHrDashboardContextAsync(); await LoadEmployees();
             await LoadPendingLeaveCount();
         }
         catch (Exception ex)
@@ -467,4 +477,75 @@
     {
         await LoadEmployees();
     }
+
+    private HubConnection? _dashHub;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dashHub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _dashHub.On("DashboardRefresh", async () =>
+        {
+            await LoadPendingLeaveCount();
+            await LoadPendingWfhCount();
+            await LoadPendingOtCount();
+
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await _dashHub.StartAsync();
+
+        if (dashboardContext != null)
+        {
+            await _dashHub.SendAsync(
+                "JoinHrDashboardGroup",
+                dashboardContext.OrganizationId.ToString(),
+                dashboardContext.DepartmentId.ToString());
+        }
+    }
+
+    private async Task LoadPendingWfhCount()
+    {
+        try
+        {
+            // TODO:
+            // Replace with actual WFH service later
+
+            pendingWfhCount = 0;
+        }
+        catch
+        {
+            pendingWfhCount = 0;
+        }
+    }
+
+    private async Task LoadPendingOtCount()
+    {
+        try
+        {
+            // TODO:
+            // Replace with actual OT service later
+
+            pendingOtCount = 0;
+        }
+        catch
+        {
+            pendingOtCount = 0;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dashHub != null)
+        {
+            await _dashHub.DisposeAsync();
+        }
+    }
+
+
 }

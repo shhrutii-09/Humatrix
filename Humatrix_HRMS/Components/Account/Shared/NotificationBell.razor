@@ -1,278 +1,294 @@
-﻿@using Humatrix_HRMS.DTOs
-@using Humatrix_HRMS.Services
+﻿@* Components/Shared/NotificationBell.razor *@
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Infrastructure.Services
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Identity
-@using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject IJSRuntime JS
-
-@inject NotificationService NotificationService
+@inject NotificationEngine NotificationEngine
 @inject AuthenticationStateProvider AuthProvider
-
 @inject NavigationManager Nav
 
-<div class="dropdown">
+<div class="dropdown notification-bell-container">
 
     <!-- BELL BUTTON -->
     <button class="btn btn-light position-relative border"
             type="button"
             data-bs-toggle="dropdown"
-            aria-expanded="false">
-
+            aria-expanded="false"
+            aria-label="Notifications">
         <i class="bi bi-bell fs-5"></i>
-
         @if (unreadCount > 0)
         {
-            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                @unreadCount
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style="font-size: 0.65rem;">
+                @(unreadCount > 99 ? "99+" : unreadCount.ToString())
             </span>
         }
-
     </button>
 
     <!-- DROPDOWN -->
-    <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-0"
-        style="width:350px; max-height:450px; overflow-y:auto;">
+    <div class="dropdown-menu dropdown-menu-end shadow border-0 p-0 notification-dropdown">
 
         <!-- HEADER -->
-        <li class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light sticky-top">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light sticky-top">
+            <span class="fw-bold">Notifications</span>
+            <div class="d-flex gap-2">
+                @if (notifications.Any(x => !x.IsRead))
+                {
+                    <button class="btn btn-sm btn-link text-primary text-decoration-none p-0"
+                            @onclick="MarkAllRead">
+                        Mark all read
+                    </button>
+                }
+                @if (notifications.Any())
+                {
+                    <button class="btn btn-sm btn-link text-danger text-decoration-none p-0"
+                            @onclick="ClearAll">
+                        Clear all
+                    </button>
+                }
+            </div>
+        </div>
 
-            <span class="fw-bold">
-                Notifications
-            </span>
-
-            @if (notifications.Any())
+        <!-- FILTER TABS -->
+        <div class="d-flex border-bottom px-2 pt-1 bg-white sticky-top" style="top:41px;">
+            @foreach (var tab in new[] { "All", "Unread" })
             {
-                <button class="btn btn-sm btn-link text-danger text-decoration-none"
-                        @onclick="ClearAllNotifications">
-                    Clear All
+                <button class="btn btn-sm me-1 mb-1 @(activeTab == tab ? "btn-primary" : "btn-light")"
+                        @onclick="() => SetTab(tab)">
+                    @tab
                 </button>
             }
+        </div>
 
-        </li>
+        <!-- LIST -->
+        <div style="max-height: 400px; overflow-y: auto;">
+            @{
+                var visible = activeTab == "Unread"
+                ? notifications.Where(x => !x.IsRead).ToList()
+                : notifications;
+            }
 
-        <!-- EMPTY -->
-        @if (!notifications.Any())
-        {
-            <li class="text-center text-muted p-4">
-                <i class="bi bi-bell-slash fs-4 d-block mb-2"></i>
-                No notifications
-            </li>
-        }
-        else
-        {
-            @foreach (var n in notifications.OrderByDescending(x => x.CreatedAt))
+            @if (!visible.Any())
             {
-                <li class="border-bottom">
+                <div class="text-center text-muted p-4">
+                    <i class="bi bi-bell-slash fs-4 d-block mb-2"></i>
+                    No notifications
+                </div>
+            }
+            else
+            {
+                @foreach (var n in visible)
+                {
+                    <div class="notification-item border-bottom d-flex align-items-start p-3 @(!n.IsRead ? "notification-item--unread" : "")"
+                         style="cursor: pointer"
+                         @onclick="() => Open(n)">
 
-                    <div class="d-flex justify-content-between align-items-start p-3 notification-item">
-
-                        <!-- CLICKABLE CONTENT -->
-                        @* <div class="flex-grow-1"
-                             style="cursor:pointer"
-                             @onclick="() => OpenNotification(n)"> *@
-
-                        <div class="flex-grow-1"
-                             style="cursor:pointer"
-                             @onclick:stopPropagation="true"
-                             @onclick="async () => await OpenNotification(n)">
-
-                            <div class="fw-semibold">
-                                @n.Title
-                            </div>
-
-                            <small class="text-muted d-block">
-                                @n.Message
-                            </small>
-
-                            <div class="small text-muted mt-1">
-                                @n.CreatedAt.ToString("dd MMM yyyy hh:mm tt")
-                            </div>
-
+                        <!-- TYPE ICON -->
+                        <div class="notification-icon me-2 flex-shrink-0">
+                            <i class="bi @GetIcon(n.NotificationType) @GetIconColor(n.NotificationType)"></i>
                         </div>
 
-                        <!-- DELETE BUTTON -->
-                        <button class="btn btn-sm text-danger"
-                                title="Delete"
-                                @onclick="() => DeleteNotification(n.NotificationId)">
+                        <!-- CONTENT -->
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="fw-semibold text-truncate">@n.Title</div>
+                            <small class="text-muted d-block">@n.Message</small>
+                            <div class="small text-muted mt-1">
+                                @TimeAgo(n.CreatedAt)
+                            </div>
+                        </div>
 
-                            <i class="bi bi-x-lg"></i>
-
+                        <!-- DELETE -->
+                        <button class="btn btn-sm text-muted ms-1 flex-shrink-0"
+                                title="Dismiss"
+                                @onclick:stopPropagation="true"
+                                @onclick="() => Delete(n.NotificationId)">
+                            <i class="bi bi-x"></i>
                         </button>
-
                     </div>
-
-                </li>
+                }
             }
-        }
+        </div>
 
-    </ul>
-
+        <!-- FOOTER -->
+        <div class="border-top text-center py-2 bg-light">
+            <a href="/notifications" class="small text-primary text-decoration-none">
+                View all notifications
+            </a>
+        </div>
+    </div>
 </div>
 
 <style>
+    .notification-dropdown {
+        width: 380px;
+        border-radius: 12px;
+    }
+
     .notification-item:hover {
         background-color: #f8f9fa;
     }
 
-    .dropdown-menu {
-        border-radius: 12px;
+    .notification-item--unread {
+        background-color: #f0f7ff;
     }
+
+        .notification-item--unread:hover {
+            background-color: #e8f2ff;
+        }
 </style>
 
 @code {
-
-    private HubConnection? hubConnection;
-
+    private HubConnection? _hub;
     private List<NotificationDto> notifications = new();
-
     private int unreadCount;
-
     private string? currentUserId;
-
-
-    private bool connected = false;
+    private bool _connected;
+    private string activeTab = "All";
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadUser();
         await LoadNotifications();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !connected && !string.IsNullOrEmpty(currentUserId))
+        if (!firstRender || _connected || string.IsNullOrEmpty(currentUserId))
+            return;
+
+        _connected = true;
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Receive full payload — no DB reload needed
+        _hub.On<NotificationPushDto>("ReceiveNotification", async push =>
         {
-            connected = true;
+            try
+            {
+                // Prepend to local list without hitting DB
+                notifications.Insert(0, new NotificationDto
+                {
+                    NotificationId = push.NotificationId,
+                    Title = push.Title,
+                    Message = push.Message,
+                    RedirectUrl = push.RedirectUrl,
+                    NotificationType = push.NotificationType,
+                    Priority = push.Priority,
+                    CreatedAt = push.CreatedAt,
+                    IsRead = false
+                });
 
-            hubConnection = new HubConnectionBuilder()
-                .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
-                .WithAutomaticReconnect()
-                .Build();
+                unreadCount = push.NewUnreadCount;
 
-            hubConnection.On("ReceiveNotification", async () =>
-{
-    try
-    {
-        await LoadNotifications();
+                // Show toast + sound (respect preferences — check sound toggle)
+                await JS.InvokeVoidAsync("showToastNotification",
+                    push.Title, push.Message, push.RedirectUrl, push.Priority);
+                await JS.InvokeVoidAsync("playNotificationSound");
 
-        var latest = notifications
-            .OrderByDescending(x => x.CreatedAt)
-            .FirstOrDefault();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NotificationBell] Push handler error: {ex.Message}");
+            }
+        });
 
-        if (latest != null)
-        {
-            await JS.InvokeVoidAsync(
-                "showToastNotification",
-                latest.Title,
-                latest.Message,
-                latest.RedirectUrl);
-
-            await JS.InvokeVoidAsync(
-                "playNotificationSound");
-        }
-
-        await InvokeAsync(StateHasChanged);
+        await _hub.StartAsync();
+        await _hub.SendAsync("JoinUserGroup", currentUserId);
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine(ex.ToString());
-    }
-});
 
-            await hubConnection.StartAsync();
-
-            await hubConnection.SendAsync(
-                "JoinUserGroup",
-                currentUserId);
-        }
-    }
-    // =========================
-    // LOAD NOTIFICATIONS
-    // =========================
-    private async Task LoadNotifications()
+    private async Task LoadUser()
     {
         var auth = await AuthProvider.GetAuthenticationStateAsync();
-
-        var user = auth.User;
-
-        if (user?.Identity == null || !user.Identity.IsAuthenticated)
-            return;
-
-        currentUserId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-
-        if (string.IsNullOrEmpty(currentUserId))
-            return;
-
-        notifications = await NotificationService
-            .GetMyNotificationsAsync(currentUserId);
-
-        unreadCount = await NotificationService
-            .GetUnreadCountAsync(currentUserId);
-
-        StateHasChanged();
-    }
-    // =========================
-    // OPEN NOTIFICATION
-    // =========================
-    private async Task OpenNotification(NotificationDto n)
-    {
-        try
-        {
-            await NotificationService.MarkAsReadAsync(n.NotificationId);
-
-            n.IsRead = true;
-
-            unreadCount = Math.Max(0, unreadCount - 1);
-
-            await InvokeAsync(StateHasChanged);
-
-            if (!string.IsNullOrWhiteSpace(n.RedirectUrl))
-            {
-                Nav.NavigateTo(n.RedirectUrl, forceLoad: true);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-        }
+        currentUserId = auth.User
+            .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     }
 
-    // =========================
-    // DELETE SINGLE
-    // =========================
-    private async Task DeleteNotification(int id)
+    private async Task LoadNotifications()
     {
-        await NotificationService.DeleteNotificationAsync(id);
-
-        notifications.RemoveAll(x => x.NotificationId == id);
-
+        if (string.IsNullOrEmpty(currentUserId)) return;
+        notifications = await NotificationEngine.GetMyNotificationsAsync(currentUserId);
         unreadCount = notifications.Count(x => !x.IsRead);
-
         StateHasChanged();
+    }
+
+    private async Task Open(NotificationDto n)
+    {
+        if (!n.IsRead)
+        {
+            await NotificationEngine.MarkAsReadAsync(n.NotificationId, currentUserId!);
+            n.IsRead = true;
+            unreadCount = Math.Max(0, unreadCount - 1);
+            StateHasChanged();
+        }
+        if (!string.IsNullOrWhiteSpace(n.RedirectUrl))
+            Nav.NavigateTo(n.RedirectUrl, forceLoad: false);
+    }
+
+    private async Task Delete(int id)
+    {
+        await NotificationEngine.DeleteAsync(id, currentUserId!);
+        notifications.RemoveAll(x => x.NotificationId == id);
+        unreadCount = notifications.Count(x => !x.IsRead);
+        StateHasChanged();
+    }
+
+    private async Task MarkAllRead()
+    {
+        await NotificationEngine.MarkAllReadAsync(currentUserId!);
+        notifications.ForEach(x => { x.IsRead = true; x.ReadAt = DateTime.UtcNow; });
+        unreadCount = 0;
+        StateHasChanged();
+    }
+
+    private async Task ClearAll()
+    {
+        await NotificationEngine.ClearAllAsync(currentUserId!);
+        notifications.Clear();
+        unreadCount = 0;
+        StateHasChanged();
+    }
+
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    private static string GetIcon(string type) => type switch
+    {
+        var t when t.StartsWith("leave") => "bi-calendar-check",
+        var t when t.StartsWith("wfh") => "bi-house-check",
+        var t when t.StartsWith("overtime") => "bi-clock-history",
+        var t when t.StartsWith("attendance") => "bi-person-check",
+        var t when t.StartsWith("task") => "bi-check2-square",
+        _ => "bi-bell"
+    };
+
+    private static string GetIconColor(string type) => type switch
+    {
+        var t when t.Contains("approved") => "text-success",
+        var t when t.Contains("rejected") => "text-danger",
+        _ => "text-primary"
+    };
+
+    private static string TimeAgo(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt.ToUniversalTime();
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
+        return dt.ToString("dd MMM");
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (hubConnection is not null)
-        {
-            await hubConnection.DisposeAsync();
-        }
-    }
-    // =========================
-    // CLEAR ALL
-    // =========================
-    private async Task ClearAllNotifications()
-    {
-        if (string.IsNullOrEmpty(currentUserId))
-            return;
-
-        await NotificationService.ClearAllNotificationsAsync(currentUserId);
-
-        notifications.Clear();
-
-        unreadCount = 0;
-
-        StateHasChanged();
+        if (_hub is not null) await _hub.DisposeAsync();
     }
 }
