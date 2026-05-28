@@ -1,12 +1,16 @@
 ﻿@page "/admin/create-organization"
 @rendermode InteractiveServer
+
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
 @attribute [Authorize(Roles = "SuperAdmin")]
+
 @inject OrganizationService OrgService
-@inject IJSRuntime JS
+
+<PageTitle>Create Organization</PageTitle>
+
 <div class="container-fluid px-4 mt-4">
 
     <!-- HEADER -->
@@ -20,155 +24,276 @@
 
     </div>
 
-    <!-- MAIN FORM (still card, but full-width like employee page) -->
+    <!-- FORM CARD -->
     <div class="card shadow-sm border-0">
+
         <div class="card-body p-4">
-                <div class="text-center mb-4">
-                    <div class="icon-shape bg-purple-light text-purple mb-3">
-                        <i class="bi bi-building fs-3"></i>
-                    </div>
-                    <h3 class="fw-bold">Register Organization</h3>
-                    <p class="text-muted">Fill in the details to onboard a new company.</p>
+
+            <!-- TOP TITLE -->
+            <div class="text-center mb-4">
+
+                <div class="icon-shape bg-purple-light text-purple mb-3">
+                    <i class="bi bi-building fs-3"></i>
                 </div>
 
-                <EditForm Model="orgDto" OnValidSubmit="HandleCreateOrganization">
-                    <DataAnnotationsValidator />
+                <h3 class="fw-bold">
+                    Register Organization
+                </h3>
 
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Company Name</label>
-                        <InputText @bind-Value="orgDto.Name" class="form-control border-0 bg-light py-2 px-3" placeholder="Enter name" />
-                        <ValidationMessage For="() => orgDto.Name" class="text-danger small mt-1" />
+                <p class="text-muted">
+                    Fill in the details to onboard a new company.
+                </p>
+
+            </div>
+
+            <!-- FORM -->
+            <EditForm Model="orgDto"
+                      OnValidSubmit="HandleCreateOrganization">
+
+                <DataAnnotationsValidator />
+
+                <!-- COMPANY NAME -->
+                <div class="mb-3">
+
+                    <label class="form-label small fw-bold">
+                        Company Name
+                    </label>
+
+                    <InputText @bind-Value="orgDto.Name"
+                               class="form-control border-0 bg-light py-2 px-3"
+                               placeholder="Enter company name" />
+
+                    <ValidationMessage For="() => orgDto.Name"
+                                       class="text-danger small mt-1" />
+
+                </div>
+
+                <!-- EMAIL + PHONE -->
+                <div class="row mb-3">
+
+                    <div class="col-md-6">
+
+                        <label class="form-label small fw-bold">
+                            Email
+                        </label>
+
+                        <InputText @bind-Value="orgDto.Email"
+                                   type="email"
+                                   class="form-control border-0 bg-light py-2"
+                                   placeholder="organization@email.com" />
+
+                        <ValidationMessage For="() => orgDto.Email"
+                                           class="text-danger small mt-1" />
+
                     </div>
 
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Email</label>
-                            <InputText @bind-Value="orgDto.Email" type="email" class="form-control border-0 bg-light py-2" placeholder="org@email.com" />
-                            <ValidationMessage For="() => orgDto.Email" class="text-danger small mt-1" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">Phone</label>
-                            <InputText @bind-Value="orgDto.Phone" class="form-control border-0 bg-light py-2" placeholder="10-digit number" />
-                            <ValidationMessage For="() => orgDto.Phone" class="text-danger small mt-1" />
-                        </div>
+                    <div class="col-md-6">
+
+                        <label class="form-label small fw-bold">
+                            Phone
+                        </label>
+
+                        <InputText @bind-Value="orgDto.Phone"
+                                   class="form-control border-0 bg-light py-2"
+                                   placeholder="10-digit number" />
+
+                        <ValidationMessage For="() => orgDto.Phone"
+                                           class="text-danger small mt-1" />
+
                     </div>
 
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold">Address</label>
-                        <InputTextArea @bind-Value="orgDto.Address" class="form-control border-0 bg-light py-2" rows="2" placeholder="Enter full address" />
-                        <ValidationMessage For="() => orgDto.Address" class="text-danger small mt-1" />
-                    </div>
+                </div>
 
-                    <div class="admin-section mb-4 p-3 rounded-3">
-                        <label class="form-label small fw-bold text-primary">Assign Admin User Email</label>
-                        <InputText @bind-Value="orgDto.AdminEmail" type="email" class="form-control border-0 py-2 shadow-sm" placeholder="admin@email.com" />
-                        <ValidationMessage For="() => orgDto.AdminEmail" class="text-danger small mt-1" />
-                        <small class="text-muted d-block mt-2" style="font-size: 0.7rem;">*This user will receive the invitation to set up the system.</small>
-                    </div>
+                <!-- ADDRESS -->
+                <div class="mb-4">
 
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary py-2 fw-bold rounded-3 shadow-sm" disabled="@isSubmitting">
-                            @if (isSubmitting)
-                            {
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                            
-                                <span>Creating...</span>
-                            }
-                            else
-                            {
-                                <span>CREATE ORGANIZATION</span>
-                            }
-                        </button>
-                        <a href="/admin/dashboard" class="btn btn-link text-muted small text-decoration-none text-center">Cancel and return</a>
-                    </div>
+                    <label class="form-label small fw-bold">
+                        Address
+                    </label>
 
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <div class="alert alert-danger mt-3 border-0 shadow-sm">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            @errorMessage
-                        </div>
-                    }
+                    <InputTextArea @bind-Value="orgDto.Address"
+                                   class="form-control border-0 bg-light py-2"
+                                   rows="2"
+                                   placeholder="Enter full address" />
 
-                    @* @if (!string.IsNullOrEmpty(successMessage))
-                    {
-                        <div class="alert alert-success mt-3 border-0 shadow-sm">
-                            <i class="bi bi-check-circle-fill me-2"></i>
-                            @successMessage
-                        </div>
-                    } *@
-                </EditForm>
+                    <ValidationMessage For="() => orgDto.Address"
+                                       class="text-danger small mt-1" />
 
-                @if (!string.IsNullOrEmpty(generatedLink))
+                </div>
+
+                <!-- ADMIN EMAIL -->
+                <div class="admin-section mb-4 p-3 rounded-3">
+
+                    <label class="form-label small fw-bold text-primary">
+                        Assign Admin User Email
+                    </label>
+
+                    <InputText @bind-Value="orgDto.AdminEmail"
+                               type="email"
+                               class="form-control border-0 py-2 shadow-sm"
+                               placeholder="admin@email.com" />
+
+                    <ValidationMessage For="() => orgDto.AdminEmail"
+                                       class="text-danger small mt-1" />
+
+                    <small class="text-muted d-block mt-2"
+                           style="font-size: 0.75rem;">
+
+                        *Admin will receive activation mail on Yopmail.
+
+                    </small>
+
+                </div>
+
+                <!-- BUTTONS -->
+                <div class="d-grid gap-2">
+
+                    <button type="submit"
+                            class="btn btn-primary py-2 fw-bold rounded-3 shadow-sm"
+                            style="background-color: #5c4ac7; border: none;"
+                            disabled="@isSubmitting">
+
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Creating...</span>
+                        }
+                        else
+                        {
+                            <span>CREATE ORGANIZATION</span>
+                        }
+
+                    </button>
+
+                    <a href="/admin/dashboard"
+                       class="btn btn-link text-muted small text-decoration-none text-center">
+
+                        Cancel and return
+
+                    </a>
+
+                </div>
+
+                <!-- ERROR -->
+                @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3" style="background-color: #e6ffed; min-height: 80px;">
-                        <div class="d-flex w-100 justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
-                                <div>
-                                    @* <b class="text-success d-block" style="font-size: 1rem;">Created Successfully!</b> *@
-                                    <b class="text-success" style="font-size: 1.1rem;">
-                                        Organization created successfully!
-                                    </b>
-                                    <span class="text-muted small">Copy the invite link below.</span>
-                                </div>
-                            </div>
+                    <div class="alert alert-danger mt-3 border-0 shadow-sm">
 
-                            <button class="btn btn-outline-success border-0 p-2"
-                                    title="Copy Link"
-                                    @onclick="CopyLinkToClipboard"
-                                    style="border-radius: 8px;">
-                                <i class="bi bi-copy" style="font-size: 1.5rem;"></i>
-                            </button>
-                        </div>
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+                        @errorMessage
+
                     </div>
                 }
 
-            </div>
+            </EditForm>
+
+            <!-- SUCCESS MESSAGE -->
+            @if (isCreatedSuccessfully)
+            {
+                <div class="alert alert-success mt-4 border-0 shadow-sm p-4"
+                     style="background-color: #e6ffed;">
+
+                    <div class="d-flex align-items-start">
+
+                        <i class="bi bi-check-circle-fill fs-3 text-success me-3"></i>
+
+                        <div>
+
+                            <h5 class="text-success fw-bold mb-2">
+                                Organization Created Successfully!
+                            </h5>
+
+                            <p class="mb-1">
+                                Admin activation mail has been sent successfully.
+                            </p>
+
+                            <p class="mb-0 text-muted small">
+                                Please check the provided Yopmail inbox and activate the admin account.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+
         </div>
+
     </div>
-@* </div> *@
 
+</div>
 
+<style>
+
+    .card {
+        border-radius: 14px;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #5c4ac7;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+    }
+
+    .icon-shape {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .bg-purple-light {
+        background-color: rgba(92, 74, 199, 0.1);
+    }
+
+    .text-purple {
+        color: #5c4ac7;
+    }
+
+    .admin-section {
+        background-color: #f8f7ff;
+        border: 1px solid #ece9ff;
+    }
+
+</style>
 
 @code {
+
     public CreateOrganizationDto orgDto { get; set; } = new();
-    private string? generatedLink;
+
     private bool isSubmitting = false;
 
-    private string? errorMessage;
-    private string? successMessage;
+    private bool isCreatedSuccessfully = false;
 
+    private string? errorMessage;
 
     private async Task HandleCreateOrganization()
     {
         isSubmitting = true;
+
         errorMessage = null;
-        successMessage = null;
-        generatedLink = null;
+
+        isCreatedSuccessfully = false;
+
         try
         {
-            generatedLink = await OrgService.CreateOrganizationAsync(orgDto);
-            successMessage = "Organization created successfully!";
+            await OrgService.CreateOrganizationAsync(orgDto);
 
-            orgDto = new(); 
+            isCreatedSuccessfully = true;
+
+            orgDto = new();
         }
-        // catch (Exception ex)
-        // {
-        //     Console.WriteLine(ex.Message);
-        // }
         catch (Exception ex)
         {
             errorMessage = GetFriendlyMessage(ex.Message);
         }
-        finally { isSubmitting = false; }
-    }
-
-    private async Task CopyLinkToClipboard()
-    {
-        if (!string.IsNullOrEmpty(generatedLink))
+        finally
         {
-            await JS.InvokeVoidAsync("clipboardCopy.copyText", generatedLink);
+            isSubmitting = false;
         }
     }
 
@@ -183,7 +308,7 @@
         if (message.Contains("Password"))
             return "Password rules not satisfied. Please check requirements.";
 
-        // fallback
         return "Something went wrong. Please try again.";
     }
+
 }

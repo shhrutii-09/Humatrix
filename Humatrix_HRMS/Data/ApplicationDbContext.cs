@@ -60,7 +60,7 @@ namespace Humatrix_HRMS.Data
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
@@ -352,11 +352,11 @@ namespace Humatrix_HRMS.Data
                     x.OrganizationId
                 });
 
-
             modelBuilder.ApplyConfiguration(new AssetConfiguration());
                 modelBuilder.ApplyConfiguration(new AssetAssignmentConfiguration());
             modelBuilder.ApplyConfiguration(new AssetRequestConfiguration());
             modelBuilder.ApplyConfiguration(new ProcurementRequestConfiguration());
+
 
         }
 

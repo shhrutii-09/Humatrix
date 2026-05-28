@@ -130,10 +130,11 @@
                                 <td class="text-center">
                                     <div class="form-check form-switch d-flex justify-content-center align-items-center gap-2">
 
+                                        @* Updated configuration to utilize native Blazor server-side status synchronization *@
                                         <input class="form-check-input shadow-none"
                                                type="checkbox"
-                                               checked="@org.IsActive"
-                                               @onchange="() => ToggleStatus(org)">
+                                               @bind="org.IsActive"
+                                               @bind:after="() => ToggleStatus(org)">
 
                                         <span class="small @(org.IsActive ? "text-success" : "text-danger")"
                                               style="min-width: 50px; text-align: left;">
@@ -301,20 +302,26 @@
     private int ActiveCount =>
         organizations.Count(o => o.IsActive);
 
+    // ✅ Keeps filtered data cleanly displayed with newest creations at the top
     private IEnumerable<Organization> FilteredOrganizations =>
-        organizations.Where(o =>
-            string.IsNullOrWhiteSpace(searchTerm)
-            || o.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
-            || o.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+        organizations
+            .Where(o =>
+                string.IsNullOrWhiteSpace(searchTerm)
+                || o.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                || o.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(o => o.CreatedAt); // <-- Sorts sequentially by date added
 
     protected override async Task OnInitializedAsync()
     {
         await LoadOrganizations();
     }
 
+    // ✅ Primary data load sorted chronologically (Latest records hit the top lines first)
     private async Task LoadOrganizations()
     {
-        organizations = await OrgService.GetAllOrganizationsAsync();
+        organizations = (await OrgService.GetAllOrganizationsAsync())
+            .OrderByDescending(o => o.CreatedAt) // <-- Sorts sequentially by date added
+            .ToList();
     }
 
     private void StartEdit(Organization org)

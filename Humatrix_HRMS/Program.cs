@@ -35,18 +35,16 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-
-
-// Identity
+// Identity Setup
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
+
+    // ✅ Fixes token tracking discrepancies for custom setups
+    options.Tokens.ProviderMap["AdminInvite"] = new TokenProviderDescriptor(typeof(DataProtectorTokenProvider<ApplicationUser>));
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
-
-//builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-//    options.UseSqlServer(connectionString));
 
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 
@@ -72,18 +70,14 @@ builder.Services
         };
     });
 
-
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString),
     ServiceLifetime.Scoped); // ✅ THIS LINE FIXES ERROR
-
-
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
 // ✅ Correct HttpContextAccessor registration
 builder.Services.AddHttpContextAccessor();
-
 
 builder.Services.Configure<EmailSettings>(
     builder.Configuration.GetSection("EmailSettings"));
@@ -125,11 +119,6 @@ builder.Services.AddScoped<TaskService>();
 
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddSignalR();
-//builder.Services.AddScoped<AttendanceService>();  
-//builder.Services.AddControllers();
-//builder.Services.AddCascadingAuthenticationState();
-
-
 
 var app = builder.Build();
 
@@ -154,7 +143,7 @@ else
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
-}   
+}
 
 //app.UseHttpsRedirection();
 app.UseStaticFiles();
