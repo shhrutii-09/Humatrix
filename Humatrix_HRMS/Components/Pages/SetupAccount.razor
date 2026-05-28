@@ -1,5 +1,7 @@
 ﻿@page "/setup-account"
 @layout LoginLayout
+@rendermode InteractiveServer
+
 @using Humatrix_HRMS.Components.Account.Shared
 @using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.Identity
@@ -15,103 +17,262 @@
 <PageTitle>Set Password | Humatrix</PageTitle>
 
 <div class="container-fluid vh-100 d-flex align-items-center justify-content-center bg-light">
-    <div class="row w-100 shadow-sm" style="max-width: 500px; border-radius:12px; overflow:hidden;">
+    <div class="row w-100 shadow-sm"
+         style="max-width: 650px; border-radius:20px; overflow:hidden;">
 
-        @* FORM CARD *@
+        <!-- FORM CARD -->
         <div class="col-12 bg-white p-5">
-            <h3 class="fw-bold mb-2">Set Your Password</h3>
-            <p class="text-muted small mb-4">Please create a secure password for your account.</p>
 
-            @if (!string.IsNullOrEmpty(error))
-            {
-                <div class="alert alert-danger small">@error</div>
-            }
-
-            <EditForm Model="model" OnValidSubmit="SetPassword" FormName="setupForm">
-                <DataAnnotationsValidator />
-                <ValidationSummary class="text-danger small" />
-
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">New Password</label>
-                    <InputText type="password"
-                               @bind-Value="model.Password"
-                               class="form-control bg-light border-0"
-                               placeholder="Enter password" />
-                    <ValidationMessage For="() => model.Password" />
+            <!-- ICON -->
+            <div class="text-center mb-4">
+                <div class="icon-circle mx-auto mb-3">
+                    <i class="bi bi-shield-lock-fill"></i>
                 </div>
 
+                <h1 class="fw-bold mb-2">Set Your Password</h1>
+
+                <p class="text-muted fs-5">
+                    Please create a secure password for your account.
+                </p>
+            </div>
+
+            <!-- ERROR MESSAGE -->
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger border-0 shadow-sm py-3 mb-4">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    @error
+                </div>
+            }
+
+            <!-- SUCCESS MESSAGE -->
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="alert alert-success border-0 shadow-sm py-3 mb-4">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    @successMessage
+                </div>
+            }
+
+            <!-- FORM -->
+            <EditForm Model="model"
+                      OnValidSubmit="SetPassword"
+                      FormName="setupPasswordForm">
+
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger small mb-3" />
+
+                <!-- PASSWORD -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-secondary fs-5 mb-3">
+                        New Password
+                    </label>
+
+                    <div class="position-relative">
+
+                        <InputText type="@(showPassword ? "text" : "password")"
+                                   @bind-Value="model.Password"
+                                   class="form-control custom-input pe-5"
+                                   placeholder="Enter password" />
+
+                        <!-- EYE ICON -->
+                        <button type="button"
+                                class="password-toggle-btn"
+                                @onclick="TogglePassword">
+
+                            <i class="bi @(showPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+
+                        </button>
+                    </div>
+
+                    <ValidationMessage For="() => model.Password"
+                                       class="text-danger small mt-2 d-block" />
+                </div>
+
+                <!-- SUBMIT BUTTON -->
                 <button type="submit"
-                        class="btn w-100 py-2 fw-bold mt-2"
-                        style="background-color:#5c4ac7; color:white;">
-                    SUBMIT & ACTIVATE
+                        class="btn submit-btn w-100 py-3 fw-bold fs-5"
+                        disabled="@isLoading">
+
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Activating...</span>
+                    }
+                    else
+                    {
+                        <span>SUBMIT & ACTIVATE</span>
+                    }
+
                 </button>
+
             </EditForm>
         </div>
     </div>
 </div>
 
 <style>
-    /* Keeps style consistent with Login page */
-    .form-control:focus {
-        box-shadow: none;
-        border: 1px solid #5c4ac7;
-        background-color: #fff !important;
+    body {
+        background-color: #f5f6fa;
     }
+
+    .icon-circle {
+        width: 80px;
+        height: 80px;
+        background: rgba(92, 74, 199, 0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .icon-circle i {
+            font-size: 35px;
+            color: #5c4ac7;
+        }
+
+    .custom-input {
+        height: 60px;
+        border-radius: 14px;
+        border: none;
+        background: #f5f5f7;
+        font-size: 18px;
+        padding-left: 18px;
+        padding-right: 55px;
+    }
+
+        .custom-input:focus {
+            background: #fff;
+            border: 1px solid #5c4ac7;
+            box-shadow: 0 0 0 0.15rem rgba(92,74,199,.15);
+        }
+
+    .password-toggle-btn {
+        position: absolute;
+        top: 50%;
+        right: 18px;
+        transform: translateY(-50%);
+        border: none;
+        background: transparent;
+        color: #6c757d;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0;
+    }
+
+        .password-toggle-btn:hover {
+            color: #5c4ac7;
+        }
+
+    .submit-btn {
+        background: #5c4ac7;
+        color: white;
+        border: none;
+        border-radius: 14px;
+        transition: 0.3s;
+    }
+
+        .submit-btn:hover {
+            background: #4b3bb0;
+            color: white;
+        }
 </style>
 
 @code {
-    [Parameter]
-    [SupplyParameterFromQuery]
-    public string userId { get; set; }
-
 
     [Parameter]
     [SupplyParameterFromQuery]
-    public string token { get; set; }
+    public string? userId { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? token { get; set; }
 
     private string? error;
+    private string? successMessage;
 
-    // 4. Critical: Must have [SupplyParameterFromForm] for SSR to bind the data
+    private bool showPassword = false;
+    private bool isLoading = false;
+
     [SupplyParameterFromForm]
     public SetupModel model { get; set; } = new();
 
+    private void TogglePassword()
+    {
+        showPassword = !showPassword;
+    }
+
     private async Task SetPassword()
     {
-
-        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
-            return;
-
-        var user = await UserManager.FindByIdAsync(userId);
-        if (user == null) return;
-
-        // ✅ CHECK BEFORE RESET
-        var invite = await Db.UserInvites
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.Token == token);
-
-        if (invite == null || invite.IsUsed)
+        try
         {
-            error = "Invalid or expired or already used link.";
-            return;
-            // Console.WriteLine("Invalid or expired link.");
-            // return;
+            isLoading = true;
+
+            error = null;
+            successMessage = null;
+
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+            {
+                error = "Invalid activation link.";
+                return;
+            }
+
+            var user = await UserManager.FindByIdAsync(userId);
+
+            if (user == null)
+            {
+                error = "User not found.";
+                return;
+            }
+
+            // CHECK INVITE
+            var invite = await Db.UserInvites
+                .FirstOrDefaultAsync(x => x.UserId == userId && x.Token == token);
+
+            if (invite == null || invite.IsUsed)
+            {
+                error = "Invalid or expired activation link.";
+                return;
+            }
+
+            // RESET PASSWORD
+            var result = await UserManager.ResetPasswordAsync(user, token, model.Password);
+
+            if (result.Succeeded)
+            {
+                // MARK INVITE USED
+                invite.IsUsed = true;
+
+                await Db.SaveChangesAsync();
+
+                successMessage = "Admin activated successfully! Redirecting to login...";
+
+                StateHasChanged();
+
+                await Task.Delay(2000);
+
+                Nav.NavigateTo("/Account/Login", true);
+            }
+            else
+            {
+                error = string.Join(", ", result.Errors.Select(x => x.Description));
+            }
         }
-
-        var result = await UserManager.ResetPasswordAsync(user, token, model.Password);
-
-        if (result.Succeeded)
+        catch (Exception ex)
         {
-            // ✅ MARK USED
-            invite.IsUsed = true;
-            await Db.SaveChangesAsync();
-
-            Nav.NavigateTo("/Account/Login");
+            error = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
+
     public class SetupModel
     {
         [Required(ErrorMessage = "Password is required")]
-        [StringLength(100, MinimumLength = 6, ErrorMessage = "Password is too short")]
-        public string Password { get; set; }
-
+        [StringLength(100, MinimumLength = 6,
+            ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = string.Empty;
     }
 }
