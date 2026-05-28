@@ -690,7 +690,7 @@ namespace Humatrix_HRMS.Services
                 return (false, errors);
             }
 
-            return (true, "Password changed successfully");
+            return (true, "Password changed successfullyyyy");
         }
 
         public async Task<Employee?> GetEmployeeByUserIdAsync(string userId)
