@@ -1,403 +1,228 @@
-﻿// DTOs/Asset/AssetDtos.cs
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
-namespace Humatrix_HRMS.DTOs.Asset
+namespace Humatrix_HRMS.DTOs.Assets
 {
-    // ═════════════════════════════════════════════════════════════════════════
-    // ASSET CRUD DTOs
-    // ═════════════════════════════════════════════════════════════════════════
-
-    public class EmployeeDropdownDto
-    {
-        public Guid EmployeeId { get; set; }
-        public string FullName { get; set; } = string.Empty;
-        public string? EmployeeCode { get; set; }
-        public string? DepartmentName { get; set; }
-    }
+    // =========================================================================
+    // Asset DTOs
+    // =========================================================================
 
     public class CreateAssetDto
     {
-        [Required(ErrorMessage = "Asset name is required.")]
-        [MaxLength(200)]
-        public string AssetName { get; set; } = default!;
-
-        [Required(ErrorMessage = "Category is required.")]
-        public string Category { get; set; } = default!;
-
-        [MaxLength(100)]
-        public string? Brand { get; set; }
-
-        [MaxLength(100)]
-        public string? Model { get; set; }
-
-        [MaxLength(100)]
-        public string? SerialNumber { get; set; }
-
+        [Required, MaxLength(100)] public string Name { get; set; } = default!;
+        [Required, MaxLength(100)] public string Category { get; set; } = default!;
+        [MaxLength(100)] public string? Brand { get; set; }
+        [MaxLength(100)] public string? Model { get; set; }
+        [MaxLength(100)] public string? SerialNumber { get; set; }
+        [Range(0, double.MaxValue)] public decimal? PurchasePrice { get; set; }
         public DateTime? PurchaseDate { get; set; }
-
-        [Range(0, double.MaxValue, ErrorMessage = "Purchase cost must be positive.")]
-        public decimal? PurchaseCost { get; set; }
-
-        public DateTime? WarrantyExpiry { get; set; }
-
-        [MaxLength(50)]
-        public string? Condition { get; set; }
-
-        /// <summary>The department this asset belongs to. Null = org-wide pool.</summary>
+        public DateTime? WarrantyExpiryDate { get; set; }
         public Guid? DepartmentId { get; set; }
-
-        [MaxLength(2000)]
-        public string? Notes { get; set; }
+        [MaxLength(500)] public string? Notes { get; set; }
     }
 
     public class UpdateAssetDto
     {
-        public Guid AssetId { get; set; }
-
-        [Required(ErrorMessage = "Asset name is required.")]
-        [MaxLength(200)]
-        public string AssetName { get; set; } = default!;
-
-        [Required]
-        public string Category { get; set; } = default!;
-
-        [MaxLength(100)]
-        public string? Brand { get; set; }
-
-        [MaxLength(100)]
-        public string? Model { get; set; }
-
-        [MaxLength(100)]
-        public string? SerialNumber { get; set; }
-
+        [MaxLength(100)] public string? Name { get; set; }
+        [MaxLength(100)] public string? Brand { get; set; }
+        [MaxLength(100)] public string? Model { get; set; }
+        [MaxLength(100)] public string? SerialNumber { get; set; }
+        [Range(0, double.MaxValue)] public decimal? PurchasePrice { get; set; }
         public DateTime? PurchaseDate { get; set; }
-
-        [Range(0, double.MaxValue)]
-        public decimal? PurchaseCost { get; set; }
-
-        public DateTime? WarrantyExpiry { get; set; }
-
-        [MaxLength(50)]
-        public string? Condition { get; set; }
-
-        public Guid? DepartmentId { get; set; }
-
-        [MaxLength(2000)]
-        public string? Notes { get; set; }
-
-        /// <summary>Required for optimistic concurrency — must be sent back from the last read.</summary>
-        public byte[]? RowVersion { get; set; }
+        public DateTime? WarrantyExpiryDate { get; set; }
+        [MaxLength(500)] public string? Notes { get; set; }
     }
 
     public class AssetDto
     {
         public Guid AssetId { get; set; }
         public Guid OrganizationId { get; set; }
-        public Guid? DepartmentId { get; set; }
-        public string? DepartmentName { get; set; }
-        public string AssetCode { get; set; } = default!;
-        public string AssetName { get; set; } = default!;
+        public string Name { get; set; } = default!;
         public string Category { get; set; } = default!;
+        public string AssetCode { get; set; } = default!;
         public string? Brand { get; set; }
         public string? Model { get; set; }
         public string? SerialNumber { get; set; }
-        public DateTime? PurchaseDate { get; set; }
-        public decimal? PurchaseCost { get; set; }
-        public DateTime? WarrantyExpiry { get; set; }
         public string Status { get; set; } = default!;
-        public string? Condition { get; set; }
-        public string? Notes { get; set; }
         public Guid? CurrentEmployeeId { get; set; }
         public string? CurrentEmployeeName { get; set; }
-        public string? CurrentEmployeeCode { get; set; }
-        public DateTime? UpdatedAt { get; set; }
+        public decimal? PurchasePrice { get; set; }
+        public DateTime? PurchaseDate { get; set; }
+        public DateTime? WarrantyExpiryDate { get; set; }
+        public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
-
-        /// <summary>Sent back on every write to enable optimistic concurrency.</summary>
-        public byte[]? RowVersion { get; set; }
-
-        public bool IsWarrantyExpiringSoon =>
-            WarrantyExpiry.HasValue
-            && WarrantyExpiry.Value > DateTime.UtcNow
-            && WarrantyExpiry.Value <= DateTime.UtcNow.AddDays(30);
-
-        public bool IsWarrantyExpired =>
-            WarrantyExpiry.HasValue
-            && WarrantyExpiry.Value < DateTime.UtcNow;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // ASSIGNMENT DTOs
-    // ═════════════════════════════════════════════════════════════════════════
+    public class AssetListDto
+    {
+        public Guid AssetId { get; set; }
+        public string Name { get; set; } = default!;
+        public string Category { get; set; } = default!;
+        public string AssetCode { get; set; } = default!;
+        public string Status { get; set; } = default!;
+        public Guid? DepartmentId { get; set; }
+
+        public string? CurrentEmployeeName { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    // =========================================================================
+    // Assignment DTOs
+    // =========================================================================
 
     public class AssignAssetDto
     {
-        [Required]
-        public Guid AssetId { get; set; }
-
-        [Required(ErrorMessage = "Please select an employee.")]
-        public Guid EmployeeId { get; set; }
-
-        [MaxLength(2000)]
-        public string? Notes { get; set; }
+        [Required] public Guid AssetId { get; set; }
+        [Required] public Guid EmployeeId { get; set; }
+        [MaxLength(500)] public string? Notes { get; set; }
     }
 
     public class ReturnAssetDto
     {
-        [Required]
-        public Guid AssetId { get; set; }
-
-        [Required(ErrorMessage = "Return condition is required.")]
-        [MaxLength(50)]
-        public string ReturnCondition { get; set; } = default!;
-
-        [MaxLength(2000)]
-        public string? Notes { get; set; }
+        [Required] public Guid AssetId { get; set; }
+        [MaxLength(500)] public string? Notes { get; set; }
     }
 
-    public class RetireDisposeAssetDto
+    public class AssignmentDto
     {
-        [Required]
+        public Guid AssetAssignmentId { get; set; }
         public Guid AssetId { get; set; }
-
-        /// <summary>"Retired" or "Disposed"</summary>
-        [Required]
-        public string NewStatus { get; set; } = default!;
-
-        [Required(ErrorMessage = "Reason is required.")]
-        [MaxLength(2000)]
-        public string Reason { get; set; } = default!;
-    }
-
-    public class AssetAssignmentHistoryDto
-    {
-        public Guid HistoryId { get; set; }
-        public Guid AssetId { get; set; }
-        public string AssetCode { get; set; } = default!;
         public string AssetName { get; set; } = default!;
+        public string AssetCode { get; set; } = default!;
         public Guid EmployeeId { get; set; }
         public string EmployeeName { get; set; } = default!;
-        public string EmployeeCode { get; set; } = default!;
-        public string AssignedByName { get; set; } = default!;
         public DateTime AssignedAt { get; set; }
         public DateTime? ReturnedAt { get; set; }
-        public string? ReturnCondition { get; set; }
         public string? AssignmentNotes { get; set; }
+        public string? ReturnNotes { get; set; }
         public bool IsActive => ReturnedAt == null;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // LIFECYCLE DTOs  (MarkInRepair, CompleteRepair, ReportLost, RecoverAsset)
-    // ═════════════════════════════════════════════════════════════════════════
+    // =========================================================================
+    // Asset Request DTOs
+    // =========================================================================
 
-    public class MarkAssetRepairDto
+    public class CreateAssetRequestDto
     {
-        [Required]
-        public Guid AssetId { get; set; }
+        [Required] public Guid AssetId { get; set; }
 
-        [MaxLength(2000)]
-        public string? RepairReason { get; set; }
+        /// <summary>"Repair", "Replacement", or "Return"</summary>
+        [Required] public string RequestType { get; set; } = default!;
 
-        /// <summary>Required for optimistic concurrency.</summary>
-        public byte[]? RowVersion { get; set; }
-    }
-
-    public class CompleteAssetRepairDto
-    {
-        [Required]
-        public Guid AssetId { get; set; }
-
-        [MaxLength(50)]
-        public string? FinalCondition { get; set; }
-
-        [MaxLength(2000)]
-        public string? RepairNotes { get; set; }
-
-        public byte[]? RowVersion { get; set; }
-    }
-
-    public class ReportAssetLostDto
-    {
-        [Required]
-        public Guid AssetId { get; set; }
-
-        [Required(ErrorMessage = "Please describe how the asset was lost.")]
-        [MaxLength(2000)]
-        public string LostDescription { get; set; } = default!;
-
-        public byte[]? RowVersion { get; set; }
-    }
-
-    public class RecoverAssetDto
-    {
-        [Required]
-        public Guid AssetId { get; set; }
-
-        [MaxLength(2000)]
-        public string? RecoveryNotes { get; set; }
-
-        [MaxLength(50)]
-        public string? Condition { get; set; }
-
-        public byte[]? RowVersion { get; set; }
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // ASSET REQUEST DTOs
-    // ═════════════════════════════════════════════════════════════════════════
-
-    public class SubmitAssetRequestDto
-    {
-        [Required]
-        public string RequestType { get; set; } = default!;
-
-        /// <summary>"Operational" or "Procurement" — see AssetRequestCategories.</summary>
-        [Required]
-        public string RequestCategory { get; set; } = default!;
-
-        /// <summary>Required for all types except procurement (no existing asset yet).</summary>
-        public Guid? AssetId { get; set; }
-
-        [Required(ErrorMessage = "Please provide a reason.")]
-        [MaxLength(2000)]
-        public string Reason { get; set; } = default!;
-
-        // Procurement-specific
-        [MaxLength(100)]
-        public string? RequestedCategory { get; set; }
-
-        [MaxLength(1000)]
-        public string? RequestedSpecs { get; set; }
-
-        [Range(1, 100)]
-        public int Quantity { get; set; } = 1;
+        [Required, MaxLength(1000)] public string Reason { get; set; } = default!;
     }
 
     public class ReviewAssetRequestDto
     {
-        [Required]
-        public Guid AssetRequestId { get; set; }
+        [Required] public Guid AssetRequestId { get; set; }
 
-        public Guid? ApprovalRequestId { get; set; }
+        /// <summary>true = Approved, false = Rejected</summary>
+        [Required] public bool Approve { get; set; }
 
-        /// <summary>"Approved" or "Rejected"</summary>
-        [Required]
-        public string Decision { get; set; } = default!;
+        [MaxLength(1000)] public string? Notes { get; set; }
 
-        [MaxLength(2000)]
-        public string? Comments { get; set; }
-
-        /// <summary>Required when Decision = "Rejected".</summary>
-        [MaxLength(2000)]
-        public string? RejectionReason { get; set; }
+        /// <summary>
+        /// Required when Approve = true and RequestType = "Replacement".
+        /// The AssetId of the replacement unit.
+        /// </summary>
+        public Guid? ReplacementAssetId { get; set; }
     }
 
     public class AssetRequestDto
     {
         public Guid AssetRequestId { get; set; }
-        public Guid OrganizationId { get; set; }
-
-        /// <summary>Repair / Return / Replacement / etc.</summary>
+        public Guid AssetId { get; set; }
+        public string AssetName { get; set; } = default!;
+        public string AssetCode { get; set; } = default!;
+        public Guid RequestedByEmployeeId { get; set; }
+        public string RequestedByEmployeeName { get; set; } = default!;
+        public string RequestorRole { get; set; } = default!;
         public string RequestType { get; set; } = default!;
-
-        /// <summary>Operational or Procurement.</summary>
-        public string RequestCategory { get; set; } = default!;
-
-        public Guid? AssetId { get; set; }
-        public string? AssetCode { get; set; }
-        public string? AssetName { get; set; }
-
-        public Guid EmployeeId { get; set; }
-        public string EmployeeName { get; set; } = default!;
-        public string EmployeeCode { get; set; } = default!;
-        public string? DepartmentName { get; set; }
-
-        public string Reason { get; set; } = default!;
         public string Status { get; set; } = default!;
-
-        public int Quantity { get; set; }
-
+        public string Reason { get; set; } = default!;
         public DateTime RequestedAt { get; set; }
-        public DateTime? ProcessedAt { get; set; }
-
-        public string? RejectionReason { get; set; }
-
+        public string? ReviewedByEmployeeName { get; set; }
         public DateTime? ReviewedAt { get; set; }
-        public string? ReviewedByName { get; set; }
-        public string? ReviewComments { get; set; }
-
-        // Procurement-specific
-        public string? RequestedCategory { get; set; }
-        public string? RequestedSpecs { get; set; }
-
-        // From linked ApprovalRequest
-        public Guid? ApprovalRequestId { get; set; }
-        public string? ApprovalStatus { get; set; }
+        public string? ReviewNotes { get; set; }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // ANALYTICS DTOs
-    // ═════════════════════════════════════════════════════════════════════════
+    // =========================================================================
+    // Procurement DTOs
+    // =========================================================================
 
-    public class AssetAnalyticsDto
+    public class CreateProcurementRequestDto
     {
-        public int TotalAssets { get; set; }
-        public int Available { get; set; }
-        public int Assigned { get; set; }
-        public int InRepair { get; set; }
-        public int Lost { get; set; }
-        public int Retired { get; set; }
-        public int Disposed { get; set; }
-        public decimal TotalPurchaseCost { get; set; }
-        public int WarrantyExpiringSoon { get; set; }
-        public int WarrantyExpired { get; set; }
-        public int PendingRequests { get; set; }
-        public List<AssetCategoryBreakdownDto> ByCategory { get; set; } = new();
-        public List<AssetDepartmentBreakdownDto> ByDepartment { get; set; } = new();
-        public List<AssetDto> RecentlyAssigned { get; set; } = new();
+        [Required, MaxLength(100)] public string AssetCategory { get; set; } = default!;
+        [MaxLength(100)] public string? AssetName { get; set; }
+        [Required, Range(1, 10000)] public int QuantityRequested { get; set; }
+        [Required, MaxLength(1000)] public string Justification { get; set; } = default!;
     }
 
-    public class AssetCategoryBreakdownDto
+    public class ReviewProcurementDto
     {
-        public string Category { get; set; } = default!;
-        public int Count { get; set; }
-        public decimal TotalValue { get; set; }
+        [Required] public Guid ProcurementRequestId { get; set; }
+        [Required] public bool Approve { get; set; }
+        [MaxLength(1000)] public string? Notes { get; set; }
     }
 
-    public class AssetDepartmentBreakdownDto
+    /// <summary>
+    /// OrgAdmin submits this to mark a procurement as fulfilled and auto-create assets.
+    /// </summary>
+    public class FulfilProcurementDto
     {
-        public Guid? DepartmentId { get; set; }
-        public string DepartmentName { get; set; } = "Unallocated";
-        public int Count { get; set; }
-        public int Assigned { get; set; }
-        public int Available { get; set; }
+        [Required] public Guid ProcurementRequestId { get; set; }
+
+        /// <summary>
+        /// Template for asset creation. The service will stamp each asset
+        /// with an auto-generated AssetCode and sequential naming.
+        /// </summary>
+        [Required, MaxLength(100)] public string AssetName { get; set; } = default!;
+        [MaxLength(100)] public string? Brand { get; set; }
+        [MaxLength(100)] public string? Model { get; set; }
+        [Range(0, double.MaxValue)] public decimal? PurchasePrice { get; set; }
+        public DateTime? PurchaseDate { get; set; }
+        public DateTime? WarrantyExpiryDate { get; set; }
+
+        /// <summary>How many units to actually create (≤ QuantityRequested).</summary>
+        [Required, Range(1, 10000)] public int QuantityToCreate { get; set; }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // FILTER / PAGING
-    // ═════════════════════════════════════════════════════════════════════════
+    public class ProcurementRequestDto
+    {
+        public Guid ProcurementRequestId { get; set; }
+        public Guid DepartmentId { get; set; }
+        public string DepartmentName { get; set; } = default!;
+        public string RequestedByEmployeeName { get; set; } = default!;
+        public string AssetCategory { get; set; } = default!;
+        public string? AssetName { get; set; }
+        public int QuantityRequested { get; set; }
+        public int QuantityFulfilled { get; set; }
+        public string Justification { get; set; } = default!;
+        public string Status { get; set; } = default!;
+        public DateTime RequestedAt { get; set; }
+        public DateTime? ReviewedAt { get; set; }
+        public string? ReviewNotes { get; set; }
+        public DateTime? FulfilledAt { get; set; }
+    }
+
+    // =========================================================================
+    // Query / filter DTOs
+    // =========================================================================
 
     public class AssetFilterDto
     {
-        public Guid OrganizationId { get; set; }
-        public Guid? DepartmentId { get; set; }
-        public string? Status { get; set; }
         public string? Category { get; set; }
-        /// <summary>Fuzzy search across AssetCode, Name, Serial, Brand.</summary>
-        public string? SearchTerm { get; set; }
-        /// <summary>When true, includes Retired and Disposed assets.</summary>
-        public bool IncludeInactive { get; set; }
+        public string? Status { get; set; }
+        public Guid? EmployeeId { get; set; }
         public int Page { get; set; } = 1;
-        public int PageSize { get; set; } = 25;
+        public int PageSize { get; set; } = 20;
     }
 
-    public class AssetRequestFilterDto
+    public class PagedResult<T>
     {
-        public Guid OrganizationId { get; set; }
-        public string? Status { get; set; }
-        public string? RequestType { get; set; }
-        public string? RequestCategory { get; set; }
-        public int Page { get; set; } = 1;
-        public int PageSize { get; set; } = 25;
+        public List<T> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
     }
 }

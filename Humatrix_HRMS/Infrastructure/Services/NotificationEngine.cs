@@ -443,5 +443,119 @@ namespace Humatrix_HRMS.Infrastructure.Services
             CreatedAt = x.CreatedAt,
             ReadAt = x.ReadAt
         };
+
+        /// <summary>Notify the employee that an asset has been assigned to them.</summary>
+        public Task SendAssetAssignedAsync(
+            string employeeUserId,
+            string assetName,
+            string assetCode,
+            Guid assetId,
+            Guid organizationId,
+            string actorUserId)
+            => SendToUserAsync(
+                employeeUserId, organizationId, actorUserId,
+                AssetNotificationTypes.AssetAssigned,
+                "Asset", assetId,
+                "Asset Assigned",
+                $"{assetName} ({assetCode}) has been assigned to you.",
+                "/employee/assets");
+
+        // ── Asset request raised ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Notify approvers (HR or OrgAdmin depending on requestor role)
+        /// that a new asset request has been raised.
+        /// </summary>
+        public Task SendAssetRequestRaisedAsync(
+            string assetName,
+            string assetCode,
+            string requestType,
+            Guid requestedByEmployeeId,
+            Guid assetRequestId,
+            Guid organizationId,
+            string requestorRole,
+            string actorUserId)
+            => SendToApproversAsync(
+                organizationId,
+                // departmentId — resolved inside SendToApproversAsync via resolver
+                // For employee requests, target is department HR.
+                // For HR requests, target is OrgAdmin.
+                // We pass Guid.Empty; the NotificationRecipientResolver must handle
+                // AssetRequest routing (see note below).
+                Guid.Empty,
+                requestorRole,
+                actorUserId,
+                AssetNotificationTypes.AssetRequestRaised,
+                "AssetRequest", assetRequestId,
+                $"New {requestType} Request",
+                $"{assetName} ({assetCode}): {requestType} requested.",
+                "/hr/asset-requests");
+
+        // ── Asset request reviewed ────────────────────────────────────────────
+
+        /// <summary>Notify the requestor that their asset request has been reviewed.</summary>
+        public Task SendAssetRequestReviewedAsync(
+            string requestorUserId,
+            string assetName,
+            string requestType,
+            bool approved,
+            Guid assetRequestId,
+            Guid organizationId,
+            string actorUserId)
+            => SendToUserAsync(
+                requestorUserId, organizationId, actorUserId,
+                approved
+                    ? AssetNotificationTypes.AssetRequestApproved
+                    : AssetNotificationTypes.AssetRequestRejected,
+                "AssetRequest", assetRequestId,
+                approved ? $"{requestType} Request Approved ✓" : $"{requestType} Request Rejected",
+                approved
+                    ? $"Your {requestType} request for {assetName} has been approved."
+                    : $"Your {requestType} request for {assetName} was not approved.",
+                "/employee/asset-requests");
+
+        // ── Procurement raised ────────────────────────────────────────────────
+
+        /// <summary>Notify OrgAdmin that a new procurement request has been raised by HR.</summary>
+        public Task SendProcurementRaisedAsync(
+            string assetCategory,
+            int quantity,
+            Guid departmentId,
+            Guid procurementRequestId,
+            Guid organizationId,
+            string actorUserId)
+            => SendToApproversAsync(
+                organizationId,
+                departmentId,
+                "HR",   // requestor is HR → approvers = OrgAdmins
+                actorUserId,
+                AssetNotificationTypes.ProcurementRaised,
+                "ProcurementRequest", procurementRequestId,
+                "New Procurement Request",
+                $"HR has requested {quantity}× {assetCategory}.",
+                "/admin/procurement");
+
+        // ── Procurement reviewed ──────────────────────────────────────────────
+
+        /// <summary>Notify the HR who raised the procurement of the review outcome.</summary>
+        public Task SendProcurementReviewedAsync(
+            string hrUserId,
+            string assetCategory,
+            int quantity,
+            bool approved,
+            Guid procurementRequestId,
+            Guid organizationId,
+            string actorUserId)
+            => SendToUserAsync(
+                hrUserId, organizationId, actorUserId,
+                approved
+                    ? AssetNotificationTypes.ProcurementApproved
+                    : AssetNotificationTypes.ProcurementRejected,
+                "ProcurementRequest", procurementRequestId,
+                approved ? "Procurement Approved ✓" : "Procurement Rejected",
+                approved
+                    ? $"Your request for {quantity}× {assetCategory} has been approved."
+                    : $"Your request for {quantity}× {assetCategory} was not approved.",
+                "/hr/procurement");
     }
 }

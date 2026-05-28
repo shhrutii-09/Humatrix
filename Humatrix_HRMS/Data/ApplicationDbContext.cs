@@ -1,3 +1,4 @@
+using Humatrix_HRMS.Configuration;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -44,20 +45,17 @@ namespace Humatrix_HRMS.Data
 
         //public DbSet<CorrectionAuditLog> AttendanceAuditLogs { get; set; }
 
-        public DbSet<Asset> Assets { get; set; }
-        public DbSet<AssetAssignmentHistory> AssetAssignmentHistories { get; set; }
-        public DbSet<AssetRequest> AssetRequests { get; set; }
-
         public DbSet<CorrectionAuditLog> CorrectionAuditLogs { get; set; }
         public DbSet<NotificationPreferences> NotificationPreferences { get; set; }
         public DbSet<ApprovalRequest> ApprovalRequests { get; set; }
         public DbSet<ApprovalHistory> ApprovalHistories { get; set; }
         public DbSet<ActivityLog> ActivityLogs { get; set; }
-        public DbSet<AssetAssignment> AssetAssignments { get; set; }
 
-        public DbSet<HrProcurementRequest> HrProcurementRequests { get; set; }
-        public DbSet<HrProcurementFulfillment> HrProcurementFulfillments { get; set; }
-        public DbSet<EmployeeAssetRequest> EmployeeAssetRequests { get; set; }
+
+        public DbSet<Asset> Assets { get; set; }
+           public DbSet<AssetAssignment> AssetAssignments { get; set; }
+        public DbSet<AssetRequest> AssetRequests { get; set; }
+        public DbSet<ProcurementRequest> ProcurementRequests { get; set; }
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }
@@ -355,331 +353,14 @@ namespace Humatrix_HRMS.Data
                 });
 
 
-            // =========================================================================
-            // ASSET
-            // =========================================================================
-
-            //modelBuilder.Entity<Asset>()
-            //    .HasIndex(a => new { a.OrganizationId, a.AssetCode })
-            //    .IsUnique();
-
-            modelBuilder.Entity<Asset>()
-                .HasIndex(a => new { a.OrganizationId, a.Status });
-
-            modelBuilder.Entity<Asset>()
-                .HasIndex(a => new { a.OrganizationId, a.Category });
-
-            modelBuilder.Entity<Asset>()
-                .HasIndex(a => new { a.DepartmentId, a.Status });
-
-            modelBuilder.Entity<Asset>()
-                .HasOne(a => a.CurrentEmployee)
-                .WithMany()
-                .HasForeignKey(a => a.CurrentEmployeeId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<Asset>()
-                .HasOne(a => a.Organization)
-                .WithMany()
-                .HasForeignKey(a => a.OrganizationId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<Asset>()
-                .HasOne(a => a.Department)
-                .WithMany()
-                .HasForeignKey(a => a.DepartmentId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            modelBuilder.Entity<Asset>()
-                .HasOne(a => a.CreatedByUser)
-                .WithMany()
-                .HasForeignKey(a => a.CreatedByUserId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            modelBuilder.Entity<Asset>()
-                .Property(a => a.PurchaseCost)
-                .HasPrecision(18, 2);
-
-            // =========================================================================
-            // ASSET ASSIGNMENT HISTORY
-            // =========================================================================
-
-            modelBuilder.Entity<AssetAssignmentHistory>()
-                .HasOne(h => h.Asset)
-                .WithMany(a => a.AssignmentHistory)
-                .HasForeignKey(h => h.AssetId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<AssetAssignmentHistory>()
-                .HasOne(h => h.Employee)
-                .WithMany()
-                .HasForeignKey(h => h.EmployeeId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<AssetAssignmentHistory>()
-                .HasOne(h => h.AssignedByEmployee)
-                .WithMany()
-                .HasForeignKey(h => h.AssignedByEmployeeId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<AssetAssignmentHistory>()
-                .HasIndex(h => h.AssetId);
-
-            modelBuilder.Entity<AssetAssignmentHistory>()
-                .HasIndex(h => new { h.EmployeeId, h.AssignedAt });
-
-            // Partial index: quickly find the active assignment for any asset
-            modelBuilder.Entity<AssetAssignmentHistory>()
-                .HasIndex(h => new { h.AssetId, h.ReturnedAt })
-                .HasFilter("[ReturnedAt] IS NULL");
-
-            // =========================================================================
-            // ASSET REQUEST
-            // =========================================================================
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasOne(r => r.Asset)
-                .WithMany(a => a.Requests)
-                .HasForeignKey(r => r.AssetId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasOne(r => r.Employee)
-                .WithMany()
-                .HasForeignKey(r => r.EmployeeId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasOne(r => r.ReviewedByEmployee)
-                .WithMany()
-                .HasForeignKey(r => r.ReviewedByEmployeeId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasOne(r => r.ApprovalRequest)
-                .WithMany()
-                .HasForeignKey(r => r.ApprovalRequestId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasIndex(r => new { r.OrganizationId, r.Status, r.RequestType });
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasIndex(r => new { r.EmployeeId, r.RequestedAt });
-
-            modelBuilder.Entity<AssetRequest>()
-                .HasIndex(r => r.ApprovalRequestId);
-
-            modelBuilder.Entity<Asset>()
-    .HasIndex(a => new
-    {
-        a.OrganizationId,
-        a.AssetCode
-    })
-    .IsUnique();
-
-            modelBuilder.Entity<Asset>()
-    .HasIndex(a => new { a.OrganizationId, a.AssetCode })
-    .IsUnique();
-
-            modelBuilder.Entity<AssetAssignment>()
-    .HasIndex(a => new { a.AssetId, a.ReturnedAt })
-    .HasFilter("[ReturnedAt] IS NULL")
-    .IsUnique();
-
-
-            modelBuilder.Entity<AssetAssignment>(entity =>
-            {
-                entity.HasKey(a => a.AssignmentId);
-
-                entity.HasOne(a => a.Asset)
-                    .WithMany()
-                    .HasForeignKey(a => a.AssetId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(a => a.Employee)
-                .WithMany()
-                .HasForeignKey(a => a.EmployeeId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(a => a.AssignedByEmployee)
-                .WithMany()
-                .HasForeignKey(a => a.AssignedByEmployeeId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-                // Only ONE active assignment per asset
-                entity.HasIndex(a => new {
-                    a.AssetId,
-                    a.ReturnedAt
-                })
-                .HasFilter("[ReturnedAt] IS NULL")
-                .IsUnique();
-
-                modelBuilder.Entity<Asset>()
-                    .HasIndex(a => new { a.OrganizationId, a.AssetCode })
-                    .IsUnique();
-
-
-                modelBuilder.Entity<Asset>()
-    .HasOne(a => a.Fulfillment)
-    .WithMany(f => f.CreatedAssets)
-    .HasForeignKey(a => a.FulfillmentId)
-    .IsRequired(false)
-    .OnDelete(DeleteBehavior.SetNull);
-
-                // =========================================================================
-                // HR PROCUREMENT REQUEST
-                // =========================================================================
-
-                modelBuilder.Entity<HrProcurementRequest>(entity =>
-                {
-                    entity.HasKey(r => r.ProcurementRequestId);
-
-                    entity.HasOne(r => r.Organization)
-                        .WithMany()
-                        .HasForeignKey(r => r.OrganizationId)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.Department)
-                        .WithMany()
-                        .HasForeignKey(r => r.DepartmentId)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.RequestedByEmployee)
-                        .WithMany()
-                        .HasForeignKey(r => r.RequestedByEmployeeId)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.ReviewedByEmployee)
-                        .WithMany()
-                        .HasForeignKey(r => r.ReviewedByEmployeeId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.ApprovalRequest)
-                        .WithMany()
-                        .HasForeignKey(r => r.ApprovalRequestId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    entity.HasOne(r => r.CreatedByUser)
-                        .WithMany()
-                        .HasForeignKey(r => r.CreatedByUserId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    entity.HasMany(r => r.Fulfillments)
-                        .WithOne(f => f.ProcurementRequest)
-                        .HasForeignKey(f => f.ProcurementRequestId)
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    entity.Property(r => r.EstimatedBudget)
-                        .HasPrecision(18, 2);
-
-                    // Indexes
-                    entity.HasIndex(r => new { r.OrganizationId, r.Status, r.RequestType });
-                    entity.HasIndex(r => new { r.DepartmentId, r.Status });
-                    entity.HasIndex(r => r.RequestedByEmployeeId);
-                    entity.HasIndex(r => r.ApprovalRequestId);
-                });
-
-                // =========================================================================
-                // HR PROCUREMENT FULFILLMENT
-                // =========================================================================
-
-                modelBuilder.Entity<HrProcurementFulfillment>(entity =>
-                {
-                    entity.HasKey(f => f.FulfillmentId);
-
-                    entity.HasOne(f => f.ProcurementRequest)
-                        .WithMany(r => r.Fulfillments)
-                        .HasForeignKey(f => f.ProcurementRequestId)
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    entity.HasOne(f => f.FulfilledByEmployee)
-                        .WithMany()
-                        .HasForeignKey(f => f.FulfilledByEmployeeId)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    // CreatedAssets navigated through Asset.FulfillmentId — configured above.
-
-                    entity.HasIndex(f => f.ProcurementRequestId);
-                    entity.HasIndex(f => f.FulfilledAt);
-                });
-
-                // =========================================================================
-                // EMPLOYEE ASSET REQUEST
-                // =========================================================================
-
-                modelBuilder.Entity<EmployeeAssetRequest>(entity =>
-                {
-                    entity.HasKey(r => r.EmployeeAssetRequestId);
-
-                    entity.HasOne(r => r.Organization)
-                        .WithMany()
-                        .HasForeignKey(r => r.OrganizationId)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.Employee)
-                        .WithMany()
-                        .HasForeignKey(r => r.EmployeeId)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.Asset)
-                        .WithMany(a => a.EmployeeRequests)
-                        .HasForeignKey(r => r.AssetId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.ReplacementAsset)
-                        .WithMany()
-                        .HasForeignKey(r => r.ReplacementAssetId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.ReviewedByEmployee)
-                        .WithMany()
-                        .HasForeignKey(r => r.ReviewedByEmployeeId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.ProcessedByEmployee)
-                        .WithMany()
-                        .HasForeignKey(r => r.ProcessedByEmployeeId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    entity.HasOne(r => r.ApprovalRequest)
-                        .WithMany()
-                        .HasForeignKey(r => r.ApprovalRequestId)
-                        .IsRequired(false)
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    // Indexes
-                    entity.HasIndex(r => new { r.OrganizationId, r.Status, r.RequestType });
-                    entity.HasIndex(r => new { r.EmployeeId, r.CreatedAt });
-                    entity.HasIndex(r => r.AssetId);
-                    entity.HasIndex(r => r.ApprovalRequestId);
-
-                    // Partial index for open requests (pending + underreview).
-                    // SQL Server syntax — adjust for your target DB if needed.
-                    entity.HasIndex(r => new { r.EmployeeId, r.AssetId, r.Status })
-                        .HasFilter("[Status] IN ('Pending','UnderReview','Approved','InProgress')");
-                });
-
-
-
-            });
+            modelBuilder.ApplyConfiguration(new AssetConfiguration());
+                modelBuilder.ApplyConfiguration(new AssetAssignmentConfiguration());
+            modelBuilder.ApplyConfiguration(new AssetRequestConfiguration());
+            modelBuilder.ApplyConfiguration(new ProcurementRequestConfiguration());
 
         }
 
-     
+
 
     }
 }

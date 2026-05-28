@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Humatrix_HRMS.Hubs;
 using Humatrix_HRMS.Infrastructure.Services;
 using Humatrix_HRMS.Services;
+using Humatrix_HRMS.Services.Assets;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -104,8 +105,6 @@ builder.Services.AddScoped<LeaveService>();
 builder.Services.AddHostedService<YearlyBalanceService>();
 builder.Services.AddScoped<OvertimeService>();
 builder.Services.AddScoped<WorkFromHomeService>();
-builder.Services.AddScoped<AssetService>();
-builder.Services.AddScoped<AssetRequestService>();
 builder.Services.AddScoped<AttendanceCorrectionService>();
 builder.Services.AddScoped<CorrectionValidationEngine>();
 builder.Services.AddHostedService<AttendanceBackgroundService>();
@@ -117,7 +116,8 @@ builder.Services.AddScoped<NotificationEngine>();
 builder.Services.AddScoped<ApprovalWorkflowService>();
 builder.Services.AddScoped<ActivityLogService>();
 builder.Services.AddScoped<DashboardBroadcastService>();
-builder.Services.AddScoped<AssetAssignmentService>();
+
+builder.Services.AddScoped<AssetService>();
 
 builder.Services.AddScoped<OfficeLocationService>();
 

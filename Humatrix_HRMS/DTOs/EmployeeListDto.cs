@@ -17,6 +17,7 @@
         public Guid? ShiftId { get; set; } // ✅ Add this line
         public bool IsActive { get; set; }
         public Guid? DepartmentId { get; set; }
+        public string EmployeeCode { get; set; } = "";
         public Guid? DesignationId { get; set; }
 
     }
