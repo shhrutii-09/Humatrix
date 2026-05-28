@@ -56,7 +56,7 @@ namespace Humatrix_HRMS.Services
                     Email = dto.AdminEmail,
                     OrganizationId = org.OrganizationId,
                     EmailConfirmed = true,
-                    IsActive = true // Pehla admin directly active hoga
+                    IsActive = false
                 };
 
                 var result = await _userManager.CreateAsync(user);
@@ -66,7 +66,7 @@ namespace Humatrix_HRMS.Services
 
                 await _userManager.AddToRoleAsync(user, "OrgAdmin");
 
-                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
 
                 var invite = new UserInvite
                 {
@@ -189,14 +189,13 @@ namespace Humatrix_HRMS.Services
 
             if (user == null)
             {
-                // Naya staging user placeholder banega jo locked (IsActive = false) rahega
                 user = new ApplicationUser
                 {
                     UserName = newAdminEmail,
                     Email = newAdminEmail,
                     OrganizationId = orgId,
                     EmailConfirmed = true,
-                    IsActive = false // 👈 Jab tak password set nahi hoga, tab tak active nahi mana jayega
+                    IsActive = false
                 };
 
                 var result = await _userManager.CreateAsync(user);
@@ -211,7 +210,6 @@ namespace Humatrix_HRMS.Services
                 }
             }
 
-            // Secure Token generation
             var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
 
             var invite = new UserInvite
@@ -242,8 +240,6 @@ namespace Humatrix_HRMS.Services
         {
             using var _context = _contextFactory.CreateDbContext();
 
-            // ✅ FIX: Sirf usi admin ka email dikhega jo filhaal Active hai. 
-            // Jab tak naya admin link par click karke activate nahi hota, tab tak purana active admin hi return hoga.
             var admin = await (from user in _context.Users
                                join userRole in _context.UserRoles on user.Id equals userRole.UserId
                                join role in _context.Roles on userRole.RoleId equals role.Id
@@ -253,7 +249,6 @@ namespace Humatrix_HRMS.Services
                                select user.Email)
                                .FirstOrDefaultAsync();
 
-            // Fallback: Agar koi bhi active admin na mile (unlikely case), toh system ke kisi bhi admin ko fetch karega
             if (string.IsNullOrEmpty(admin))
             {
                 admin = await (from user in _context.Users
