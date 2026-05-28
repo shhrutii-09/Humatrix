@@ -303,6 +303,7 @@ namespace Humatrix_HRMS.Services
                     EmployeeId = profile?.EmployeeId ?? Guid.Empty,
                     Email = u.Email ?? string.Empty,
                     FirstName = u.FirstName,
+                    EmployeeCode = profile?.EmployeeCode ?? "",
                     LastName = u.LastName,
                     Name = $"{u.FirstName} {u.LastName}",
                     Role = role,
@@ -386,6 +387,7 @@ namespace Humatrix_HRMS.Services
                     LastName = u.LastName,
                     Name = $"{u.FirstName} {u.LastName}",
                     Role = role,
+                    EmployeeCode = profile?.EmployeeCode ?? "",
                     Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
                     Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
                     DepartmentId = u.DepartmentId,
@@ -688,7 +690,16 @@ namespace Humatrix_HRMS.Services
                 return (false, errors);
             }
 
-            return (true, "Password changed successfully");
+            return (true, "Password changed successfullyyyy");
+        }
+
+        public async Task<Employee?> GetEmployeeByUserIdAsync(string userId)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+
+            return await context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == userId);
         }
     }
 }

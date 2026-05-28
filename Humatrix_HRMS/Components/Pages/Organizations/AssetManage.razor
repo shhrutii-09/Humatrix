@@ -1,0 +1,690 @@
+﻿@page "/org/assets"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Assets
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Microsoft.AspNetCore.Authorization
+@inject EmployeeService EmployeeService
+@inject AssetService AssetService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Asset Inventory | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">Asset Inventory</h2>
+            <p class="text-muted mb-0">Manage and track all organisational assets.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm px-3" @onclick="RefreshAsync">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+            </button>
+            <button class="btn btn-primary btn-sm px-3" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg me-1"></i> Add Asset
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm asset-stat-card">
+                <div class="card-body p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-soft-primary">
+                        <i class="bi bi-box-seam text-primary"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Total Assets</div>
+                        <div class="stat-value">@totalCount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm asset-stat-card">
+                <div class="card-body p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-soft-success">
+                        <i class="bi bi-check-circle text-success"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Available</div>
+                        <div class="stat-value text-success">@availableCount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm asset-stat-card">
+                <div class="card-body p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-soft-info">
+                        <i class="bi bi-person-check text-info"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">Assigned</div>
+                        <div class="stat-value text-info">@assignedCount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm asset-stat-card">
+                <div class="card-body p-3 d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-soft-warning">
+                        <i class="bi bi-tools text-warning"></i>
+                    </div>
+                    <div>
+                        <div class="stat-label">In Repair</div>
+                        <div class="stat-value text-warning">@inRepairCount</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-muted">CATEGORY</label>
+                    <select class="form-select form-select-sm" @bind="filter.Category" @bind:after="RefreshAsync">
+                        <option value="">All Categories</option>
+                        @foreach (var cat in categories)
+                        {
+                            <option value="@cat">@cat</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-muted">STATUS</label>
+                    <select class="form-select form-select-sm" @bind="filter.Status" @bind:after="RefreshAsync">
+                        <option value="">All Statuses</option>
+                        <option value="@AssetStatus.Available">Available</option>
+                        <option value="@AssetStatus.Assigned">Assigned</option>
+                        <option value="@AssetStatus.InRepair">In Repair</option>
+                        <option value="@AssetStatus.Retired">Retired</option>
+                        <option value="@AssetStatus.Lost">Lost</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-muted">SEARCH</label>
+                    <input class="form-control form-control-sm"
+                           placeholder="Name, code, serial…"
+                           @bind="searchText"
+                           @bind:event="oninput"
+                           @bind:after="ApplySearch" />
+                </div>
+                <div class="col-md-2 text-end">
+                    <button class="btn btn-link btn-sm text-muted p-0" @onclick="ClearFilters">
+                        <i class="bi bi-x-circle me-1"></i>Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            @if (loading)
+            {
+                <div class="d-flex justify-content-center align-items-center py-5">
+                    <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;"></div>
+                </div>
+            }
+            else if (assets == null || !assets.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-box-seam fs-1 mb-3 d-block opacity-25"></i>
+                    <p class="mb-1 fw-semibold">No assets found</p>
+                    <p class="small">Try changing your filters or add a new asset.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 asset-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Asset</th>
+                                <th>Category</th>
+                                <th>Code</th>
+                                <th>Status</th>
+                                <th>Assigned To</th>
+                                <th>Added</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var asset in filteredAssets)
+                            {
+                                <tr>
+                                    <td class="ps-4 fw-semibold">@asset.Name</td>
+                                    <td>
+                                        <span class="badge bg-soft-secondary text-secondary">@asset.Category</span>
+                                    </td>
+                                    <td class="font-monospace small text-muted">@asset.AssetCode</td>
+                                    <td>@GetStatusBadge(asset.Status)</td>
+                                    <td class="text-muted small">@(asset.CurrentEmployeeName ?? "—")</td>
+                                    <td class="text-muted small">@asset.CreatedAt.ToString("dd MMM yyyy")</td>
+                                    <td class="text-end pe-4">
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <button class="btn btn-xs btn-outline-primary"
+                                                    @onclick="() => ViewAsset(asset.AssetId)"
+                                                    title="View details">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            @if (asset.Status == AssetStatus.Available)
+                                            {
+                                                <button class="btn btn-xs btn-outline-success"
+                                                        @onclick="() => OpenAssignModal(asset)"
+                                                        title="Assign">
+                                                    <i class="bi bi-person-plus"></i>
+                                                </button>
+                                            }
+                                            @if (asset.Status == AssetStatus.Assigned)
+                                            {
+                                                <button class="btn btn-xs btn-outline-warning"
+                                                        @onclick="() => OpenReturnModal(asset)"
+                                                        title="Return">
+                                                    <i class="bi bi-arrow-return-left"></i>
+                                                </button>
+                                            }
+                                            @if (asset.Status == AssetStatus.Available)
+                                            {
+                                                <button class="btn btn-xs btn-outline-danger"
+                                                        @onclick="() => ConfirmRetire(asset)"
+                                                        title="Retire">
+                                                    <i class="bi bi-archive"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                @if (totalPages > 1)
+                {
+                    <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top">
+                        <span class="text-muted small">
+                            Showing @((filter.Page - 1) * filter.PageSize + 1)–@Math.Min(filter.Page * filter.PageSize, totalCount) of @totalCount assets
+                        </span>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-xs btn-outline-secondary" disabled="@(filter.Page <= 1)"
+                                    @onclick="PrevPage">
+                                <i class="bi bi-chevron-left"></i>
+                            </button>
+                            @for (int p = 1; p <= totalPages; p++)
+                            {
+                                var pg = p;
+                                <button class="btn btn-xs @(filter.Page == pg ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => GoToPage(pg)">
+                                    @pg
+                                </button>
+                            }
+                            <button class="btn btn-xs btn-outline-secondary" disabled="@(filter.Page >= totalPages)"
+                                    @onclick="NextPage">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- ── CREATE ASSET MODAL ─────────────────────────────────────────────────── -->
+@if (showCreateModal)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-panel">
+        <div class="modal-panel-header">
+            <h5 class="fw-bold mb-0"><i class="bi bi-plus-circle me-2 text-primary"></i>Add New Asset</h5>
+            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-panel-body">
+            <EditForm Model="createDto" OnValidSubmit="SubmitCreateAsync">
+                <DataAnnotationsValidator />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Asset Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="createDto.Name" placeholder="e.g. Dell Laptop" />
+                        <ValidationMessage For="() => createDto.Name" class="text-danger small" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Category <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="createDto.Category" placeholder="e.g. Laptop" />
+                        <ValidationMessage For="() => createDto.Category" class="text-danger small" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Brand</label>
+                        <InputText class="form-control" @bind-Value="createDto.Brand" placeholder="e.g. Dell" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Model</label>
+                        <InputText class="form-control" @bind-Value="createDto.Model" placeholder="e.g. Latitude 5520" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Serial Number</label>
+                        <InputText class="form-control" @bind-Value="createDto.SerialNumber" placeholder="e.g. SN123456" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Purchase Price</label>
+                        <InputNumber class="form-control" @bind-Value="createDto.PurchasePrice" placeholder="0.00" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Purchase Date</label>
+                        <InputDate class="form-control" @bind-Value="createDto.PurchaseDate" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Warranty Expiry</label>
+                        <InputDate class="form-control" @bind-Value="createDto.WarrantyExpiryDate" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold">Notes</label>
+                        <InputTextArea class="form-control" @bind-Value="createDto.Notes" rows="2" />
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger mt-3 py-2 small">@errorMessage</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    <button type="button" class="btn btn-light" @onclick="CloseModals">Cancel</button>
+                    <button type="submit" class="btn btn-primary" disabled="@submitting">
+                        @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Create Asset
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- ── ASSIGN MODAL ─────────────────────────────────────────────────────── -->
+@if (showAssignModal && selectedAsset != null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-panel modal-panel-sm">
+        <div class="modal-panel-header">
+            <h5 class="fw-bold mb-0"><i class="bi bi-person-plus me-2 text-success"></i>Assign Asset</h5>
+            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-panel-body">
+            <div class="asset-info-chip mb-4">
+                <i class="bi bi-box-seam text-primary me-2"></i>
+                <span class="fw-semibold">@selectedAsset.Name</span>
+                <span class="font-monospace text-muted ms-2 small">@selectedAsset.AssetCode</span>
+            </div>
+            <EditForm Model="assignDto" OnValidSubmit="SubmitAssignAsync">
+                <DataAnnotationsValidator />
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Assign To <span class="text-danger">*</span></label>
+                    <select class="form-select" @bind="assignEmployeeId">
+                        <option value="">— Select Employee —</option>
+                        @foreach (var emp in employees)
+                        {
+                            <option value="@emp.EmployeeId">@emp.FirstName @emp.LastName (@emp.EmployeeCode)</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Notes</label>
+                    <InputTextArea class="form-control" @bind-Value="assignDto.Notes" rows="2" placeholder="Optional assignment notes…" />
+                </div>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger py-2 small">@errorMessage</div>
+                }
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button type="button" class="btn btn-light" @onclick="CloseModals">Cancel</button>
+                    <button type="submit" class="btn btn-success" disabled="@submitting">
+                        @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        Assign
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- ── RETURN MODAL ─────────────────────────────────────────────────────── -->
+@if (showReturnModal && selectedAsset != null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-panel modal-panel-sm">
+        <div class="modal-panel-header">
+            <h5 class="fw-bold mb-0"><i class="bi bi-arrow-return-left me-2 text-warning"></i>Return Asset</h5>
+            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-panel-body">
+            <div class="asset-info-chip mb-4">
+                <i class="bi bi-box-seam text-primary me-2"></i>
+                <span class="fw-semibold">@selectedAsset.Name</span>
+                <span class="text-muted ms-2 small">currently assigned to <strong>@selectedAsset.CurrentEmployeeName</strong></span>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Return Notes</label>
+                <textarea class="form-control" @bind="returnNotes" rows="2" placeholder="Optional notes on condition, reason…"></textarea>
+            </div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger py-2 small">@errorMessage</div>
+            }
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button class="btn btn-light" @onclick="CloseModals">Cancel</button>
+                <button class="btn btn-warning" @onclick="SubmitReturnAsync" disabled="@submitting">
+                    @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Confirm Return
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ── RETIRE CONFIRM ────────────────────────────────────────────────────── -->
+@if (showRetireConfirm && selectedAsset != null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
+    <div class="modal-panel modal-panel-sm">
+        <div class="modal-panel-header">
+            <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-archive me-2"></i>Retire Asset</h5>
+            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="modal-panel-body">
+            <p class="text-muted">Are you sure you want to retire <strong>@selectedAsset.Name (@selectedAsset.AssetCode)</strong>? This action cannot be undone.</p>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger py-2 small">@errorMessage</div>
+            }
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button class="btn btn-light" @onclick="CloseModals">Cancel</button>
+                <button class="btn btn-danger" @onclick="SubmitRetireAsync" disabled="@submitting">
+                    @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Yes, Retire
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .text-primary { color: #5c4ac7 !important; }
+    .btn-primary { background: #5c4ac7; border-color: #5c4ac7; }
+    .btn-primary:hover { background: #4a39b0; border-color: #4a39b0; }
+
+    .asset-stat-card { border-radius: 12px; }
+    .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
+    .stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6c757d; }
+    .stat-value { font-size: 1.6rem; font-weight: 800; line-height: 1; color: #1a1a2e; }
+
+    .bg-soft-primary { background: rgba(92,74,199,0.1); }
+    .bg-soft-success { background: rgba(25,135,84,0.1); }
+    .bg-soft-info { background: rgba(13,202,240,0.1); }
+    .bg-soft-warning { background: rgba(255,193,7,0.1); }
+    .bg-soft-secondary { background: rgba(108,117,125,0.1); }
+
+    .asset-table th { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6c757d; padding: 0.85rem 1rem; }
+    .asset-table td { padding: 0.85rem 1rem; font-size: 0.875rem; }
+
+    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.78rem; border-radius: 6px; }
+
+    .modal-backdrop-custom { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1040; backdrop-filter: blur(2px); }
+    .modal-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.18); z-index: 1050; width: 640px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; }
+    .modal-panel-sm { width: 480px; }
+    .modal-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid #f0f0f0; }
+    .modal-panel-body { padding: 1.5rem; overflow-y: auto; }
+
+    .asset-info-chip { background: #f8f9ff; border: 1px solid #e8e4ff; border-radius: 10px; padding: 0.6rem 1rem; display: flex; align-items: center; }
+</style>
+
+@code {
+    private List<AssetListDto> assets = new();
+    private List<AssetListDto> filteredAssets = new();
+    private AssetFilterDto filter = new() { PageSize = 20 };
+    private bool loading = true;
+    private string searchText = "";
+    private int totalCount, availableCount, assignedCount, inRepairCount, totalPages;
+    private List<string> categories = new();
+
+    // Modal state
+    private bool showCreateModal, showAssignModal, showReturnModal, showRetireConfirm;
+    private AssetListDto? selectedAsset;
+    private CreateAssetDto createDto = new();
+    private AssignAssetDto assignDto = new();
+    private string assignEmployeeId = "";
+    private string returnNotes = "";
+    private bool submitting;
+    private string errorMessage = "";
+
+    // Employee list for assign dropdown
+    private List<EmployeeSelectItem> employees = new();
+
+    // Context
+    private Guid orgId;
+    private string userId = "", userRole = "OrgAdmin";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
+        orgId = ctx.OrganizationId;
+        userId = ctx.UserId;
+        await LoadAsync();
+        await LoadEmployeesAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        StateHasChanged();
+
+        var result = await AssetService.GetAssetsAsync(orgId, filter);
+        assets = result.Items;
+        totalCount = result.TotalCount;
+        totalPages = result.TotalPages;
+
+        // Compute quick counts (load all for sidebar — or use dedicated endpoints)
+        var allFilter = new AssetFilterDto { PageSize = 10000 };
+        var allResult = await AssetService.GetAssetsAsync(orgId, allFilter);
+        availableCount  = allResult.Items.Count(a => a.Status == AssetStatus.Available);
+        assignedCount   = allResult.Items.Count(a => a.Status == AssetStatus.Assigned);
+        inRepairCount   = allResult.Items.Count(a => a.Status == AssetStatus.InRepair);
+        categories      = allResult.Items.Select(a => a.Category).Distinct().OrderBy(c => c).ToList();
+
+        ApplySearch();
+        loading = false;
+    }
+
+    private async Task LoadEmployeesAsync()
+    {
+        var result = await EmployeeService.GetEmployeesByOrganizationIdAsync(orgId);
+
+        employees = result
+            .Select(e => new EmployeeSelectItem
+            {
+                EmployeeId = e.EmployeeId,
+                FirstName = e.FirstName,
+                LastName = e.LastName,
+                EmployeeCode = e.EmployeeCode
+            })
+            .ToList();
+    }
+
+    // private void ApplySearch()
+    // {
+    //     filteredAssets = string.IsNullOrWhiteSpace(searchText)
+    //         ? assets.ToList()
+    //         : assets.Where(a =>
+    //             a.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+    //             a.AssetCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+    //             (a.CurrentEmployeeName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false))
+    //           .ToList();
+    // }
+
+    // private async Task OnSearchInput(ChangeEventArgs e)
+    // {
+    //     searchText = e.Value?.ToString() ?? "";
+    //     ApplySearch();
+    // }
+
+    private void ApplySearch()
+    {
+        filteredAssets = string.IsNullOrWhiteSpace(searchText)
+            ? assets.ToList()
+            : assets.Where(a =>
+                a.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                a.AssetCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                (a.CurrentEmployeeName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false))
+              .ToList();
+    }
+
+    private async Task RefreshAsync() => await LoadAsync();
+
+    private async Task ClearFilters()
+    {
+        filter = new AssetFilterDto { PageSize = 20 };
+        searchText = "";
+        await LoadAsync();
+    }
+
+    private async Task GoToPage(int p) { filter.Page = p; await LoadAsync(); }
+    private async Task PrevPage() { if (filter.Page > 1) { filter.Page--; await LoadAsync(); } }
+    private async Task NextPage() { if (filter.Page < totalPages) { filter.Page++; await LoadAsync(); } }
+
+    private void ViewAsset(Guid id) => Nav.NavigateTo($"/org/assets/{id}");
+
+    // ── CREATE ────────────────────────────────────────────────────────────────
+    private void OpenCreateModal()
+    {
+        createDto = new CreateAssetDto();
+        errorMessage = "";
+        showCreateModal = true;
+    }
+
+    private async Task SubmitCreateAsync()
+    {
+        submitting = true; errorMessage = "";
+        try
+        {
+            await AssetService.CreateAssetAsync(orgId, createDto, userId, userRole);
+            CloseModals();
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    // ── ASSIGN ────────────────────────────────────────────────────────────────
+    private void OpenAssignModal(AssetListDto asset)
+    {
+        selectedAsset = asset;
+        assignDto = new AssignAssetDto { AssetId = asset.AssetId };
+        assignEmployeeId = "";
+        errorMessage = "";
+        showAssignModal = true;
+    }
+
+    private async Task SubmitAssignAsync()
+    {
+        if (!Guid.TryParse(assignEmployeeId, out var empId))
+        {
+            errorMessage = "Please select an employee.";
+            return;
+        }
+        assignDto.EmployeeId = empId;
+        submitting = true; errorMessage = "";
+        try
+        {
+            await AssetService.AssignAssetAsync(orgId, assignDto, userId, userRole);
+            CloseModals();
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    // ── RETURN ────────────────────────────────────────────────────────────────
+    private void OpenReturnModal(AssetListDto asset)
+    {
+        selectedAsset = asset;
+        returnNotes = "";
+        errorMessage = "";
+        showReturnModal = true;
+    }
+
+    private async Task SubmitReturnAsync()
+    {
+        submitting = true; errorMessage = "";
+        try
+        {
+            await AssetService.ReturnAssetAsync(orgId, new ReturnAssetDto
+            {
+                AssetId = selectedAsset!.AssetId,
+                Notes = returnNotes
+            }, userId, userRole);
+            CloseModals();
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    // ── RETIRE ────────────────────────────────────────────────────────────────
+    private void ConfirmRetire(AssetListDto asset)
+    {
+        selectedAsset = asset;
+        errorMessage = "";
+        showRetireConfirm = true;
+    }
+
+    private async Task SubmitRetireAsync()
+    {
+        submitting = true; errorMessage = "";
+        try
+        {
+            await AssetService.RetireAssetAsync(selectedAsset!.AssetId, orgId, userId, userRole);
+            CloseModals();
+            await LoadAsync();
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    private void CloseModals()
+    {
+        showCreateModal = showAssignModal = showReturnModal = showRetireConfirm = false;
+        selectedAsset = null; errorMessage = "";
+    }
+
+    private RenderFragment GetStatusBadge(string status) => status switch
+    {
+        AssetStatus.Available => @<span class="badge bg-soft-success text-success">Available</span>,
+        AssetStatus.Assigned  => @<span class="badge bg-soft-info text-info">Assigned</span>,
+        AssetStatus.InRepair  => @<span class="badge bg-soft-warning text-warning">In Repair</span>,
+        AssetStatus.Retired   => @<span class="badge bg-soft-secondary text-secondary">Retired</span>,
+        AssetStatus.Lost      => @<span class="badge bg-danger">Lost</span>,
+        _                     => @<span class="badge bg-light text-dark">@status</span>
+    };
+
+    // Simple select item — replace with your real Employee DTO if different
+    private class EmployeeSelectItem
+    {
+        public Guid EmployeeId { get; set; }
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string EmployeeCode { get; set; } = "";
+    }
+}

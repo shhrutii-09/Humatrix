@@ -1,3 +1,4 @@
+using Humatrix_HRMS.Configuration;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -49,8 +50,17 @@ namespace Humatrix_HRMS.Data
         public DbSet<ApprovalRequest> ApprovalRequests { get; set; }
         public DbSet<ApprovalHistory> ApprovalHistories { get; set; }
         public DbSet<ActivityLog> ActivityLogs { get; set; }
-       
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+
+
+        public DbSet<Asset> Assets { get; set; }
+           public DbSet<AssetAssignment> AssetAssignments { get; set; }
+        public DbSet<AssetRequest> AssetRequests { get; set; }
+        public DbSet<ProcurementRequest> ProcurementRequests { get; set; }
+
+        //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
+        //public DbSet<IdentityRole> Roles { get; set; }
+
+         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
@@ -342,11 +352,15 @@ namespace Humatrix_HRMS.Data
                     x.OrganizationId
                 });
 
+            modelBuilder.ApplyConfiguration(new AssetConfiguration());
+                modelBuilder.ApplyConfiguration(new AssetAssignmentConfiguration());
+            modelBuilder.ApplyConfiguration(new AssetRequestConfiguration());
+            modelBuilder.ApplyConfiguration(new ProcurementRequestConfiguration());
 
 
         }
 
-     
+
 
     }
 }

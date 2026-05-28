@@ -1,5 +1,6 @@
 ﻿// Infrastructure/Services/ActivityLogService.cs
 using Humatrix_HRMS.Data;
+using Humatrix_HRMS.Infrastructure.Constants;
 using Humatrix_HRMS.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -150,5 +151,77 @@ namespace Humatrix_HRMS.Infrastructure.Services
                 .Take(pageSize)
                 .ToListAsync();
         }
+
+
+
+        // ── Asset ─────────────────────────────────────────────────────────────
+
+        public Task LogAssetCreatedAsync(
+            Guid organizationId, Guid assetId,
+            string userId, string role, object newValues)
+            => LogAsync(organizationId, AssetModuleName.Asset, "Created",
+                "Asset", assetId, userId, role, newValues: newValues);
+
+        public Task LogAssetAssignedAsync(
+            Guid organizationId, Guid assetId,
+            string userId, string role,
+            string assetCode, string assignedToName)
+            => LogAsync(organizationId, AssetModuleName.Asset, "Assigned",
+                "Asset", assetId, userId, role,
+                newValues: new { assetCode, assignedTo = assignedToName });
+
+        public Task LogAssetReturnedAsync(
+            Guid organizationId, Guid assetId,
+            string userId, string role, string assetCode)
+            => LogAsync(organizationId, AssetModuleName.Asset, "Returned",
+                "Asset", assetId, userId, role,
+                newValues: new { assetCode });
+
+        public Task LogAssetRetiredAsync(
+            Guid organizationId, Guid assetId,
+            string userId, string role, string assetCode)
+            => LogAsync(organizationId, AssetModuleName.Asset, "Retired",
+                "Asset", assetId, userId, role,
+                newValues: new { assetCode });
+
+        // ── Asset Request ─────────────────────────────────────────────────────
+
+        public Task LogAssetRequestRaisedAsync(
+            Guid organizationId, Guid requestId,
+            string userId, string role,
+            string requestType, string assetCode)
+            => LogAsync(organizationId, AssetModuleName.AssetRequest, "Raised",
+                "AssetRequest", requestId, userId, role,
+                newValues: new { requestType, assetCode });
+
+        public Task LogAssetRequestReviewedAsync(
+            Guid organizationId, Guid requestId,
+            string userId, string role,
+            string action, string requestType)
+            => LogAsync(organizationId, AssetModuleName.AssetRequest, action,
+                "AssetRequest", requestId, userId, role,
+                newValues: new { requestType, action });
+
+        // ── Procurement ───────────────────────────────────────────────────────
+
+        public Task LogProcurementRaisedAsync(
+            Guid organizationId, Guid procurementId,
+            string userId, string assetCategory, int quantity)
+            => LogAsync(organizationId, AssetModuleName.Procurement, "Raised",
+                "ProcurementRequest", procurementId, userId, "HR",
+                newValues: new { assetCategory, quantity });
+
+        public Task LogProcurementReviewedAsync(
+            Guid organizationId, Guid procurementId,
+            string userId, string action)
+            => LogAsync(organizationId, AssetModuleName.Procurement, action,
+                "ProcurementRequest", procurementId, userId, "OrgAdmin");
+
+        public Task LogProcurementFulfilledAsync(
+            Guid organizationId, Guid procurementId,
+            string userId, int quantityCreated)
+            => LogAsync(organizationId, AssetModuleName.Procurement, "Fulfilled",
+                "ProcurementRequest", procurementId, userId, "OrgAdmin",
+                newValues: new { quantityCreated });
     }
 }
