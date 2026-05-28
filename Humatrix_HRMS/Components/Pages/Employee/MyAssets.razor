@@ -1,0 +1,440 @@
+﻿@* @page "/my-assets"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.DTOs.Asset
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+<PageTitle>My Assets</PageTitle>
+
+<div class="container-fluid px-4 py-3">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">My Assets</h4>
+
+            <small class="text-muted">
+                Assets currently assigned to you
+            </small>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    @if (!string.IsNullOrWhiteSpace(_errorMsg))
+    {
+        <div class="alert alert-danger alert-dismissible fade show">
+            @_errorMsg
+
+            <button class="btn-close"
+                    @onclick="() => _errorMsg = null">
+            </button>
+        </div>
+    }
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small mb-1">
+                        Total Assets
+                    </div>
+
+                    <h3 class="fw-bold mb-0">
+                        @_assets.Count
+                    </h3>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small mb-1">
+                        Active Assignments
+                    </div>
+
+                    <h3 class="fw-bold text-primary mb-0">
+                        @_assets.Count(x => x.Status == AssetStatuses.Assigned)
+                    </h3>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small mb-1">
+                        Warranty Expiring Soon
+                    </div>
+
+                    <h3 class="fw-bold text-warning mb-0">
+                        @_assets.Count(x => x.IsWarrantyExpiringSoon)
+                    </h3>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="text-muted small mb-1">
+                        Expired Warranty
+                    </div>
+
+                    <h3 class="fw-bold text-danger mb-0">
+                        @_assets.Count(x => x.IsWarrantyExpired)
+                    </h3>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Assets Table -->
+    <div class="card border-0 shadow-sm">
+
+        <div class="card-body p-0">
+
+            @if (_loading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            }
+            else if (!_assets.Any())
+            {
+                <div class="text-center py-5 text-muted">
+
+                    <i class="bi bi-laptop fs-1 d-block mb-3"></i>
+
+                    <h5>No Assets Assigned</h5>
+
+                    <small>
+                        You currently do not have any assigned assets.
+                    </small>
+
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle mb-0">
+
+                        <thead class="table-light">
+                            <tr>
+                                <th>Asset</th>
+                                <th>Code</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Assigned On</th>
+                                <th>Warranty</th>
+                                <th>Condition</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var asset in _assets)
+                            {
+                                <tr style="cursor:pointer"
+                                    @onclick="@(() => OpenDetails(asset.AssetId))">
+
+                                    <!-- Asset -->
+                                    <td>
+                                        <div class="fw-semibold">
+                                            @asset.AssetName
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(asset.Brand))
+                                        {
+                                            <small class="text-muted">
+                                                @asset.Brand @asset.Model
+                                            </small>
+                                        }
+                                    </td>
+
+                                    <!-- Code -->
+                                    <td>
+                                        <code>
+                                            @asset.AssetCode
+                                        </code>
+                                    </td>
+
+                                    <!-- Category -->
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            @asset.Category
+                                        </span>
+                                    </td>
+
+                                    <!-- Status -->
+                                    <td>
+                                        @RenderStatusBadge(asset.Status)
+                                    </td>
+
+                                    <!-- Assigned Date -->
+                                    <td>
+
+                                        @if (asset.AssignedDate.HasValue)
+                                        {
+                                            <small>
+                                                @asset.AssignedDate.Value.ToString("dd MMM yyyy")
+                                            </small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+
+                                    </td>
+
+                                    <!-- Warranty -->
+                                    <td>
+
+                                        @if (asset.WarrantyExpiry.HasValue)
+                                        {
+                                            <small class="@(asset.IsWarrantyExpired
+                                                                                                   ? "text-danger"
+                                                                                                   : asset.IsWarrantyExpiringSoon
+                                                                                                       ? "text-warning"
+                                                                                                       : "text-muted")">
+
+                                    @asset.WarrantyExpiry.Value.ToString("dd MMM yyyy")
+
+                                            </small>
+                                                                }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+
+                                    </td>
+
+                                    <!-- Condition -->
+                                    <td>
+                                        <small>
+                                            @(asset.Condition ?? "—")
+                                        </small>
+                                    </td>
+
+                                    <!-- Actions -->
+                                    <td class="text-end">
+
+                                        <button class="btn btn-outline-primary btn-sm"
+                                                @onclick:stopPropagation="true"
+                                                @onclick="@(() => OpenDetails(asset.AssetId))">
+
+                                            <i class="bi bi-eye"></i>
+
+                                        </button>
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+    <!-- Return History -->
+    <div class="card border-0 shadow-sm mt-4">
+
+        <div class="card-header bg-white border-0 pt-3">
+            <h5 class="fw-bold mb-0">
+                Recent Return History
+            </h5>
+        </div>
+
+        <div class="card-body">
+
+            @if (!_history.Any())
+            {
+                <div class="text-muted text-center py-3">
+                    No return history found.
+                </div>
+            }
+            else
+            {
+                <div class="timeline">
+
+                    @foreach (var item in _history)
+                    {
+                        <div class="border-start border-3 ps-3 mb-4">
+
+                            <div class="fw-semibold">
+                                @item.Asset?.AssetName
+                            </div>
+
+                            <small class="text-muted d-block mb-1">
+                                @item.Asset?.AssetCode
+                            </small>
+
+                            <small>
+                                Returned on
+                                <strong>
+                                    @item.ReturnedAt?.ToString("dd MMM yyyy")
+                                </strong>
+                            </small>
+
+                            @if (!string.IsNullOrWhiteSpace(item.ReturnCondition))
+                            {
+                                <div class="mt-1">
+                                    <span class="badge bg-light text-dark border">
+                                        @item.ReturnCondition
+                                    </span>
+                                </div>
+                            }
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+
+    private bool _loading = true;
+
+    private string? _errorMsg;
+
+    private Guid _orgId;
+
+    private Employee? _employee;
+
+    private List<AssetDto> _assets = new();
+
+    private List<AssetAssignment> _history = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var currentUser = await CurrentUser.GetUserAsync();
+
+            _orgId = currentUser?.OrganizationId ?? Guid.Empty;
+
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            _employee = await db.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserId == currentUser!.Id);
+
+            if (_employee == null)
+            {
+                _errorMsg = "Employee profile not found.";
+                return;
+            }
+
+            // Current assigned assets
+            _assets = await db.Assets
+
+                .Where(x =>
+                    x.OrganizationId == _orgId &&
+                    x.CurrentEmployeeId == _employee.EmployeeId &&
+                    x.Status == AssetStatuses.Assigned)
+
+                .Select(x => new AssetDto
+                {
+                    AssetId = x.AssetId,
+                    AssetCode = x.AssetCode,
+                    AssetName = x.AssetName,
+                    Brand = x.Brand,
+                    Model = x.Model,
+                    Category = x.Category,
+                    Status = x.Status,
+                    Condition = x.Condition,
+                    WarrantyExpiry = x.WarrantyExpiry,
+                    AssignedDate = x.AssignedAt
+                })
+
+                .OrderBy(x => x.AssetName)
+
+                .ToListAsync();
+
+            // Return history
+            _history = await db.AssetAssignments
+
+                .Include(x => x.Asset)
+
+                .Where(x =>
+                    x.EmployeeId == _employee.EmployeeId &&
+                    x.ReturnedAt != null)
+
+                .OrderByDescending(x => x.ReturnedAt)
+
+                .Take(10)
+
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMsg = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenDetails(Guid assetId)
+    {
+        Nav.NavigateTo($"/assets/details/{assetId}");
+    }
+
+    private MarkupString RenderStatusBadge(string status)
+    {
+        return new(status switch
+        {
+            "Assigned" =>
+                "<span class='badge bg-primary'>Assigned</span>",
+
+            "Available" =>
+                "<span class='badge bg-success'>Available</span>",
+
+            "In Repair" =>
+                "<span class='badge bg-warning text-dark'>In Repair</span>",
+
+            "Retired" =>
+                "<span class='badge bg-secondary'>Retired</span>",
+
+            _ =>
+                $"<span class='badge bg-light text-dark'>{status}</span>"
+        });
+    }
+} *@

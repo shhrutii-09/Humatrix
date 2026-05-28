@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using Humatrix_HRMS.Data;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Humatrix_HRMS.Models
 {
@@ -39,6 +40,12 @@ namespace Humatrix_HRMS.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public string? CreatedByUserId { get; set; } // ✅ FIXED
+        //public string? CreatedByUserId { get; set; }
+
+        [ForeignKey("CreatedByUserId")]
+        public ApplicationUser? CreatedByUser { get; set; }
+
+        public string? CreatedByRole { get; set; }
 
         //public Guid OrganizationId { get; set; }
 

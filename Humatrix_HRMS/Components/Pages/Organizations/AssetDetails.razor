@@ -1,0 +1,365 @@
+﻿@page "/orgadmin/assets/details/{AssetId:guid}"
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@using Humatrix_HRMS.Data
+@using Humatrix_HRMS.DTOs.Asset
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Humatrix_HRMS.Infrastructure.Services
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+
+@inject AssetService AssetSvc
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+<PageTitle>Asset Details</PageTitle>
+
+<div class="container-fluid px-4 py-3">
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (_asset == null)
+    {
+        <div class="alert alert-danger">
+            Asset not found.
+        </div>
+    }
+    else
+    {
+        @* HEADER *@
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <h3 class="fw-bold mb-0">@_asset.AssetName</h3>
+                    @RenderStatusBadge(_asset.Status)
+                </div>
+
+                <div class="text-muted">
+                    <code>@_asset.AssetCode</code>
+                    @if (!string.IsNullOrWhiteSpace(_asset.Brand))
+                    {
+                        <span> • @_asset.Brand @_asset.Model</span>
+                    }
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary"
+                    @onclick="GoBack">
+                <i class="bi bi-arrow-left me-1"></i>
+                Back
+            </button>
+
+            <button class="btn btn-outline-info"
+                    @onclick="OpenHistory">
+                <i class="bi bi-clock-history me-1"></i>
+                History
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        @* LEFT SIDE *@
+        <div class="col-lg-8">
+
+            @* BASIC INFO *@
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 fw-semibold">
+                        Basic Information
+                    </h5>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="row g-4">
+
+                        <div class="col-md-6">
+                            <small class="text-muted d-block">Category</small>
+                            <div class="fw-semibold">@_asset.Category</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <small class="text-muted d-block">Condition</small>
+                            <div class="fw-semibold">
+                                @(_asset.Condition ?? "—")
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <small class="text-muted d-block">Department</small>
+                            <div class="fw-semibold">
+                                @(_asset.DepartmentName ?? "—")
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <small class="text-muted d-block">Serial Number</small>
+                            <div class="fw-semibold">
+                                @(_asset.SerialNumber ?? "—")
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+            @* PURCHASE INFO *@
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0 fw-semibold">
+                        Purchase & Warranty
+                    </h5>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="row g-4">
+
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Purchase Date</small>
+
+                            <div class="fw-semibold">
+                                @(_asset.PurchaseDate?.ToString("dd MMM yyyy") ?? "—")
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Purchase Cost</small>
+
+                            <div class="fw-semibold">
+                                @(_asset.PurchaseCost.HasValue
+                                                                ? $"₹{_asset.PurchaseCost.Value:N2}"
+                                                                : "—")
+                            </div>
+                        </div>
+
+                            <div class="col-md-4">
+                                <small class="text-muted d-block">Warranty Expiry</small>
+
+                            @if (_asset.WarrantyExpiry.HasValue)
+                                {
+                                    <div class="fw-semibold @(GetWarrantyClass())">
+                                        @_asset.WarrantyExpiry.Value.ToString("dd MMM yyyy")
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="fw-semibold">—</div>
+                                }
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                @* NOTES *@
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0 fw-semibold">
+                            Notes
+                        </h5>
+                    </div>
+
+                    <div class="card-body">
+
+                        @if (!string.IsNullOrWhiteSpace(_asset.Notes))
+                        {
+                            <div style="white-space:pre-wrap">
+                                @_asset.Notes
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted">
+                                No notes available.
+                            </span>
+                        }
+
+                    </div>
+                </div>
+
+            </div>
+
+            @* RIGHT SIDE *@
+            <div class="col-lg-4">
+
+                @* CURRENT ASSIGNMENT *@
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0 fw-semibold">
+                            Current Assignment
+                        </h5>
+                    </div>
+
+                    <div class="card-body">
+
+                        @if (!string.IsNullOrWhiteSpace(_asset.CurrentEmployeeName))
+                        {
+                            <div class="mb-3">
+                                <small class="text-muted d-block">
+                                    Assigned To
+                                </small>
+
+                                <div class="fw-semibold">
+                                    @_asset.CurrentEmployeeName
+                                </div>
+
+                                <code>
+                                    @_asset.CurrentEmployeeCode
+                                </code>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-muted">
+                                Currently unassigned
+                            </div>
+                        }
+
+                    </div>
+                </div>
+
+                @* SYSTEM INFO *@
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0 fw-semibold">
+                            System Information
+                        </h5>
+                    </div>
+
+                    <div class="card-body">
+
+                        <div class="mb-3">
+                            <small class="text-muted d-block">
+                                Asset ID
+                            </small>
+
+                            <code class="small">
+                                @_asset.AssetId
+                            </code>
+                        </div>
+
+                        <div class="mb-3">
+                            <small class="text-muted d-block">
+                                Created At
+                            </small>
+
+                            <div class="fw-semibold">
+                                @_asset.CreatedAt.ToString("dd MMM yyyy hh:mm tt")
+                            </div>
+                        </div>
+
+                        <div>
+                            <small class="text-muted d-block">
+                                Last Updated
+                            </small>
+
+                            <div class="fw-semibold">
+                                @(_asset.UpdatedAt?.ToString("dd MMM yyyy") ?? "—")
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    }
+</div>
+
+@code {
+
+    [Parameter]
+    public Guid AssetId { get; set; }
+
+    private bool _loading = true;
+
+    private Guid _orgId;
+
+    private AssetDto? _asset;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await CurrentUser.GetUserAsync();
+
+        _orgId = user?.OrganizationId ?? Guid.Empty;
+
+        await LoadAsset();
+    }
+
+    private async Task LoadAsset()
+    {
+        _loading = true;
+
+        try
+        {
+            var filter = new AssetFilterDto
+            {
+                OrganizationId = _orgId,
+                Page = 1,
+                PageSize = 1000
+            };
+
+            var result = await AssetSvc.GetAssetsAsync(
+                filter,
+                "OrgAdmin",
+                null
+            );
+
+            _asset = result.Items
+                .FirstOrDefault(x => x.AssetId == AssetId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Nav.NavigateTo("/orgadmin/assets");
+    }
+
+    private void OpenHistory()
+    {
+        Nav.NavigateTo($"/orgadmin/assets/history/{AssetId}");
+    }
+
+    private string GetWarrantyClass()
+    {
+        if (_asset == null)
+            return "";
+
+        if (_asset.IsWarrantyExpired)
+            return "text-danger";
+
+        if (_asset.IsWarrantyExpiringSoon)
+            return "text-warning";
+
+        return "text-success";
+    }
+
+    private MarkupString RenderStatusBadge(string status) => new(status switch
+    {
+        AssetStatuses.Available => "<span class=\"badge bg-success\">Available</span>",
+        AssetStatuses.Assigned => "<span class=\"badge bg-primary\">Assigned</span>",
+        AssetStatuses.InRepair => "<span class=\"badge bg-warning text-dark\">In Repair</span>",
+        AssetStatuses.Lost => "<span class=\"badge bg-danger\">Lost</span>",
+        AssetStatuses.Retired => "<span class=\"badge bg-secondary\">Retired</span>",
+        AssetStatuses.Disposed => "<span class=\"badge bg-dark\">Disposed</span>",
+        _ => $"<span class=\"badge bg-light text-dark\">{status}</span>"
+    });
+
+}

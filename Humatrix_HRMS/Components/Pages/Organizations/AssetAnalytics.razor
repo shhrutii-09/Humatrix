@@ -1,0 +1,349 @@
+﻿@page "/orgadmin/asset-analytics"
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@using Humatrix_HRMS.DTOs.Asset
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Humatrix_HRMS.Infrastructure.Services
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+
+@inject AssetService AssetSvc
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+<PageTitle>Asset Analytics</PageTitle>
+
+<div class="container-fluid px-4 py-3">
+
+    <!-- Header -->
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">Asset Analytics</h4>
+            <small class="text-muted">
+                Organization-wide asset overview
+            </small>
+        </div>
+
+        <button class="btn btn-outline-secondary btn-sm"
+        @onclick="@(() => Nav.NavigateTo("/orgadmin/assets"))">
+    <i class="bi bi-arrow-left me-1"></i>
+    Back to Inventory
+</button>
+
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (_analytics == null)
+    {
+        <div class="alert alert-danger">
+            Unable to load analytics.
+        </div>
+    }
+    else
+    {
+        <!-- Summary Cards -->
+        <div class="row g-3 mb-4">
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Total Assets</small>
+                        <h3 class="fw-bold mb-0">@_analytics.TotalAssets</h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Assigned</small>
+                        <h3 class="fw-bold text-primary mb-0">
+                            @_analytics.Assigned
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Available</small>
+                        <h3 class="fw-bold text-success mb-0">
+                            @_analytics.Available
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">In Repair</small>
+                        <h3 class="fw-bold text-warning mb-0">
+                            @_analytics.InRepair
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Second Row -->
+        <div class="row g-3 mb-4">
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Lost Assets</small>
+                        <h3 class="fw-bold text-danger mb-0">
+                            @_analytics.Lost
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Retired</small>
+                        <h3 class="fw-bold text-secondary mb-0">
+                            @_analytics.Retired
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Warranty Expiring</small>
+                        <h3 class="fw-bold text-warning mb-0">
+                            @_analytics.WarrantyExpiringSoon
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <small class="text-muted">Pending Requests</small>
+                        <h3 class="fw-bold text-dark mb-0">
+                            @_analytics.PendingRequests
+                        </h3>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Asset Value -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">Total Asset Value</h6>
+
+                <h2 class="fw-bold text-success">
+                    ₹@_analytics.TotalPurchaseCost.ToString("N0")
+                </h2>
+            </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0">
+                <h6 class="fw-bold mb-0">Assets by Category</h6>
+            </div>
+
+            <div class="card-body p-0">
+
+                @if (_analytics.ByCategory.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Count</th>
+                                    <th>Total Value</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var c in _analytics.ByCategory)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">
+                                                @c.Category
+                                            </span>
+                                        </td>
+
+                                        <td>@c.Count</td>
+
+                                        <td>
+                                            ₹@c.TotalValue.ToString("N0")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        No category data found.
+                    </div>
+                }
+
+            </div>
+        </div>
+
+        <!-- Department Breakdown -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0">
+                <h6 class="fw-bold mb-0">Assets by Department</h6>
+            </div>
+
+            <div class="card-body p-0">
+
+                @if (_analytics.ByDepartment.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Department</th>
+                                    <th>Total</th>
+                                    <th>Assigned</th>
+                                    <th>Available</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var d in _analytics.ByDepartment)
+                                {
+                                    <tr>
+                                        <td>@d.DepartmentName</td>
+                                        <td>@d.Count</td>
+                                        <td>@d.Assigned</td>
+                                        <td>@d.Available</td>
+                                    </tr>
+                                }
+                            </tbody>
+
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        No department data found.
+                    </div>
+                }
+
+            </div>
+        </div>
+
+        <!-- Recently Assigned -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0">
+                <h6 class="fw-bold mb-0">Recently Assigned Assets</h6>
+            </div>
+
+            <div class="card-body p-0">
+
+                @if (_analytics.RecentlyAssigned.Any())
+                {
+                    <div class="table-responsive">
+
+                        <table class="table table-hover align-middle mb-0">
+
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Asset</th>
+                                    <th>Employee</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                @foreach (var a in _analytics.RecentlyAssigned)
+                                {
+                                    <tr style="cursor:pointer"
+                                        @onclick="@(() => Nav.NavigateTo($"/orgadmin/assets/details/{a.AssetId}"))">
+
+                                        <td>
+                                            <code>@a.AssetCode</code>
+                                        </td>
+
+
+                                        <td>
+                                            @a.AssetName
+                                        </td>
+
+                                        <td>
+                                            @a.CurrentEmployeeName
+                                        </td>
+
+                                        <td>
+                                            <span class="badge bg-primary">
+                                                @a.Status
+                                            </span>
+                                        </td>
+
+                                    </tr>
+                                }
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        No recent assignments found.
+                    </div>
+                }
+
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+
+    private AssetAnalyticsDto? _analytics;
+    private bool _loading = true;
+
+    private Guid _orgId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var user = await CurrentUser.GetUserAsync();
+
+            _orgId = user?.OrganizationId ?? Guid.Empty;
+
+            // _analytics = await AssetSvc.GetAssetAnalyticsAsync(_orgId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

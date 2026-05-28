@@ -40,19 +40,44 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync(u => u.Id == userId);
         }
 
+        //public async Task<HrDashboardContextDto?> GetHrDashboardContextAsync()
+        //{
+        //    var user = await GetUserAsync();
+
+        //    if (user == null)
+        //        return null;
+
+        //    return new HrDashboardContextDto
+        //    {
+        //        EmployeeId = user.Id,
+        //        OrganizationId = user.OrganizationId ?? Guid.Empty,
+        //        DepartmentId = user.DepartmentId ?? Guid.Empty,
+        //        FullName = $"{user.FirstName} {user.LastName}",
+        //        Email = user.Email ?? ""
+        //    };
+        //}
         public async Task<HrDashboardContextDto?> GetHrDashboardContextAsync()
         {
             var user = await GetUserAsync();
 
-            if (user == null)
+            if (user == null || user.OrganizationId == null)
+                return null;
+
+            using var context = _contextFactory.CreateDbContext();
+
+            var employee = await context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+            if (employee == null)
                 return null;
 
             return new HrDashboardContextDto
             {
-                EmployeeId = user.Id,
-                OrganizationId = user.OrganizationId ?? Guid.Empty,
-                DepartmentId = user.DepartmentId ?? Guid.Empty,
-                FullName = $"{user.FirstName} {user.LastName}",
+                EmployeeId = employee.EmployeeId,
+                OrganizationId = employee.OrganizationId,
+                DepartmentId = employee.DepartmentId,
+                FullName = $"{employee.FirstName} {employee.LastName}",
                 Email = user.Email ?? ""
             };
         }
@@ -70,6 +95,48 @@ namespace Humatrix_HRMS.Services
                 FullName = $"{user.FirstName} {user.LastName}",
                 Email = user.Email ?? ""
             };
+        }
+
+        public async Task<EmployeeDashboardContextDto?> GetEmployeeDashboardContextAsync()
+        {
+            var user = await GetUserAsync();
+
+            if (user == null || user.OrganizationId == null)
+                return null;
+
+            using var context = _contextFactory.CreateDbContext();
+
+            var employee = await context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+            if (employee == null)
+                return null;
+
+            return new EmployeeDashboardContextDto
+            {
+                UserId = user.Id,
+                EmployeeId = employee.EmployeeId,
+                OrganizationId = employee.OrganizationId,
+                DepartmentId = employee.DepartmentId,
+                FullName = $"{employee.FirstName} {employee.LastName}",
+                Email = user.Email ?? "",
+
+                Role = _httpContextAccessor.HttpContext?.User
+         .Claims
+         .FirstOrDefault(x => x.Type == ClaimTypes.Role)
+         ?.Value ?? "Employee"
+            };
+        }
+
+        public Task<bool> IsInRoleAsync(string role)
+        {
+            var user = _httpContextAccessor.HttpContext?.User;
+
+            if (user == null)
+                return Task.FromResult(false);
+
+            return Task.FromResult(user.IsInRole(role));
         }
     }
 }

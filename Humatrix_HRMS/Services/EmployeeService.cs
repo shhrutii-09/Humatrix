@@ -275,6 +275,16 @@ namespace Humatrix_HRMS.Services
                 .Where(e => e.OrganizationId == currentUser.OrganizationId)
                 .AsNoTracking().ToListAsync();
 
+            var creatorIds = profiles
+    .Where(p => !string.IsNullOrEmpty(p.CreatedByUserId))
+    .Select(p => p.CreatedByUserId!)
+    .Distinct()
+    .ToList();
+
+            var creators = await _userManager.Users
+                .Where(u => creatorIds.Contains(u.Id))
+                .ToListAsync();
+
             var list = new List<EmployeeListDto>();
 
             foreach (var u in users)
@@ -286,7 +296,8 @@ namespace Humatrix_HRMS.Services
                     continue;
 
                 var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
-
+                var creator = creators
+    .FirstOrDefault(c => c.Id == profile?.CreatedByUserId);
                 list.Add(new EmployeeListDto
                 {
                     EmployeeId = profile?.EmployeeId ?? Guid.Empty,
@@ -299,6 +310,11 @@ namespace Humatrix_HRMS.Services
                     Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
                     DepartmentId = u.DepartmentId,
                     DesignationId = u.DesignationId,
+                    CreatedByName = creator != null
+    ? $"{creator.FirstName} {creator.LastName}"
+    : "System",
+
+                    CreatedByRole = profile?.CreatedByRole ?? "Unknown",
                     ShiftId = profile?.ShiftId,
                     ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift Assigned",
                     IsActive = u.IsActive
@@ -390,8 +406,22 @@ namespace Humatrix_HRMS.Services
         public async Task<string> CreateEmployeeAsync(CreateEmployeeDto dto)
         {
             var currentUser = await _currentUser.GetUserAsync();
-            var inviterName =
-    $"{currentUser.FirstName} {currentUser.LastName}";
+            //        var inviterName =
+            //$"{currentUser.FirstName} {currentUser.LastName}";
+            var inviterName = string.Join(" ",
+            new[]
+            {
+        currentUser.FirstName,
+        currentUser.LastName
+            }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+
+            if (string.IsNullOrWhiteSpace(inviterName))
+            {
+                inviterName = currentUser.Email ?? "Humatrix Admin";
+            }
+
+
             if (currentUser?.OrganizationId == null)
                 throw new Exception("Unauthorized");
 
@@ -448,6 +478,21 @@ namespace Humatrix_HRMS.Services
 
                 await _userManager.AddToRoleAsync(user, dto.Role ?? "Employee");
 
+                //var employee = new Employee
+                //{
+                //    UserId = user.Id,
+                //    OrganizationId = currentUser.OrganizationId.Value,
+                //    FirstName = dto.FirstName,
+                //    LastName = dto.LastName,
+                //    DepartmentId = dto.DepartmentId ?? Guid.Empty,
+                //    DesignationId = dto.DesignationId ?? Guid.Empty,
+                //    ShiftId = dto.ShiftId,
+                //    EmployeeCode = await GenerateEmployeeCodeAsync(context),
+                //    JoiningDate = DateTime.UtcNow,
+                //    Status = "Active"
+                //};
+                var creatorRoles = await _userManager.GetRolesAsync(currentUser);
+
                 var employee = new Employee
                 {
                     UserId = user.Id,
@@ -459,9 +504,12 @@ namespace Humatrix_HRMS.Services
                     ShiftId = dto.ShiftId,
                     EmployeeCode = await GenerateEmployeeCodeAsync(context),
                     JoiningDate = DateTime.UtcNow,
-                    Status = "Active"
-                };
+                    Status = "Active",
 
+                    // NEW
+                    CreatedByUserId = currentUser.Id,
+                    CreatedByRole = creatorRoles.FirstOrDefault()
+                };
                 context.Employees.Add(employee);
                 await context.SaveChangesAsync();
 

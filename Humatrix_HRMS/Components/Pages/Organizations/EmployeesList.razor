@@ -110,9 +110,29 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td>
+                                @* <td>
                                     <div class="badge bg-soft-info text-info mb-1">@e.Role</div>
                                     <div class="small text-muted">@e.Department</div>
+                                </td> *@
+                                <td>
+                                    <div class="badge bg-soft-info text-info mb-1">
+                                        @e.Role
+                                    </div>
+
+                                    <div class="small text-muted">
+                                        @e.Department
+                                    </div>
+
+                                    <div class="small text-secondary mt-1">
+                                        Added by:
+                                        <span class="fw-semibold">
+                                            @e.CreatedByName
+                                        </span>
+
+                                        <span class="text-muted">
+                                            (@e.CreatedByRole)
+                                        </span>
+                                    </div>
                                 </td>
                                 <td><span class="text-dark">@e.Designation</span></td>
                                 <td class="text-center">

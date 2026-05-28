@@ -1,0 +1,373 @@
+﻿@* @page "/employee/asset-requests"
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.DTOs.Asset
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Humatrix_HRMS.Infrastructure.Services
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+
+@attribute [Authorize(Roles = "Employee,HR")]
+
+@inject AssetRequestService AssetRequestService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>My Asset Requests | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 py-4">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+
+        <div>
+
+            <h2 class="fw-bold mb-1">
+                My Asset Requests
+            </h2>
+
+            <p class="text-muted mb-0">
+                Track all your submitted asset-related requests
+            </p>
+
+        </div>
+
+        <button class="btn btn-outline-primary"
+                @onclick="LoadRequestsAsync">
+
+            <i class="bi bi-arrow-clockwise me-2"></i>
+            Refresh
+
+        </button>
+
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+
+            <div class="spinner-border text-primary"></div>
+
+        </div>
+    }
+    else if (!requests.Any())
+    {
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body text-center py-5">
+
+                <i class="bi bi-inbox fs-1 text-muted"></i>
+
+                <h5 class="fw-semibold mt-3">
+                    No Requests Found
+                </h5>
+
+                <p class="text-muted mb-0">
+                    You have not submitted any asset requests yet.
+                </p>
+
+            </div>
+
+        </div>
+    }
+    else
+    {
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body p-0">
+
+                <div class="table-responsive">
+
+                    <table class="table align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+
+                                <th>Request Type</th>
+
+                                <th>Asset</th>
+
+                                <th>Reason</th>
+
+                                <th>Status</th>
+
+                                <th>Requested</th>
+
+                                <th>Reviewed By</th>
+
+                                <th>Comments</th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var request in requests)
+                            {
+                                <tr>
+
+                                    <td>
+
+                                        <span class="badge bg-primary">
+                                            @request.RequestType
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        @if (!string.IsNullOrWhiteSpace(request.AssetName))
+                                        {
+                                            <div class="fw-semibold">
+                                                @request.AssetName
+                                            </div>
+
+                                            <div class="small text-muted">
+                                                @request.AssetCode
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                N/A
+                                            </span>
+                                        }
+
+                                    </td>
+
+                                    <td style="max-width: 250px;">
+
+                                        <div class="text-wrap small">
+                                            @request.Reason
+                                        </div>
+
+                                    </td>
+
+                                    <td>
+
+                                        <span class="@GetStatusBadge(request.Status)">
+                                            @request.Status
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        <div>
+                                            @request.RequestedAt
+                                            .ToLocalTime()
+                                            .ToString("dd MMM yyyy")
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            @request.RequestedAt
+                                            .ToLocalTime()
+                                            .ToString("hh:mm tt")
+                                        </div>
+
+                                    </td>
+
+                                    <td>
+
+                                        @if (!string.IsNullOrWhiteSpace(request.ReviewedByName))
+                                        {
+                                            <span>
+                                                @request.ReviewedByName
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                Pending
+                                            </span>
+                                        }
+
+                                    </td>
+
+                                    <td style="max-width: 300px;">
+
+                                        @if (!string.IsNullOrWhiteSpace(request.ReviewComments))
+                                        {
+                                            <div class="small text-wrap">
+                                                @request.ReviewComments
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">
+                                                —
+                                            </span>
+                                        }
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+<style>
+
+    .text-primary {
+        color: #5c4ac7 !important;
+    }
+
+    .btn-primary {
+        background-color: #5c4ac7;
+        border-color: #5c4ac7;
+    }
+
+    .btn-outline-primary {
+        border-color: #5c4ac7;
+        color: #5c4ac7;
+    }
+
+        .btn-outline-primary:hover {
+            background-color: #5c4ac7;
+            color: white;
+        }
+
+</style>
+
+@code {
+
+    private List<AssetRequestDto> requests = new();
+
+    private bool isLoading = true;
+
+    private HubConnection? _hub;
+
+    private Guid organizationId;
+
+    private Guid employeeId;
+
+    private Guid? departmentId;
+
+    private string userId = string.Empty;
+
+    private string role = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
+
+        if (context == null)
+        {
+            await JS.InvokeVoidAsync(
+                "showToastNotification",
+                "Error",
+                "Unable to load user context.",
+                "",
+                "error");
+
+            return;
+        }
+
+        organizationId = context.OrganizationId;
+        employeeId = context.EmployeeId;
+        departmentId = context.DepartmentId;
+        userId = context.UserId;
+        role = context.Role;
+
+        await LoadRequestsAsync();
+    }
+
+    private async Task LoadRequestsAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            requests = await AssetRequestService.GetMyRequestsAsync(
+                employeeId,
+                organizationId);
+
+            requests = requests
+                .OrderByDescending(r => r.RequestedAt)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync(
+                "showToastNotification",
+                "Error",
+                ex.Message,
+                "",
+                "error");
+        }
+        finally
+        {
+            isLoading = false;
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetStatusBadge(string status)
+    {
+        return status switch
+        {
+            AssetRequestStatuses.Pending
+                => "badge bg-warning text-dark",
+
+            AssetRequestStatuses.Approved
+                => "badge bg-success",
+
+            AssetRequestStatuses.Rejected
+                => "badge bg-danger",
+
+            _ => "badge bg-secondary"
+        };
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<NotificationPushDto>(
+            "ReceiveNotification",
+            async payload =>
+            {
+                await LoadRequestsAsync();
+
+                await InvokeAsync(StateHasChanged);
+            });
+
+        await _hub.StartAsync();
+
+        await _hub.SendAsync(
+            "JoinUserGroup",
+            userId);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub != null)
+        {
+            await _hub.DisposeAsync();
+        }
+    }
+
+} *@

@@ -4,7 +4,8 @@
     {
         //public Guid EmployeeId { get; set; }
 
-        public string EmployeeId { get; set; } = "";
+        //public string EmployeeId { get; set; } = "";
+        public Guid EmployeeId { get; set; }
         public Guid OrganizationId { get; set; }
 
         public Guid DepartmentId { get; set; }
