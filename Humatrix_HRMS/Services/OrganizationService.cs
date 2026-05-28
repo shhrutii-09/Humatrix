@@ -8,17 +8,14 @@ namespace Humatrix_HRMS.Services
 {
     public class OrganizationService
     {
-        //private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
-        //private readonly UserManager<ApplicationUser> _userManager;
-
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly EmailService _emailService;
 
         public OrganizationService(
-    IDbContextFactory<ApplicationDbContext> contextFactory,
-    UserManager<ApplicationUser> userManager,
-    EmailService emailService)
+            IDbContextFactory<ApplicationDbContext> contextFactory,
+            UserManager<ApplicationUser> userManager,
+            EmailService emailService)
         {
             _contextFactory = contextFactory;
             _userManager = userManager;
@@ -58,7 +55,8 @@ namespace Humatrix_HRMS.Services
                     UserName = dto.AdminEmail,
                     Email = dto.AdminEmail,
                     OrganizationId = org.OrganizationId,
-                    EmailConfirmed = true
+                    EmailConfirmed = true,
+                    IsActive = true // Pehla admin directly active hoga
                 };
 
                 var result = await _userManager.CreateAsync(user);
@@ -83,18 +81,10 @@ namespace Humatrix_HRMS.Services
                 _context.UserInvites.Add(invite);
                 await _context.SaveChangesAsync();
 
-                //await transaction.CommitAsync();
-
-                //var baseUrl = "https://localhost:7057";
-
-                //return $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
-
                 await transaction.CommitAsync();
 
                 var baseUrl = "https://localhost:7057";
-
-                var setupLink =
-                    $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+                var setupLink = $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
 
                 await _emailService.SendOrganizationInviteAsync(
                     dto.AdminEmail,
@@ -125,8 +115,8 @@ namespace Humatrix_HRMS.Services
 
             var dbOrg = await _context.Organizations.FindAsync(org.OrganizationId);
             var exists = await _context.Organizations.AnyAsync(x =>
-            x.OrganizationId != org.OrganizationId &&
-            x.Email.ToLower() == org.Email.ToLower());
+                x.OrganizationId != org.OrganizationId &&
+                x.Email.ToLower() == org.Email.ToLower());
 
             if (exists)
                 throw new Exception("Email already used");
@@ -156,7 +146,7 @@ namespace Humatrix_HRMS.Services
         }
 
         public async Task<(Organization Organization, int EmployeeCount, int HRCount, int DepartmentCount)>
-     GetOrganizationDetailsAsync(Guid orgId)
+            GetOrganizationDetailsAsync(Guid orgId)
         {
             using var _context = _contextFactory.CreateDbContext();
 
@@ -167,7 +157,6 @@ namespace Humatrix_HRMS.Services
             if (org == null)
                 throw new Exception("Organization not found");
 
-            // FIX: Only count users who have the "Employee" role
             var employeeCount = await (from user in _context.Users
                                        join userRole in _context.UserRoles on user.Id equals userRole.UserId
                                        join role in _context.Roles on userRole.RoleId equals role.Id
@@ -191,91 +180,89 @@ namespace Humatrix_HRMS.Services
         public async Task<string> ChangeOrganizationAdminAsync(Guid orgId, string newAdminEmail)
         {
             using var _context = _contextFactory.CreateDbContext();
-            using var transaction = await _context.Database.BeginTransactionAsync();
 
-            try
+            var org = await _context.Organizations.AsNoTracking().FirstOrDefaultAsync(x => x.OrganizationId == orgId);
+            if (org == null)
+                throw new Exception("Organization not found");
+
+            var user = await _userManager.FindByEmailAsync(newAdminEmail.ToLower());
+
+            if (user == null)
             {
-                var org = await _context.Organizations.FindAsync(orgId);
-                if (org == null)
-                    throw new Exception("Organization not found");
-
-                var user = await _userManager.FindByEmailAsync(newAdminEmail.ToLower());
-
-                if (user == null)
+                // Naya staging user placeholder banega jo locked (IsActive = false) rahega
+                user = new ApplicationUser
                 {
-                    user = new ApplicationUser
-                    {
-                        UserName = newAdminEmail,
-                        Email = newAdminEmail,
-                        OrganizationId = orgId,
-                        EmailConfirmed = true
-                    };
-
-                    var result = await _userManager.CreateAsync(user);
-                    if (!result.Succeeded)
-                        throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
-                }
-
-                if (!await _userManager.IsInRoleAsync(user, "OrgAdmin"))
-                {
-                    await _userManager.AddToRoleAsync(user, "OrgAdmin");
-                }
-
-                var currentAdmins = await (from u in _context.Users
-                                           join ur in _context.UserRoles on u.Id equals ur.UserId
-                                           join r in _context.Roles on ur.RoleId equals r.Id
-                                           where u.OrganizationId == orgId && r.Name == "OrgAdmin"
-                                           select u).ToListAsync();
-
-                foreach (var admin in currentAdmins)
-                {
-                    if (admin.Email != newAdminEmail)
-                    {
-                        await _userManager.RemoveFromRoleAsync(admin, "OrgAdmin");
-                        admin.IsActive = false;
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-
-                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-
-                var invite = new UserInvite
-                {
-                    Email = user.Email,
-                    UserId = user.Id,
-                    Token = token,
-                    Role = "OrgAdmin",
+                    UserName = newAdminEmail,
+                    Email = newAdminEmail,
                     OrganizationId = orgId,
-                    IsUsed = false
+                    EmailConfirmed = true,
+                    IsActive = false // 👈 Jab tak password set nahi hoga, tab tak active nahi mana jayega
                 };
 
-                _context.UserInvites.Add(invite);
-                await _context.SaveChangesAsync();
-
-                await transaction.CommitAsync();
-
-                var baseUrl = "https://localhost:7057";
-
-                return $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+                var result = await _userManager.CreateAsync(user);
+                if (!result.Succeeded)
+                    throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
             }
-            catch
+            else
             {
-                await transaction.RollbackAsync();
-                throw;
+                if (user.OrganizationId != orgId)
+                {
+                    throw new Exception("This user email is registered under another organization.");
+                }
             }
+
+            // Secure Token generation
+            var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
+
+            var invite = new UserInvite
+            {
+                Email = user.Email,
+                UserId = user.Id,
+                Token = token,
+                Role = "OrgAdmin",
+                OrganizationId = orgId,
+                IsUsed = false
+            };
+
+            _context.UserInvites.Add(invite);
+            await _context.SaveChangesAsync();
+
+            var baseUrl = "https://localhost:7057";
+            var setupLink = $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+            await _emailService.SendOrganizationInviteAsync(
+                newAdminEmail,
+                org.Name,
+                setupLink);
+
+            return setupLink;
         }
 
         public async Task<string?> GetOrganizationAdminEmailAsync(Guid orgId)
         {
             using var _context = _contextFactory.CreateDbContext();
 
+            // ✅ FIX: Sirf usi admin ka email dikhega jo filhaal Active hai. 
+            // Jab tak naya admin link par click karke activate nahi hota, tab tak purana active admin hi return hoga.
             var admin = await (from user in _context.Users
+                               join userRole in _context.UserRoles on user.Id equals userRole.UserId
+                               join role in _context.Roles on userRole.RoleId equals role.Id
+                               where user.OrganizationId == orgId
+                                     && role.Name == "OrgAdmin"
+                                     && user.IsActive == true
+                               select user.Email)
+                               .FirstOrDefaultAsync();
+
+            // Fallback: Agar koi bhi active admin na mile (unlikely case), toh system ke kisi bhi admin ko fetch karega
+            if (string.IsNullOrEmpty(admin))
+            {
+                admin = await (from user in _context.Users
                                join userRole in _context.UserRoles on user.Id equals userRole.UserId
                                join role in _context.Roles on userRole.RoleId equals role.Id
                                where user.OrganizationId == orgId && role.Name == "OrgAdmin"
                                select user.Email)
                                .FirstOrDefaultAsync();
+            }
 
             return admin;
         }

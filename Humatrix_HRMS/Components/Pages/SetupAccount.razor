@@ -207,7 +207,6 @@
         try
         {
             isLoading = true;
-
             error = null;
             successMessage = null;
 
@@ -218,14 +217,13 @@
             }
 
             var user = await UserManager.FindByIdAsync(userId);
-
             if (user == null)
             {
                 error = "User not found.";
                 return;
             }
 
-            // CHECK INVITE
+            // 1. Verify the setup token matching the invite request record
             var invite = await Db.UserInvites
                 .FirstOrDefaultAsync(x => x.UserId == userId && x.Token == token);
 
@@ -235,27 +233,80 @@
                 return;
             }
 
-            // RESET PASSWORD
-            var result = await UserManager.ResetPasswordAsync(user, token, model.Password);
-
-            if (result.Succeeded)
+            // 2. Validate Custom Security Token Provider instead of standard password token
+            var isTokenValid = await UserManager.VerifyUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite", token);
+            if (!isTokenValid)
             {
-                // MARK INVITE USED
-                invite.IsUsed = true;
+                error = "Invalid or expired security token.";
+                return;
+            }
 
-                await Db.SaveChangesAsync();
+            IdentityResult passwordResult;
+
+            // 3. Update the password safely regardless of whether user object is modified or fresh
+            if (await UserManager.HasPasswordAsync(user))
+            {
+                var resetToken = await UserManager.GeneratePasswordResetTokenAsync(user);
+                passwordResult = await UserManager.ResetPasswordAsync(user, resetToken, model.Password);
+            }
+            else
+            {
+                passwordResult = await UserManager.AddPasswordAsync(user, model.Password);
+            }
+
+            if (passwordResult.Succeeded)
+            {
+                using var transaction = await Db.Database.BeginTransactionAsync();
+                try
+                {
+                    // 4. Activate the user account
+                    user.IsActive = true;
+                    await UserManager.UpdateAsync(user);
+
+                    // 5. Add them to Admin security role group
+                    if (!await UserManager.IsInRoleAsync(user, "OrgAdmin"))
+                    {
+                        await UserManager.AddToRoleAsync(user, "OrgAdmin");
+                    }
+
+                    // 6. Demote all old administrators attached to this specific organization
+                    var oldAdminIds = await (from u in Db.Users
+                                             join ur in Db.UserRoles on u.Id equals ur.UserId
+                                             join r in Db.Roles on ur.RoleId equals r.Id
+                                             where u.OrganizationId == user.OrganizationId && r.Name == "OrgAdmin" && u.Id != user.Id
+                                             select u.Id).ToListAsync();
+
+                    foreach (var oldAdminId in oldAdminIds)
+                    {
+                        var oldAdmin = await UserManager.FindByIdAsync(oldAdminId);
+                        if (oldAdmin != null)
+                        {
+                            await UserManager.RemoveFromRoleAsync(oldAdmin, "OrgAdmin");
+                            oldAdmin.IsActive = false;
+                            await UserManager.UpdateAsync(oldAdmin);
+                        }
+                    }
+
+                    // 7. Mark this invite token as used completely
+                    invite.IsUsed = true;
+                    await Db.SaveChangesAsync();
+
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
 
                 successMessage = "Admin activated successfully! Redirecting to login...";
-
                 StateHasChanged();
-
                 await Task.Delay(2000);
-
                 Nav.NavigateTo("/Account/Login", true);
             }
             else
             {
-                error = string.Join(", ", result.Errors.Select(x => x.Description));
+                error = string.Join(", ", passwordResult.Errors.Select(x => x.Description));
             }
         }
         catch (Exception ex)
