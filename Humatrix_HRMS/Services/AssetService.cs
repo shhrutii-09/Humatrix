@@ -8,25 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services.Assets
 {
-    /// <summary>
-    /// Central service for the Asset Management module.
-    ///
-    /// Responsibilities:
-    ///   - Asset CRUD (OrgAdmin only)
-    ///   - Asset assignment / return
-    ///   - Status synchronisation (Asset + Assignment table always in step)
-    ///   - Asset request lifecycle (Repair / Replacement / Return)
-    ///   - Procurement request lifecycle
-    ///   - Hooks into ActivityLogService and NotificationEngine
-    ///
-    /// Concurrency: every mutating operation runs inside an explicit
-    /// EF Core transaction so that Asset, AssetAssignment, and related
-    /// tables are always consistent.
-    ///
-    /// Authorization: this service is role-agnostic. Role checks belong in
-    /// the controller or a thin authorization layer. However, department-scope
-    /// is enforced here via helper methods so callers cannot bypass it.
-    /// </summary>
     public class AssetService
     {
         private readonly ApplicationDbContext _db;
@@ -42,12 +23,6 @@ namespace Humatrix_HRMS.Services.Assets
             _activityLog = activityLog;
             _notifications = notifications;
         }
-
-        // =====================================================================
-        // ASSET CRUD  (OrgAdmin)
-        // =====================================================================
-
-        /// <summary>Creates a single asset in inventory with status Available.</summary>
         public async Task<AssetDto> CreateAssetAsync(
             Guid organizationId,
             CreateAssetDto dto,
@@ -1003,9 +978,6 @@ bool restrictToDepartment = false)
             if (asset.Status != AssetStatus.InRepair)
                 throw new InvalidOperationException(
                     "Only assets in repair can be completed.");
-
-            // If asset still belongs to employee,
-            // return back to Assigned status
             if (asset.CurrentEmployeeId.HasValue)
             {
                 AssetStatusMachine.EnsureCanTransition(
@@ -1052,10 +1024,21 @@ bool restrictToDepartment = false)
                 throw new Exception("Asset not found.");
 
             // Get employees from same department
-            var employees = await _db.Employees
-                .Where(e =>
-                    e.OrganizationId == organizationId &&
-                    e.DepartmentId == asset.DepartmentId)
+            IQueryable<Employee> employeeQuery = _db.Employees
+     .Where(e => e.OrganizationId == organizationId);
+
+            // If asset belongs to a department,
+            // only employees from same department can receive it
+            if (asset.DepartmentId.HasValue)
+            {
+                employeeQuery = employeeQuery.Where(e =>
+                    e.DepartmentId == asset.DepartmentId.Value);
+            }
+
+            // If DepartmentId == null (Org-Wide),
+            // then NO department filter = all employees
+
+            var employees = await employeeQuery
                 .OrderBy(e => e.FirstName)
                 .Select(e => new EmployeeDropdownDto
                 {
@@ -1064,6 +1047,15 @@ bool restrictToDepartment = false)
                     DepartmentId = e.DepartmentId
                 })
                 .ToListAsync();
+
+
+                //.Select(e => new EmployeeDropdownDto
+                //{
+                //    EmployeeId = e.EmployeeId,
+                //    FullName = (e.FirstName ?? "") + " " + (e.LastName ?? ""),
+                //    DepartmentId = e.DepartmentId
+                //})
+                //.ToListAsync();
 
             return employees;
         }
@@ -1144,8 +1136,6 @@ bool restrictToDepartment = false)
             var employees = await employeeQuery
                 .OrderBy(e => e.FirstName)
                 .ToListAsync();
-
-            // Filter out HR and OrgAdmin users so HR cannot assign to another HR
             var result = new List<EmployeeDropdownDto>();
             foreach (var emp in employees)
             {
@@ -1162,7 +1152,6 @@ bool restrictToDepartment = false)
                     DepartmentId = emp.DepartmentId
                 });
             }
-
             return result;
         }
 
