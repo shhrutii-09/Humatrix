@@ -160,5 +160,20 @@ namespace Humatrix_HRMS.Services
                 })
                 .ToListAsync();
         }
+
+        public async Task<List<DepartmentDto>> GetDepartmentsByOrganizationAsync(Guid organizationId)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+
+            return await _context.Departments
+                .Where(d => d.OrganizationId == organizationId && d.IsActive)
+                .Select(d => new DepartmentDto
+                {
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name
+                })
+                .OrderBy(d => d.Name)
+                .ToListAsync();
+        }
     }
 }

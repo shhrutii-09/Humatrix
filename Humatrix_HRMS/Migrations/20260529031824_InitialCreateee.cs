@@ -5,7 +5,7 @@
 namespace Humatrix_HRMS.Migrations
 {
     /// <inheritdoc />
-    public partial class create : Migration
+    public partial class InitialCreateee : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

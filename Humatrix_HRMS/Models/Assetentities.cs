@@ -34,6 +34,9 @@ namespace Humatrix_HRMS.Models
         [MaxLength(100)]
         public string? Brand { get; set; }
 
+        public Guid? DepartmentId { get; set; }
+
+
         [MaxLength(100)]
         public string? Model { get; set; }
 
@@ -80,7 +83,6 @@ namespace Humatrix_HRMS.Models
         // ── Navigation ────────────────────────────────────────────────────────
         [ForeignKey("OrganizationId")]
         public Organization? Organization { get; set; }
-        public Guid? DepartmentId { get; set; }
 
         [ForeignKey("DepartmentId")]
         public Department? Department { get; set; }

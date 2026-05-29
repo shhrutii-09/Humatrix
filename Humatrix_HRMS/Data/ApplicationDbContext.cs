@@ -53,7 +53,7 @@ namespace Humatrix_HRMS.Data
 
 
         public DbSet<Asset> Assets { get; set; }
-           public DbSet<AssetAssignment> AssetAssignments { get; set; }
+        public DbSet<AssetAssignment> AssetAssignments { get; set; } 
         public DbSet<AssetRequest> AssetRequests { get; set; }
         public DbSet<ProcurementRequest> ProcurementRequests { get; set; }
 
@@ -71,6 +71,10 @@ namespace Humatrix_HRMS.Data
             modelBuilder.Entity<LeaveBalance>()
                 .Property(l => l.Pending)
                 .HasPrecision(5, 2);
+
+            modelBuilder.HasSequence<long>("EmployeeCodeSequence")
+      .StartsAt(1)
+      .IncrementsBy(1);
 
             modelBuilder.Entity<LeaveBalance>()
                 .Property(l => l.Used)
@@ -357,7 +361,20 @@ namespace Humatrix_HRMS.Data
             modelBuilder.ApplyConfiguration(new AssetRequestConfiguration());
             modelBuilder.ApplyConfiguration(new ProcurementRequestConfiguration());
 
+            modelBuilder.Entity<Asset>()
+    .HasOne(a => a.Department)
+    .WithMany()
+    .HasForeignKey(a => a.DepartmentId)
+    .OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<Asset>()
+       .HasIndex(a => new
+       {
+           a.OrganizationId,
+           a.SerialNumber
+       })
+       .HasFilter("[SerialNumber] IS NOT NULL")
+       .IsUnique();
         }
 
 

@@ -66,8 +66,8 @@ namespace Humatrix_HRMS.Services
 
                 await _userManager.AddToRoleAsync(user, "OrgAdmin");
 
-                var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
-
+                //var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
                 var invite = new UserInvite
                 {
                     Email = dto.AdminEmail,
@@ -210,8 +210,8 @@ namespace Humatrix_HRMS.Services
                 }
             }
 
-            var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
-
+            //var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
             var invite = new UserInvite
             {
                 Email = user.Email,

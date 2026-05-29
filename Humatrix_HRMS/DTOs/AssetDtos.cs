@@ -29,6 +29,8 @@ namespace Humatrix_HRMS.DTOs.Assets
         [Range(0, double.MaxValue)] public decimal? PurchasePrice { get; set; }
         public DateTime? PurchaseDate { get; set; }
         public DateTime? WarrantyExpiryDate { get; set; }
+        public Guid? DepartmentId { get; set; }
+
         [MaxLength(500)] public string? Notes { get; set; }
     }
 
@@ -47,6 +49,8 @@ namespace Humatrix_HRMS.DTOs.Assets
         public string? CurrentEmployeeName { get; set; }
         public decimal? PurchasePrice { get; set; }
         public DateTime? PurchaseDate { get; set; }
+        public Guid? DepartmentId { get; set; }
+
         public DateTime? WarrantyExpiryDate { get; set; }
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -189,7 +193,7 @@ namespace Humatrix_HRMS.DTOs.Assets
     public class ProcurementRequestDto
     {
         public Guid ProcurementRequestId { get; set; }
-        public Guid DepartmentId { get; set; }
+        public Guid? DepartmentId { get; set; }
         public string DepartmentName { get; set; } = default!;
         public string RequestedByEmployeeName { get; set; } = default!;
         public string AssetCategory { get; set; } = default!;
@@ -215,6 +219,8 @@ namespace Humatrix_HRMS.DTOs.Assets
         public Guid? EmployeeId { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
+        public Guid? DepartmentId { get; set; }
+
     }
 
     public class PagedResult<T>

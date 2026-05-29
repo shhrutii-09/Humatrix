@@ -50,26 +50,24 @@ namespace Humatrix_HRMS.Configuration
         {
             b.HasKey(x => x.AssetAssignmentId);
 
-            // Enforce only one ACTIVE assignment per asset at a time.
-            // A filtered unique index on (AssetId) WHERE ReturnedAt IS NULL.
             b.HasIndex(x => x.AssetId)
-             .HasFilter("[ReturnedAt] IS NULL")
-             .IsUnique()
-             .HasDatabaseName("UX_AssetAssignment_OneActivePerAsset");
+                .HasFilter("[ReturnedAt] IS NULL")
+                .IsUnique()
+                .HasDatabaseName("UX_AssetAssignment_OneActivePerAsset");
 
-            // History lookups
             b.HasIndex(x => new { x.EmployeeId, x.ReturnedAt });
+
             b.HasIndex(x => new { x.AssetId, x.AssignedAt });
 
             b.HasOne(x => x.Asset)
-             .WithMany(a => a.Assignments)
-             .HasForeignKey(x => x.AssetId)
-             .OnDelete(DeleteBehavior.Restrict);
+                .WithMany(a => a.Assignments)
+                .HasForeignKey(x => x.AssetId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             b.HasOne(x => x.Employee)
-             .WithMany()
-             .HasForeignKey(x => x.EmployeeId)
-             .OnDelete(DeleteBehavior.Restrict);
+                .WithMany()
+                .HasForeignKey(x => x.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 

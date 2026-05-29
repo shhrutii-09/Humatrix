@@ -22,6 +22,8 @@ namespace Humatrix_HRMS.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence("EmployeeCodeSequence");
+
             modelBuilder.Entity("Humatrix_HRMS.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -338,6 +340,9 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<Guid?>("CurrentEmployeeId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Model")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -383,10 +388,16 @@ namespace Humatrix_HRMS.Migrations
 
                     b.HasIndex("CurrentEmployeeId");
 
+                    b.HasIndex("DepartmentId");
+
                     b.HasIndex("OrganizationId", "AssetCode")
                         .IsUnique();
 
                     b.HasIndex("OrganizationId", "CurrentEmployeeId");
+
+                    b.HasIndex("OrganizationId", "SerialNumber")
+                        .IsUnique()
+                        .HasFilter("[SerialNumber] IS NOT NULL");
 
                     b.HasIndex("OrganizationId", "Status");
 
@@ -1818,6 +1829,11 @@ namespace Humatrix_HRMS.Migrations
                         .HasForeignKey("CurrentEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Humatrix_HRMS.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
                         .WithMany()
                         .HasForeignKey("OrganizationId")
@@ -1825,6 +1841,8 @@ namespace Humatrix_HRMS.Migrations
                         .IsRequired();
 
                     b.Navigation("CurrentEmployee");
+
+                    b.Navigation("Department");
 
                     b.Navigation("Organization");
                 });

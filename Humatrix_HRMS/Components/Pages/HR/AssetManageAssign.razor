@@ -3,934 +3,2338 @@
 @attribute [Authorize(Roles = "HR")]
 
 @using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Services.Assets
 @using Humatrix_HRMS.Infrastructure.Constants
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
 
-@inject EmployeeService EmployeeService
 @inject AssetService AssetService
+@inject EmployeeService EmployeeService
 @inject CurrentUserService CurrentUserService
+@inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>Department Assets | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 py-4">
+<div class="hr-wrapper">
 
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold text-dark mb-0">Department Assets</h2>
-            <p class="text-muted mb-0">
-                Manage and assign department assets.
-            </p>
+    <!-- ── Page Header ──────────────────────────────────────────────────────── -->
+    <div class="hr-header">
+        <div class="hr-header-left">
+            <div class="hr-header-icon">
+                <i class="bi bi-building-fill"></i>
+            </div>
+            <div>
+                <h1 class="hr-title">Department Assets</h1>
+                <p class="hr-subtitle">
+                    @if (!string.IsNullOrEmpty(departmentName))
+                    {
+                        <span class="hr-dept-pill">
+                            <i class="bi bi-building me-1"></i>@departmentName
+                        </span>
+                    }
+                    <span class="text-muted ms-1">— manage, assign and track</span>
+                </p>
+            </div>
         </div>
+        <div class="hr-header-actions">
+            <button class="hr-btn hr-btn-ghost" @onclick="RefreshAllAsync" disabled="@(pageLoading)">
+                <i class="bi bi-arrow-clockwise @(pageLoading ? "spin" : "")"></i>
+                Refresh
+            </button>
+            <button class="hr-btn hr-btn-outline" @onclick="OpenProcurementModal">
+                <i class="bi bi-clipboard-plus"></i>
+                Request Assets
+            </button>
+        </div>
+    </div>
 
-        <button class="btn btn-outline-secondary btn-sm px-3"
-                @onclick="RefreshAsync">
-            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+    <!-- ── KPI Strip ────────────────────────────────────────────────────────── -->
+    <div class="hr-kpi-row">
+        <div class="hr-kpi hr-kpi-total">
+            <div class="hr-kpi-icon"><i class="bi bi-layers-fill"></i></div>
+            <div>
+                <div class="hr-kpi-label">Total Assets</div>
+                <div class="hr-kpi-val">@kpiTotal</div>
+            </div>
+        </div>
+        <div class="hr-kpi hr-kpi-available">
+            <div class="hr-kpi-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div>
+                <div class="hr-kpi-label">Available</div>
+                <div class="hr-kpi-val">@kpiAvailable</div>
+            </div>
+        </div>
+        <div class="hr-kpi hr-kpi-assigned">
+            <div class="hr-kpi-icon"><i class="bi bi-person-check-fill"></i></div>
+            <div>
+                <div class="hr-kpi-label">Assigned</div>
+                <div class="hr-kpi-val">@kpiAssigned</div>
+            </div>
+        </div>
+        <div class="hr-kpi hr-kpi-repair">
+            <div class="hr-kpi-icon"><i class="bi bi-tools"></i></div>
+            <div>
+                <div class="hr-kpi-label">In Repair</div>
+                <div class="hr-kpi-val">@kpiRepair</div>
+            </div>
+        </div>
+        <div class="hr-kpi hr-kpi-pending">
+            <div class="hr-kpi-icon"><i class="bi bi-hourglass-split"></i></div>
+            <div>
+                <div class="hr-kpi-label">Pending Requests</div>
+                <div class="hr-kpi-val">@kpiPendingRequests</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tabs ─────────────────────────────────────────────────────────────── -->
+    <div class="hr-tabs">
+        <button class="hr-tab @(activeTab == Tab.Inventory ? "active" : "")"
+                @onclick='() => SetTab(Tab.Inventory)'>
+            <i class="bi bi-box-seam"></i>
+            <span>Inventory</span>
+            <span class="hr-tab-count">@kpiTotal</span>
+        </button>
+        <button class="hr-tab @(activeTab == Tab.Requests ? "active" : "")"
+                @onclick='() => SetTab(Tab.Requests)'>
+            <i class="bi bi-inbox-fill"></i>
+            <span>Asset Requests</span>
+            @if (kpiPendingRequests > 0)
+            {
+                <span class="hr-tab-badge">@kpiPendingRequests</span>
+            }
+        </button>
+        <button class="hr-tab @(activeTab == Tab.Procurement ? "active" : "")"
+                @onclick='() => SetTab(Tab.Procurement)'>
+            <i class="bi bi-clipboard-check-fill"></i>
+            <span>Procurement</span>
         </button>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="row g-3 mb-4">
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-primary">
-                        <i class="bi bi-box-seam text-primary"></i>
-                    </div>
-
-                    <div>
-                        <div class="stat-label">Total Assets</div>
-                        <div class="stat-value">@totalCount</div>
-                    </div>
-                </div>
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB — INVENTORY
+    ════════════════════════════════════════════════════════════════════════════ -->
+    @if (activeTab == Tab.Inventory)
+    {
+        <!-- Filter bar -->
+        <div class="hr-filter-bar">
+            <div class="hr-filter-group">
+                <label class="hr-filter-label">Category</label>
+                <select class="hr-sel" @bind="invFilter.Category" @bind:after="LoadInventoryAsync">
+                    <option value="">All Categories</option>
+                    @foreach (var c in invCategories)
+                    {
+                        <option value="@c">@c</option>
+                    }
+                </select>
             </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-success">
-                        <i class="bi bi-check-circle text-success"></i>
-                    </div>
-
-                    <div>
-                        <div class="stat-label">Available</div>
-                        <div class="stat-value text-success">@availableCount</div>
-                    </div>
-                </div>
+            <div class="hr-filter-group">
+                <label class="hr-filter-label">Status</label>
+                <select class="hr-sel" @bind="invFilter.Status" @bind:after="LoadInventoryAsync">
+                    <option value="">All Statuses</option>
+                    <option value="@AssetStatus.Available">Available</option>
+                    <option value="@AssetStatus.Assigned">Assigned</option>
+                    <option value="@AssetStatus.InRepair">In Repair</option>
+                    <option value="@AssetStatus.Retired">Retired</option>
+                </select>
             </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-info">
-                        <i class="bi bi-person-check text-info"></i>
-                    </div>
-
-                    <div>
-                        <div class="stat-label">Assigned</div>
-                        <div class="stat-value text-info">@assignedCount</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-warning">
-                        <i class="bi bi-tools text-warning"></i>
-                    </div>
-
-                    <div>
-                        <div class="stat-label">In Repair</div>
-                        <div class="stat-value text-warning">@inRepairCount</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Filters -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-3">
-
-            <div class="row g-2 align-items-end">
-
-                <div class="col-md-3">
-                    <label class="form-label small fw-semibold text-muted">
-                        CATEGORY
-                    </label>
-
-                    <select class="form-select form-select-sm"
-                            @bind="filter.Category"
-                            @bind:after="RefreshAsync">
-
-                        <option value="">All Categories</option>
-
-                        @foreach (var cat in categories)
-                        {
-                            <option value="@cat">@cat</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="col-md-3">
-                    <label class="form-label small fw-semibold text-muted">
-                        STATUS
-                    </label>
-
-                    <select class="form-select form-select-sm"
-                            @bind="filter.Status"
-                            @bind:after="RefreshAsync">
-
-                        <option value="">All Statuses</option>
-
-                        <option value="@AssetStatus.Available">Available</option>
-                        <option value="@AssetStatus.Assigned">Assigned</option>
-                        <option value="@AssetStatus.InRepair">In Repair</option>
-                        <option value="@AssetStatus.Retired">Retired</option>
-                        <option value="@AssetStatus.Lost">Lost</option>
-
-                    </select>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label small fw-semibold text-muted">
-                        SEARCH
-                    </label>
-
-                    <input class="form-control form-control-sm"
-                           placeholder="Name, code, serial..."
-                           @bind="searchText"
+            <div class="hr-filter-group hr-filter-search">
+                <label class="hr-filter-label">Search</label>
+                <div class="hr-search-wrap">
+                    <i class="bi bi-search hr-search-ico"></i>
+                    <input class="hr-inp hr-inp-search"
+                           placeholder="Name, code, assigned employee…"
+                           @bind="invSearch"
                            @bind:event="oninput"
-                           @bind:after="ApplySearch" />
+                           @bind:after="ApplyInvSearch" />
+                    @if (!string.IsNullOrEmpty(invSearch))
+                    {
+                        <button class="hr-search-clear" @onclick='() => { invSearch = ""; ApplyInvSearch(); }'>
+                            <i class="bi bi-x"></i>
+                        </button>
+                    }
                 </div>
-
-                <div class="col-md-2 text-end">
-                    <button class="btn btn-link btn-sm text-muted p-0"
-                            @onclick="ClearFilters">
-                        <i class="bi bi-x-circle me-1"></i>Clear
-                    </button>
-                </div>
-
+            </div>
+            <div class="hr-filter-group" style="justify-content:flex-end; margin-left:auto;">
+                <label class="hr-filter-label">&nbsp;</label>
+                <button class="hr-btn hr-btn-ghost hr-btn-sm" @onclick="ClearInvFilters">
+                    <i class="bi bi-x-circle"></i> Clear
+                </button>
             </div>
         </div>
-    </div>
 
-    <!-- Table -->
-    <div class="card border-0 shadow-sm">
-        <div class="card-body p-0">
+        <!-- Info note about scope -->
+        <div class="hr-scope-note">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            Showing assets assigned to <strong>@departmentName</strong> and organisation-wide assets.
+            Assets of other departments are not visible here.
+        </div>
 
-            @if (loading)
+        <!-- Table -->
+        <div class="hr-card">
+            @if (invLoading)
             {
-                <div class="d-flex justify-content-center align-items-center py-5">
-                    <div class="spinner-border text-primary"
-                         style="width:2.5rem;height:2.5rem;">
-                    </div>
+                <div class="hr-state-center">
+                    <div class="hr-spinner"></div>
+                    <p class="hr-state-sub">Loading assets…</p>
                 </div>
             }
-            else if (filteredAssets == null || !filteredAssets.Any())
+            else if (!invFiltered.Any())
             {
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-box-seam fs-1 mb-3 d-block opacity-25"></i>
-
-                    <p class="mb-1 fw-semibold">
-                        No assets found
-                    </p>
-
-                    <p class="small">
-                        No assets available in your department.
+                <div class="hr-state-center">
+                    <i class="bi bi-box-seam hr-empty-icon"></i>
+                    <p class="hr-state-title">No assets found</p>
+                    <p class="hr-state-sub">
+                        @if (string.IsNullOrEmpty(invSearch) && string.IsNullOrEmpty(invFilter.Status) && string.IsNullOrEmpty(invFilter.Category))
+                        {
+                            <text>Your department has no assets yet. Use <strong>Request Assets</strong> to raise a procurement.</text>
+                        }
+                        else
+                        {
+                            <text>No assets match your filters. Try clearing them.</text>
+                        }
                     </p>
                 </div>
             }
             else
             {
                 <div class="table-responsive">
-
-                    <table class="table table-hover align-middle mb-0 asset-table">
-
-                        <thead class="table-light">
+                    <table class="hr-table">
+                        <thead>
                             <tr>
-                                <th class="ps-4">Asset</th>
+                                <th>Asset</th>
                                 <th>Category</th>
                                 <th>Code</th>
+                                <th>Scope</th>
                                 <th>Status</th>
                                 <th>Assigned To</th>
                                 <th>Added</th>
-                                <th class="text-end pe-4">Actions</th>
+                                <th class="text-end pe-3">Actions</th>
                             </tr>
                         </thead>
-
                         <tbody>
-
-                            @foreach (var asset in filteredAssets)
+                            @foreach (var a in invFiltered)
                             {
-                                <tr>
-
-                                    <td class="ps-4 fw-semibold">
-                                        @asset.Name
-                                    </td>
-
+                                <tr class="hr-row">
                                     <td>
-                                        <span class="badge bg-soft-secondary text-secondary">
-                                            @asset.Category
-                                        </span>
+                                        <div class="hr-asset-name">@a.Name</div>
                                     </td>
-
-                                    <td class="font-monospace small text-muted">
-                                        @asset.AssetCode
-                                    </td>
-
+                                    <td><span class="hr-cat">@a.Category</span></td>
+                                    <td><code class="hr-code">@a.AssetCode</code></td>
                                     <td>
-                                        @GetStatusBadge(asset.Status)
+                                        @if (a.DepartmentId == null)
+                                        {
+                                            <span class="hr-badge hr-badge-orgwide">Org-Wide</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="hr-badge hr-badge-dept">
+                                                <i class="bi bi-building me-1"></i>@departmentName
+                                            </span>
+                                        }
                                     </td>
-
-                                    <td class="text-muted small">
-                                        @(asset.CurrentEmployeeName ?? "—")
+                                    <td>
+                                        <span class="@StatusClass(a.Status)">@StatusLabel(a.Status)</span>
                                     </td>
-
-                                    <td class="text-muted small">
-                                        @asset.CreatedAt.ToString("dd MMM yyyy")
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(a.CurrentEmployeeName))
+                                        {
+                                            <div class="hr-assignee">
+                                                <div class="hr-avatar">@a.CurrentEmployeeName[0]</div>
+                                                <span>@a.CurrentEmployeeName</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="hr-muted">—</span>
+                                        }
                                     </td>
-
-                                    <td class="text-end pe-4">
-
-                                        <div class="d-flex gap-1 justify-content-end">
-
-                                            <button class="btn btn-xs btn-outline-primary"
-                                                    @onclick="() => ViewAsset(asset.AssetId)"
-                                                    title="View details">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-
-                                            @if (asset.Status == AssetStatus.Available)
+                                    <td class="hr-muted hr-sm">@a.CreatedAt.ToString("dd MMM yyyy")</td>
+                                    <td class="text-end pe-3">
+                                        <div class="hr-actions">
+                                            @if (a.Status == AssetStatus.Available)
                                             {
-                                                <button class="btn btn-xs btn-outline-success"
-                                                        @onclick="() => OpenAssignModal(asset)"
-                                                        title="Assign">
-                                                    <i class="bi bi-person-plus"></i>
+                                                <button class="hr-act-btn hr-act-assign"
+                                                        @onclick="() => OpenAssignModal(a)"
+                                                        title="Assign to Employee">
+                                                    <i class="bi bi-person-plus-fill"></i>
                                                 </button>
                                             }
-
-                                            @if (asset.Status == AssetStatus.Assigned)
+                                            @if (a.Status == AssetStatus.Assigned)
                                             {
-                                                <button class="btn btn-xs btn-outline-warning"
-                                                        @onclick="() => OpenReturnModal(asset)"
-                                                        title="Return">
+                                                <button class="hr-act-btn hr-act-return"
+                                                        @onclick="() => OpenReturnModal(a)"
+                                                        title="Return Asset">
                                                     <i class="bi bi-arrow-return-left"></i>
                                                 </button>
+                                                <button class="hr-act-btn hr-act-repair"
+                                                        @onclick="() => OpenRequestModal(a, AssetRequestType.Repair)"
+                                                        title="Request Repair">
+                                                    <i class="bi bi-tools"></i>
+                                                </button>
+                                                <button class="hr-act-btn hr-act-replace"
+                                                        @onclick="() => OpenRequestModal(a, AssetRequestType.Replacement)"
+                                                        title="Request Replacement">
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                </button>
                                             }
-
                                         </div>
-
                                     </td>
-
                                 </tr>
                             }
-
                         </tbody>
-
                     </table>
-
                 </div>
 
-                <!-- Pagination -->
-                @if (totalPages > 1)
+                @if (invTotalPages > 1)
                 {
-                    <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top">
-
-                        <span class="text-muted small">
-                            Showing
-                            @((filter.Page - 1) * filter.PageSize + 1)
-                            –
-                            @Math.Min(filter.Page * filter.PageSize, totalCount)
-                            of
-                            @totalCount assets
+                    <div class="hr-pagination">
+                        <span class="hr-muted hr-sm">
+                            Showing @((invFilter.Page - 1) * invFilter.PageSize + 1)–@Math.Min(invFilter.Page * invFilter.PageSize, invTotalCount) of @invTotalCount
                         </span>
-
-                        <div class="d-flex gap-1">
-
-                            <button class="btn btn-xs btn-outline-secondary"
-                                    disabled="@(filter.Page <= 1)"
-                                    @onclick="PrevPage">
+                        <div class="hr-pages">
+                            <button class="hr-pg-btn" disabled="@(invFilter.Page <= 1)" @onclick="InvPrev">
                                 <i class="bi bi-chevron-left"></i>
                             </button>
-
-                            @for (int p = 1; p <= totalPages; p++)
+                            @for (int p = Math.Max(1, invFilter.Page - 2); p <= Math.Min(invTotalPages, invFilter.Page + 2); p++)
                             {
                                 var pg = p;
-
-                                <button class="btn btn-xs @(filter.Page == pg ? "btn-primary" : "btn-outline-secondary")"
-                                        @onclick="() => GoToPage(pg)">
-                                    @pg
-                                </button>
+                                <button class="hr-pg-btn @(invFilter.Page == pg ? "active" : "")" @onclick="() => InvGoPage(pg)">@pg</button>
                             }
-
-                            <button class="btn btn-xs btn-outline-secondary"
-                                    disabled="@(filter.Page >= totalPages)"
-                                    @onclick="NextPage">
+                            <button class="hr-pg-btn" disabled="@(invFilter.Page >= invTotalPages)" @onclick="InvNext">
                                 <i class="bi bi-chevron-right"></i>
                             </button>
-
                         </div>
-
                     </div>
                 }
             }
-
         </div>
-    </div>
+    }
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB — ASSET REQUESTS
+    ════════════════════════════════════════════════════════════════════════════ -->
+    @if (activeTab == Tab.Requests)
+    {
+        <!-- Filter for requests -->
+        <div class="hr-filter-bar">
+            <div class="hr-filter-group">
+                <label class="hr-filter-label">Status</label>
+                <select class="hr-sel" @bind="reqStatusFilter" @bind:after="LoadRequestsAsync">
+                    <option value="">All Statuses</option>
+                    <option value="@AssetRequestStatus.Pending">Pending</option>
+                    <option value="@AssetRequestStatus.Approved">Approved</option>
+                    <option value="@AssetRequestStatus.Rejected">Rejected</option>
+                    <option value="@AssetRequestStatus.Completed">Completed</option>
+                </select>
+            </div>
+            <div class="hr-filter-group">
+                <label class="hr-filter-label">Type</label>
+                <select class="hr-sel" @bind="reqTypeFilter" @bind:after="ApplyReqFilters">
+                    <option value="">All Types</option>
+                    <option value="@AssetRequestType.Repair">Repair</option>
+                    <option value="@AssetRequestType.Replacement">Replacement</option>
+                    <option value="@AssetRequestType.Return">Return</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="hr-scope-note">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            Showing requests for assets in <strong>@departmentName</strong> and org-wide assets.
+            All HRs in your department can see these requests.
+        </div>
+
+        <div class="hr-card">
+            @if (reqLoading)
+            {
+                <div class="hr-state-center"><div class="hr-spinner"></div></div>
+            }
+            else if (!reqFiltered.Any())
+            {
+                <div class="hr-state-center">
+                    <i class="bi bi-inbox hr-empty-icon"></i>
+                    <p class="hr-state-title">No requests found</p>
+                    <p class="hr-state-sub">Repair, replacement and return requests for your department will appear here.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="hr-table">
+                        <thead>
+                            <tr>
+                                <th>Asset</th>
+                                <th>Type</th>
+                                <th>Raised By</th>
+                                <th>Role</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Reviewed By</th>
+                                <th>Review Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in reqFiltered)
+                            {
+                                <tr class="hr-row">
+                                    <td>
+                                        <div class="hr-asset-name">@r.AssetName</div>
+                                        <code class="hr-code-sm">@r.AssetCode</code>
+                                    </td>
+                                    <td>
+                                        <span class="@ReqTypeClass(r.RequestType)">
+                                            @ReqTypeIcon(r.RequestType) @r.RequestType
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="hr-assignee">
+                                            <div class="hr-avatar hr-avatar-sm">@r.RequestedByEmployeeName[0]</div>
+                                            <span class="hr-sm">@r.RequestedByEmployeeName</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="@RoleClass(r.RequestorRole)">@r.RequestorRole</span>
+                                    </td>
+                                    <td class="hr-reason-cell" title="@r.Reason">@r.Reason</td>
+                                    <td><span class="@ReqStatusClass(r.Status)">@r.Status</span></td>
+                                    <td class="hr-muted hr-sm">@r.RequestedAt.ToString("dd MMM yyyy")</td>
+                                    <td class="hr-muted hr-sm">@(r.ReviewedByEmployeeName ?? "—")</td>
+                                    <td class="hr-muted hr-sm hr-reason-cell" title="@r.ReviewNotes">@(r.ReviewNotes ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         TAB — PROCUREMENT
+    ════════════════════════════════════════════════════════════════════════════ -->
+    @if (activeTab == Tab.Procurement)
+    {
+        <div class="hr-section-toolbar">
+            <p class="hr-muted hr-sm">
+                Procurement requests are visible to all HRs in <strong>@departmentName</strong>.
+                OrgAdmin reviews and fulfils approved requests.
+            </p>
+            <button class="hr-btn hr-btn-primary hr-btn-sm" @onclick="OpenProcurementModal">
+                <i class="bi bi-plus-lg"></i> New Request
+            </button>
+        </div>
+
+        <div class="hr-card">
+            @if (procLoading)
+            {
+                <div class="hr-state-center"><div class="hr-spinner"></div></div>
+            }
+            else if (!procurements.Any())
+            {
+                <div class="hr-state-center">
+                    <i class="bi bi-clipboard hr-empty-icon"></i>
+                    <p class="hr-state-title">No procurement requests yet</p>
+                    <p class="hr-state-sub">Click <strong>New Request</strong> to ask OrgAdmin for new assets.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="hr-table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Asset Name</th>
+                                <th>Requested</th>
+                                <th>Fulfilled</th>
+                                <th>Requested By</th>
+                                <th>Justification</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Review Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in procurements)
+                            {
+                                <tr class="hr-row">
+                                    <td><span class="hr-cat">@p.AssetCategory</span></td>
+                                    <td class="hr-sm">@(p.AssetName ?? "—")</td>
+                                    <td class="fw-semibold">@p.QuantityRequested</td>
+                                    <td>
+                                        @if (p.QuantityFulfilled > 0)
+                                        {
+                                            <span class="hr-badge hr-badge-success">@p.QuantityFulfilled</span>
+                                        }
+                                        else
+                                        {
+
+                                            <span class="hr-muted">0</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="hr-assignee">
+                                            @if (!string.IsNullOrEmpty(p.RequestedByEmployeeName))
+                                            {
+                                                <div class="hr-avatar hr-avatar-sm">@p.RequestedByEmployeeName[0]</div>
+                                            }
+                                            <span class="hr-sm">@p.RequestedByEmployeeName</span>
+                                        </div>
+                                    </td>
+                                    <td class="hr-reason-cell hr-sm" title="@p.Justification">@p.Justification</td>
+                                    <td><span class="@ProcStatusClass(p.Status)">@p.Status</span></td>
+                                    <td class="hr-muted hr-sm">@p.RequestedAt.ToString("dd MMM yyyy")</td>
+                                    <td class="hr-muted hr-sm hr-reason-cell" title="@p.ReviewNotes">@(p.ReviewNotes ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
 
 </div>
 
-<!-- ASSIGN MODAL -->
-@if (showAssignModal && selectedAsset != null)
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     MODAL — ASSIGN ASSET
+══════════════════════════════════════════════════════════════════════════════ -->
+@if (showAssignModal && modalAsset != null)
 {
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-
-    <div class="modal-panel modal-panel-sm">
-
-        <div class="modal-panel-header">
-
-            <h5 class="fw-bold mb-0">
-                <i class="bi bi-person-plus me-2 text-success"></i>
-                Assign Asset
-            </h5>
-
-            <button class="btn btn-link text-muted p-0"
-                    @onclick="CloseModals">
-                <i class="bi bi-x-lg"></i>
-            </button>
-
+    <div class="hr-overlay" @onclick="CloseAll"></div>
+    <div class="hr-modal hr-modal-sm">
+        <div class="hr-modal-hdr">
+            <div class="hr-modal-title-wrap">
+                <div class="hr-modal-ico hr-ico-success"><i class="bi bi-person-plus-fill"></i></div>
+                <div>
+                    <h5 class="hr-modal-title">Assign Asset</h5>
+                    <p class="hr-modal-sub">Select an employee from your department</p>
+                </div>
+            </div>
+            <button class="hr-close" @onclick="CloseAll"><i class="bi bi-x-lg"></i></button>
         </div>
+        <div class="hr-modal-body">
 
-        <div class="modal-panel-body">
-
-            <div class="asset-info-chip mb-4">
-
-                <i class="bi bi-box-seam text-primary me-2"></i>
-
-                <span class="fw-semibold">
-                    @selectedAsset.Name
-                </span>
-
-                <span class="font-monospace text-muted ms-2 small">
-                    @selectedAsset.AssetCode
-                </span>
-
+            <!-- Asset chip -->
+            <div class="hr-chip">
+                <i class="bi bi-box-seam-fill hr-chip-ico"></i>
+                <div class="hr-chip-info">
+                    <span class="hr-chip-name">@modalAsset.Name</span>
+                    <code class="hr-chip-code">@modalAsset.AssetCode</code>
+                </div>
+                @if (modalAsset.DepartmentId == null)
+                {
+                    <span class="hr-badge hr-badge-orgwide">Org-Wide</span>
+                }
+                else
+                {
+                    <span class="hr-badge hr-badge-dept">@departmentName</span>
+                }
             </div>
 
-            <EditForm Model="assignDto"
-                      OnValidSubmit="SubmitAssignAsync">
+            <div class="hr-info-box hr-info-blue">
+                <i class="bi bi-shield-lock-fill"></i>
+                <span>
+                    Only <strong>Employee-role</strong> users in <strong>@departmentName</strong> are listed.
+                    HR users and members of other departments cannot be assigned.
+                </span>
+            </div>
 
-                <DataAnnotationsValidator />
-
-                <div class="mb-3">
-
-                    <label class="form-label small fw-semibold">
-                        Assign To
-                        <span class="text-danger">*</span>
-                    </label>
-
-                    <select class="form-select"
-                            @bind="assignEmployeeId">
-
-                        <option value="">
-                            — Select Employee —
-                        </option>
-
-                        @foreach (var emp in employees)
-                        {
-                            <option value="@emp.EmployeeId">
-                                @emp.FirstName @emp.LastName (@emp.EmployeeCode)
-                            </option>
-                        }
-
-                    </select>
-
-                </div>
-
-                <div class="mb-3">
-
-                    <label class="form-label small fw-semibold">
-                        Notes
-                    </label>
-
-                    <InputTextArea class="form-control"
-                                   @bind-Value="assignDto.Notes"
-                                   rows="2"
-                                   placeholder="Optional assignment notes..." />
-
-                </div>
-
-                @if (!string.IsNullOrEmpty(errorMessage))
+            <div class="hr-form-grp">
+                <label class="hr-lbl">Assign To <span class="hr-req">*</span></label>
+                @if (empLoading)
                 {
-                    <div class="alert alert-danger py-2 small">
-                        @errorMessage
+                    <div class="hr-inline-load">
+                        <span class="hr-spinner-sm"></span>
+                        <span class="hr-muted hr-sm">Loading eligible employees…</span>
                     </div>
                 }
-
-                <div class="d-flex justify-content-end gap-2 mt-3">
-
-                    <button type="button"
-                            class="btn btn-light"
-                            @onclick="CloseModals">
-                        Cancel
-                    </button>
-
-                    <button type="submit"
-                            class="btn btn-success"
-                            disabled="@submitting">
-
-                        @if (submitting)
+                else if (!assignableEmps.Any())
+                {
+                    <div class="hr-alert hr-alert-warn">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        No eligible employees found in <strong>@departmentName</strong>.
+                        All employees may already have assets, or no Employee-role users exist yet.
+                    </div>
+                }
+                else
+                {
+                    <select class="hr-inp" @bind="assignEmpId">
+                        <option value="">— Select Employee —</option>
+                        @foreach (var e in assignableEmps)
                         {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <option value="@e.EmployeeId">@e.FullName</option>
                         }
+                    </select>
+                }
+            </div>
 
-                        Assign
+            <div class="hr-form-grp">
+                <label class="hr-lbl">Assignment Notes</label>
+                <textarea class="hr-inp" rows="2" @bind="assignNotes"
+                          placeholder="Optional — project name, reason for assignment…"></textarea>
+            </div>
 
-                    </button>
+            @if (!string.IsNullOrEmpty(modalError))
+            {
+                <div class="hr-alert hr-alert-err"><i class="bi bi-exclamation-circle me-2"></i>@modalError</div>
+            }
 
-                </div>
-
-            </EditForm>
-
+            <div class="hr-modal-footer">
+                <button class="hr-btn hr-btn-ghost" @onclick="CloseAll">Cancel</button>
+                <button class="hr-btn hr-btn-success"
+                        @onclick="SubmitAssignAsync"
+                        disabled="@(submitting || string.IsNullOrEmpty(assignEmpId) || !assignableEmps.Any())">
+                    @if (submitting)
+                    {
+                        <span class="hr-spinner-sm me-1"></span>
+                    }
+                    Assign Asset
+                </button>
+            </div>
         </div>
     </div>
 }
 
-<!-- RETURN MODAL -->
-@if (showReturnModal && selectedAsset != null)
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     MODAL — RETURN ASSET
+══════════════════════════════════════════════════════════════════════════════ -->
+@if (showReturnModal && modalAsset != null)
 {
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-
-    <div class="modal-panel modal-panel-sm">
-
-        <div class="modal-panel-header">
-
-            <h5 class="fw-bold mb-0">
-                <i class="bi bi-arrow-return-left me-2 text-warning"></i>
-                Return Asset
-            </h5>
-
-            <button class="btn btn-link text-muted p-0"
-                    @onclick="CloseModals">
-                <i class="bi bi-x-lg"></i>
-            </button>
-
+    <div class="hr-overlay" @onclick="CloseAll"></div>
+    <div class="hr-modal hr-modal-sm">
+        <div class="hr-modal-hdr">
+            <div class="hr-modal-title-wrap">
+                <div class="hr-modal-ico hr-ico-warning"><i class="bi bi-arrow-return-left"></i></div>
+                <div>
+                    <h5 class="hr-modal-title">Return Asset</h5>
+                    <p class="hr-modal-sub">Mark this asset as returned from the employee</p>
+                </div>
+            </div>
+            <button class="hr-close" @onclick="CloseAll"><i class="bi bi-x-lg"></i></button>
         </div>
-
-        <div class="modal-panel-body">
-
-            <div class="asset-info-chip mb-4">
-
-                <i class="bi bi-box-seam text-primary me-2"></i>
-
-                <span class="fw-semibold">
-                    @selectedAsset.Name
-                </span>
-
-                <span class="text-muted ms-2 small">
-                    currently assigned to
-                    <strong>@selectedAsset.CurrentEmployeeName</strong>
-                </span>
-
+        <div class="hr-modal-body">
+            <div class="hr-chip">
+                <i class="bi bi-box-seam-fill hr-chip-ico"></i>
+                <div class="hr-chip-info">
+                    <span class="hr-chip-name">@modalAsset.Name</span>
+                    <span class="hr-chip-sub">
+                        Currently held by <strong>@modalAsset.CurrentEmployeeName</strong>
+                    </span>
+                </div>
             </div>
 
-            <div class="mb-3">
-
-                <label class="form-label small fw-semibold">
-                    Return Notes
-                </label>
-
-                <textarea class="form-control"
-                          @bind="returnNotes"
-                          rows="2"
-                          placeholder="Optional notes...">
-                    </textarea>
-
+            <div class="hr-form-grp">
+                <label class="hr-lbl">Return Notes</label>
+                <textarea class="hr-inp" rows="2" @bind="returnNotes"
+                          placeholder="Condition on return, any remarks…"></textarea>
             </div>
 
-            @if (!string.IsNullOrEmpty(errorMessage))
+            @if (!string.IsNullOrEmpty(modalError))
             {
-                <div class="alert alert-danger py-2 small">
-                    @errorMessage
+                <div class="hr-alert hr-alert-err"><i class="bi bi-exclamation-circle me-2"></i>@modalError</div>
+            }
+
+            <div class="hr-modal-footer">
+                <button class="hr-btn hr-btn-ghost" @onclick="CloseAll">Cancel</button>
+                <button class="hr-btn hr-btn-warning" @onclick="SubmitReturnAsync" disabled="@submitting">
+                    @if (submitting)
+                    {
+                        <span class="hr-spinner-sm me-1"></span>
+                    }
+                    Confirm Return
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     MODAL — ASSET REQUEST (Repair / Replacement / Return)
+══════════════════════════════════════════════════════════════════════════════ -->
+@if (showRequestModal && modalAsset != null)
+{
+    <div class="hr-overlay" @onclick="CloseAll"></div>
+    <div class="hr-modal hr-modal-sm">
+        <div class="hr-modal-hdr">
+            <div class="hr-modal-title-wrap">
+                <div class="hr-modal-ico @RequestModalIconClass()">
+                    <i class="@RequestModalIcon()"></i>
+                </div>
+                <div>
+                    <h5 class="hr-modal-title">Request @requestType</h5>
+                    <p class="hr-modal-sub">This request will be reviewed by OrgAdmin</p>
+                </div>
+            </div>
+            <button class="hr-close" @onclick="CloseAll"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="hr-modal-body">
+            <div class="hr-chip">
+                <i class="@RequestModalIcon() hr-chip-ico @RequestChipIconColor()"></i>
+                <div class="hr-chip-info">
+                    <span class="hr-chip-name">@modalAsset.Name</span>
+                    <span class="hr-chip-sub">
+                        Assigned to <strong>@modalAsset.CurrentEmployeeName</strong>
+                    </span>
+                </div>
+            </div>
+
+            @if (requestType == AssetRequestType.Replacement)
+            {
+                <div class="hr-info-box hr-info-blue">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <span>
+                        On approval, OrgAdmin will select a replacement asset from
+                        <strong>@departmentName</strong>'s available inventory.
+                        The old asset will be returned automatically.
+                    </span>
+                </div>
+            }
+            @if (requestType == AssetRequestType.Repair)
+            {
+                <div class="hr-info-box hr-info-amber">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>
+                        On approval, the asset will move to <strong>In Repair</strong> status.
+                        When repair is complete, it will return to <strong>Assigned</strong>.
+                    </span>
                 </div>
             }
 
-            <div class="d-flex justify-content-end gap-2 mt-3">
-
-                <button class="btn btn-light"
-                        @onclick="CloseModals">
-                    Cancel
-                </button>
-
-                <button class="btn btn-warning"
-                        @onclick="SubmitReturnAsync"
-                        disabled="@submitting">
-
-                    @if (submitting)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1"></span>
-                    }
-
-                    Confirm Return
-
-                </button>
-
+            <div class="hr-form-grp">
+                <label class="hr-lbl">Reason <span class="hr-req">*</span></label>
+                <textarea class="hr-inp" rows="3" @bind="requestReason"
+                          placeholder="@RequestReasonPlaceholder()"></textarea>
             </div>
 
+            @if (!string.IsNullOrEmpty(modalError))
+            {
+                <div class="hr-alert hr-alert-err"><i class="bi bi-exclamation-circle me-2"></i>@modalError</div>
+            }
+
+            <div class="hr-modal-footer">
+                <button class="hr-btn hr-btn-ghost" @onclick="CloseAll">Cancel</button>
+                <button class="hr-btn @RequestSubmitBtnClass()"
+                        @onclick="SubmitRequestAsync"
+                        disabled="@(submitting || string.IsNullOrWhiteSpace(requestReason))">
+                    @if (submitting)
+                    {
+                        <span class="hr-spinner-sm me-1"></span>
+                    }
+                    Submit @requestType Request
+                </button>
+            </div>
         </div>
     </div>
 }
 
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     MODAL — PROCUREMENT REQUEST
+══════════════════════════════════════════════════════════════════════════════ -->
+@if (showProcurementModal)
+{
+    <div class="hr-overlay" @onclick="CloseAll"></div>
+    <div class="hr-modal hr-modal-sm">
+        <div class="hr-modal-hdr">
+            <div class="hr-modal-title-wrap">
+                <div class="hr-modal-ico hr-ico-primary"><i class="bi bi-clipboard-plus-fill"></i></div>
+                <div>
+                    <h5 class="hr-modal-title">Request New Assets</h5>
+                    <p class="hr-modal-sub">OrgAdmin will review and create assets for your department</p>
+                </div>
+            </div>
+            <button class="hr-close" @onclick="CloseAll"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="hr-modal-body">
+
+            <div class="hr-info-box hr-info-blue mb-3">
+                <i class="bi bi-info-circle-fill"></i>
+                <span>
+                    Request is raised on behalf of <strong>@departmentName</strong>.
+                    All HRs in your department will see this request once submitted.
+                </span>
+            </div>
+
+            <EditForm Model="procDto" OnValidSubmit="SubmitProcurementAsync">
+                <DataAnnotationsValidator />
+
+                <div class="hr-form-grp">
+                    <label class="hr-lbl">Asset Category <span class="hr-req">*</span></label>
+                    <InputText class="hr-inp" @bind-Value="procDto.AssetCategory"
+                               placeholder="e.g. Laptop, Monitor, Headset" />
+                    <ValidationMessage For="() => procDto.AssetCategory" class="hr-val-err" />
+                </div>
+
+                <div class="hr-form-grp">
+                    <label class="hr-lbl">Preferred Asset Name <span class="hr-hint">(optional)</span></label>
+                    <InputText class="hr-inp" @bind-Value="procDto.AssetName"
+                               placeholder="e.g. Dell Latitude 5540, LG 27-inch Monitor" />
+                </div>
+
+                <div class="hr-form-grp">
+                    <label class="hr-lbl">Quantity Required <span class="hr-req">*</span></label>
+                    <InputNumber class="hr-inp" @bind-Value="procDto.QuantityRequested" min="1" max="1000" />
+                    <ValidationMessage For="() => procDto.QuantityRequested" class="hr-val-err" />
+                </div>
+
+                <div class="hr-form-grp">
+                    <label class="hr-lbl">Justification <span class="hr-req">*</span></label>
+                    <InputTextArea class="hr-inp" @bind-Value="procDto.Justification" rows="3"
+                                   placeholder="Why does your department need these assets? Include urgency, use case…" />
+                    <ValidationMessage For="() => procDto.Justification" class="hr-val-err" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(modalError))
+                {
+                    <div class="hr-alert hr-alert-err"><i class="bi bi-exclamation-circle me-2"></i>@modalError</div>
+                }
+
+                <div class="hr-modal-footer">
+                    <button type="button" class="hr-btn hr-btn-ghost" @onclick="CloseAll">Cancel</button>
+                    <button type="submit" class="hr-btn hr-btn-primary" disabled="@submitting">
+                        @if (submitting)
+                        {
+                            <span class="hr-spinner-sm me-1"></span>
+                        }
+                        Submit Request
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- ── Toast ───────────────────────────────────────────────────────────────── -->
+@if (!string.IsNullOrEmpty(toastMsg))
+{
+    <div class="hr-toast @toastCss">
+        <i class="@toastIcon me-2"></i>@toastMsg
+    </div>
+}
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     STYLES
+───────────────────────────────────────────────────────────────────────── -->
 <style>
-
-    .text-primary {
-        color: #5c4ac7 !important;
+    :root {
+        --c-primary: #4f46e5;
+        --c-pdk: #4338ca;
+        --c-success: #059669;
+        --c-warning: #d97706;
+        --c-danger: #dc2626;
+        --c-info: #0891b2;
+        --c-bg: #f8f9fc;
+        --c-surface: #ffffff;
+        --c-border: #e5e7eb;
+        --c-text: #111827;
+        --c-muted: #6b7280;
+        --c-radius: 12px;
+        --c-shadow: 0 1px 3px rgba(0,0,0,.08);
+        --c-shadow-lg: 0 12px 40px rgba(0,0,0,.14);
     }
 
-    .btn-primary {
-        background: #5c4ac7;
-        border-color: #5c4ac7;
+    /* Wrapper */
+    .hr-wrapper {
+        padding: 1.75rem 1.5rem;
+        background: var(--c-bg);
+        min-height: 100vh;
+        max-width: 1500px;
     }
 
-        .btn-primary:hover {
-            background: #4a39b0;
-            border-color: #4a39b0;
-        }
+    /* Header */
+    .hr-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: .75rem;
+    }
 
-    .asset-stat-card {
+    .hr-header-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .hr-header-icon {
+        width: 48px;
+        height: 48px;
         border-radius: 12px;
+        background: linear-gradient(135deg,#667eea,#764ba2);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
     }
 
-    .stat-icon {
-        width: 44px;
-        height: 44px;
+    .hr-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--c-text);
+        margin: 0;
+        letter-spacing: -.02em;
+    }
+
+    .hr-subtitle {
+        font-size: .825rem;
+        color: var(--c-muted);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: .35rem;
+        flex-wrap: wrap;
+    }
+
+    .hr-dept-pill {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+        font-weight: 600;
+        padding: .15rem .55rem;
+        border-radius: 20px;
+        font-size: .78rem;
+    }
+
+    .hr-header-actions {
+        display: flex;
+        gap: .625rem;
+    }
+
+    /* KPI */
+    .hr-kpi-row {
+        display: grid;
+        grid-template-columns: repeat(5,1fr);
+        gap: .875rem;
+        margin-bottom: 1.25rem;
+    }
+
+    @@media(max-width:1100px) {
+        .hr-kpi-row {
+            grid-template-columns: repeat(3,1fr);
+        }
+    }
+
+    @@media(max-width:640px) {
+        .hr-kpi-row {
+            grid-template-columns: repeat(2,1fr);
+        }
+    }
+
+    .hr-kpi {
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: var(--c-radius);
+        padding: .875rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        box-shadow: var(--c-shadow);
+    }
+
+    .hr-kpi-icon {
+        width: 40px;
+        height: 40px;
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         flex-shrink: 0;
     }
 
-    .stat-label {
-        font-size: 0.7rem;
+    .hr-kpi-label {
+        font-size: .68rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #6c757d;
+        letter-spacing: .8px;
+        color: var(--c-muted);
     }
 
-    .stat-value {
-        font-size: 1.6rem;
+    .hr-kpi-val {
+        font-size: 1.65rem;
         font-weight: 800;
-        line-height: 1;
-        color: #1a1a2e;
+        line-height: 1.1;
+        color: var(--c-text);
     }
 
-    .bg-soft-primary {
-        background: rgba(92,74,199,0.1);
+    .hr-kpi-total .hr-kpi-icon {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
     }
 
-    .bg-soft-success {
-        background: rgba(25,135,84,0.1);
+    .hr-kpi-available .hr-kpi-icon {
+        background: rgba(5,150,105,.1);
+        color: var(--c-success);
     }
 
-    .bg-soft-info {
-        background: rgba(13,202,240,0.1);
+    .hr-kpi-available .hr-kpi-val {
+        color: var(--c-success);
     }
 
-    .bg-soft-warning {
-        background: rgba(255,193,7,0.1);
+    .hr-kpi-assigned .hr-kpi-icon {
+        background: rgba(8,145,178,.1);
+        color: var(--c-info);
     }
 
-    .bg-soft-secondary {
-        background: rgba(108,117,125,0.1);
+    .hr-kpi-assigned .hr-kpi-val {
+        color: var(--c-info);
     }
 
-    .asset-table th {
-        font-size: 0.72rem;
+    .hr-kpi-repair .hr-kpi-icon {
+        background: rgba(217,119,6,.1);
+        color: var(--c-warning);
+    }
+
+    .hr-kpi-repair .hr-kpi-val {
+        color: var(--c-warning);
+    }
+
+    .hr-kpi-pending .hr-kpi-icon {
+        background: rgba(220,38,38,.1);
+        color: var(--c-danger);
+    }
+
+    .hr-kpi-pending .hr-kpi-val {
+        color: var(--c-danger);
+    }
+
+    /* Tabs */
+    .hr-tabs {
+        display: flex;
+        gap: .25rem;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: var(--c-radius);
+        padding: .35rem;
+        margin-bottom: 1rem;
+    }
+
+    .hr-tab {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .4rem;
+        padding: .6rem .875rem;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        font-size: .85rem;
+        font-weight: 500;
+        color: var(--c-muted);
+        cursor: pointer;
+        transition: all .15s;
+    }
+
+        .hr-tab:hover:not(.active) {
+            background: #f3f4f6;
+            color: var(--c-text);
+        }
+
+        .hr-tab.active {
+            background: var(--c-primary);
+            color: #fff;
+            font-weight: 600;
+        }
+
+    .hr-tab-count {
+        font-size: .68rem;
         font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
-        color: #6c757d;
-        padding: 0.85rem 1rem;
+        padding: .1rem .4rem;
+        border-radius: 20px;
+        background: rgba(0,0,0,.1);
     }
 
-    .asset-table td {
-        padding: 0.85rem 1rem;
-        font-size: 0.875rem;
+    .hr-tab.active .hr-tab-count {
+        background: rgba(255,255,255,.25);
     }
 
-    .btn-xs {
-        padding: 0.2rem 0.5rem;
-        font-size: 0.78rem;
-        border-radius: 6px;
+    .hr-tab-badge {
+        font-size: .68rem;
+        font-weight: 700;
+        background: var(--c-danger);
+        color: #fff;
+        padding: .1rem .4rem;
+        border-radius: 20px;
     }
 
-    .modal-backdrop-custom {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.4);
-        z-index: 1040;
-        backdrop-filter: blur(2px);
+    /* Filter bar */
+    .hr-filter-bar {
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: var(--c-radius);
+        padding: .875rem 1rem;
+        margin-bottom: .75rem;
+        display: flex;
+        gap: .75rem;
+        flex-wrap: wrap;
+        align-items: flex-end;
     }
 
-    .modal-panel {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-        z-index: 1050;
-        width: 640px;
-        max-width: 95vw;
-        max-height: 90vh;
+    .hr-filter-group {
         display: flex;
         flex-direction: column;
+        gap: .3rem;
+        min-width: 140px;
     }
 
-    .modal-panel-sm {
-        width: 480px;
+    .hr-filter-search {
+        flex: 1;
+        min-width: 220px;
     }
 
-    .modal-panel-header {
+    .hr-filter-label {
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .7px;
+        color: var(--c-muted);
+    }
+
+    .hr-sel, .hr-inp {
+        height: 36px;
+        padding: 0 .625rem;
+        border: 1px solid var(--c-border);
+        border-radius: 8px;
+        font-size: .85rem;
+        color: var(--c-text);
+        background: var(--c-surface);
+        width: 100%;
+        outline: none;
+        transition: border-color .15s;
+    }
+
+        .hr-sel:focus, .hr-inp:focus {
+            border-color: var(--c-primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+        }
+
+    .hr-search-wrap {
+        position: relative;
+    }
+
+    .hr-search-ico {
+        position: absolute;
+        left: .625rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--c-muted);
+        font-size: .8rem;
+        pointer-events: none;
+    }
+
+    .hr-inp-search {
+        padding-left: 2rem;
+    }
+
+    .hr-search-clear {
+        position: absolute;
+        right: .5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--c-muted);
+        cursor: pointer;
+    }
+
+    /* Scope note */
+    .hr-scope-note {
+        background: rgba(79,70,229,.05);
+        border: 1px solid rgba(79,70,229,.15);
+        color: #374151;
+        border-radius: 8px;
+        padding: .6rem 1rem;
+        font-size: .8rem;
+        margin-bottom: .75rem;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Section toolbar */
+    .hr-section-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid #f0f0f0;
+        margin-bottom: .75rem;
     }
 
-    .modal-panel-body {
+    /* Card / table */
+    .hr-card {
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: var(--c-radius);
+        box-shadow: var(--c-shadow);
+        overflow: hidden;
+    }
+
+    .hr-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .hr-table thead tr {
+            background: #f9fafb;
+            border-bottom: 1px solid var(--c-border);
+        }
+
+        .hr-table th {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            color: var(--c-muted);
+            padding: .75rem 1rem;
+            white-space: nowrap;
+        }
+
+        .hr-table td {
+            padding: .75rem 1rem;
+            font-size: .85rem;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+        }
+
+    .hr-row:hover td {
+        background: #fafafa;
+    }
+
+    .hr-asset-name {
+        font-weight: 600;
+        color: var(--c-text);
+    }
+
+    .hr-code {
+        font-family: 'JetBrains Mono',monospace;
+        font-size: .78rem;
+        background: #f3f4f6;
+        color: var(--c-muted);
+        padding: .1rem .35rem;
+        border-radius: 4px;
+    }
+
+    .hr-code-sm {
+        font-family: monospace;
+        font-size: .72rem;
+        color: var(--c-muted);
+    }
+
+    .hr-cat {
+        background: #f3f4f6;
+        color: #374151;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-muted {
+        color: var(--c-muted);
+    }
+
+    .hr-sm {
+        font-size: .82rem;
+    }
+
+    .hr-reason-cell {
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Status badges */
+    .hr-status {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        font-size: .72rem;
+        font-weight: 700;
+        padding: .25rem .6rem;
+        border-radius: 20px;
+        white-space: nowrap;
+    }
+
+        .hr-status::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+    .hr-s-available {
+        background: rgba(5,150,105,.1);
+        color: #065f46;
+    }
+
+        .hr-s-available::before {
+            background: var(--c-success);
+        }
+
+    .hr-s-assigned {
+        background: rgba(8,145,178,.1);
+        color: #155e75;
+    }
+
+        .hr-s-assigned::before {
+            background: var(--c-info);
+        }
+
+    .hr-s-inrepair {
+        background: rgba(217,119,6,.1);
+        color: #92400e;
+    }
+
+        .hr-s-inrepair::before {
+            background: var(--c-warning);
+        }
+
+    .hr-s-retired {
+        background: rgba(107,114,128,.1);
+        color: #374151;
+    }
+
+        .hr-s-retired::before {
+            background: var(--c-muted);
+        }
+
+    .hr-s-lost {
+        background: rgba(220,38,38,.1);
+        color: #991b1b;
+    }
+
+        .hr-s-lost::before {
+            background: var(--c-danger);
+        }
+
+    /* Request type badges */
+    .hr-rt-repair {
+        background: rgba(217,119,6,.1);
+        color: #92400e;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-rt-replacement {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-rt-return {
+        background: rgba(8,145,178,.1);
+        color: #155e75;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    /* Request status badges */
+    .hr-rs-pending {
+        background: rgba(217,119,6,.1);
+        color: #92400e;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-rs-approved {
+        background: rgba(5,150,105,.1);
+        color: #065f46;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-rs-rejected {
+        background: rgba(220,38,38,.1);
+        color: #991b1b;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-rs-completed {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-rs-cancelled {
+        background: rgba(107,114,128,.1);
+        color: #374151;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    /* Procurement status */
+    .hr-ps-pending {
+        background: rgba(217,119,6,.1);
+        color: #92400e;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-ps-approved {
+        background: rgba(5,150,105,.1);
+        color: #065f46;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-ps-rejected {
+        background: rgba(220,38,38,.1);
+        color: #991b1b;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .hr-ps-fulfilled {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    /* Role badges */
+    .hr-role-hr {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+        font-size: .7rem;
+        font-weight: 600;
+        padding: .15rem .45rem;
+        border-radius: 20px;
+    }
+
+    .hr-role-employee {
+        background: #f3f4f6;
+        color: #374151;
+        font-size: .7rem;
+        font-weight: 600;
+        padding: .15rem .45rem;
+        border-radius: 20px;
+    }
+
+    /* Generic badges */
+    .hr-badge {
+        display: inline-block;
+        font-size: .7rem;
+        font-weight: 600;
+        padding: .15rem .5rem;
+        border-radius: 20px;
+    }
+
+    .hr-badge-orgwide {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    .hr-badge-dept {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+    }
+
+    .hr-badge-success {
+        background: rgba(5,150,105,.1);
+        color: #065f46;
+    }
+
+    /* Assignee */
+    .hr-assignee {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .hr-avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--c-primary);
+        color: #fff;
+        font-size: .7rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    .hr-avatar-sm {
+        width: 22px;
+        height: 22px;
+        font-size: .65rem;
+    }
+
+    /* Action buttons */
+    .hr-actions {
+        display: flex;
+        gap: .3rem;
+        justify-content: flex-end;
+    }
+
+    .hr-act-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        border: 1px solid var(--c-border);
+        background: var(--c-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .8rem;
+        cursor: pointer;
+        transition: all .15s;
+        color: var(--c-muted);
+    }
+
+    .hr-act-assign:hover {
+        color: var(--c-success);
+        background: rgba(5,150,105,.06);
+        border-color: var(--c-success);
+    }
+
+    .hr-act-return:hover {
+        color: var(--c-warning);
+        background: rgba(217,119,6,.06);
+        border-color: var(--c-warning);
+    }
+
+    .hr-act-repair:hover {
+        color: var(--c-info);
+        background: rgba(8,145,178,.06);
+        border-color: var(--c-info);
+    }
+
+    .hr-act-replace:hover {
+        color: var(--c-primary);
+        background: rgba(79,70,229,.06);
+        border-color: var(--c-primary);
+    }
+
+    /* Pagination */
+    .hr-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .875rem 1rem;
+        border-top: 1px solid var(--c-border);
+    }
+
+    .hr-pages {
+        display: flex;
+        gap: .3rem;
+    }
+
+    .hr-pg-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 7px;
+        border: 1px solid var(--c-border);
+        background: var(--c-surface);
+        font-size: .82rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all .15s;
+    }
+
+        .hr-pg-btn:hover:not(:disabled) {
+            border-color: var(--c-primary);
+            color: var(--c-primary);
+        }
+
+        .hr-pg-btn.active {
+            background: var(--c-primary);
+            color: #fff;
+            border-color: var(--c-primary);
+            font-weight: 700;
+        }
+
+        .hr-pg-btn:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+        }
+
+    /* State screens */
+    .hr-state-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+
+    .hr-empty-icon {
+        font-size: 3rem;
+        color: #d1d5db;
+        margin-bottom: .75rem;
+    }
+
+    .hr-state-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--c-text);
+        margin: 0;
+    }
+
+    .hr-state-sub {
+        font-size: .85rem;
+        color: var(--c-muted);
+        margin: .25rem 0 0;
+    }
+
+    .hr-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #e5e7eb;
+        border-top-color: var(--c-primary);
+        border-radius: 50%;
+        animation: hr-spin .7s linear infinite;
+    }
+
+    .hr-spinner-sm {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,.4);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: hr-spin .7s linear infinite;
+        vertical-align: middle;
+    }
+
+    @@keyframes hr-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .spin {
+        animation: hr-spin .7s linear infinite;
+    }
+
+    /* Buttons */
+    .hr-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .5rem 1rem;
+        border-radius: 8px;
+        font-size: .85rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all .15s;
+    }
+
+    .hr-btn-sm {
+        padding: .35rem .75rem;
+        font-size: .8rem;
+    }
+
+    .hr-btn-primary {
+        background: var(--c-primary);
+        color: #fff;
+        border-color: var(--c-primary);
+    }
+
+        .hr-btn-primary:hover:not(:disabled) {
+            background: var(--c-pdk);
+        }
+
+    .hr-btn-success {
+        background: var(--c-success);
+        color: #fff;
+        border-color: var(--c-success);
+    }
+
+        .hr-btn-success:hover:not(:disabled) {
+            background: #047857;
+        }
+
+    .hr-btn-warning {
+        background: var(--c-warning);
+        color: #fff;
+        border-color: var(--c-warning);
+    }
+
+        .hr-btn-warning:hover:not(:disabled) {
+            background: #b45309;
+        }
+
+    .hr-btn-danger {
+        background: var(--c-danger);
+        color: #fff;
+        border-color: var(--c-danger);
+    }
+
+        .hr-btn-danger:hover:not(:disabled) {
+            background: #b91c1c;
+        }
+
+    .hr-btn-ghost {
+        background: var(--c-surface);
+        color: var(--c-text);
+        border-color: var(--c-border);
+    }
+
+        .hr-btn-ghost:hover:not(:disabled) {
+            background: #f3f4f6;
+        }
+
+    .hr-btn-outline {
+        background: transparent;
+        color: var(--c-primary);
+        border-color: var(--c-primary);
+    }
+
+        .hr-btn-outline:hover:not(:disabled) {
+            background: rgba(79,70,229,.06);
+        }
+
+    .hr-btn:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+    }
+
+    /* Modal */
+    .hr-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.45);
+        z-index: 1040;
+        backdrop-filter: blur(3px);
+    }
+
+    .hr-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%,-50%);
+        background: var(--c-surface);
+        border-radius: 16px;
+        box-shadow: var(--c-shadow-lg);
+        z-index: 1050;
+        display: flex;
+        flex-direction: column;
+        max-height: 92vh;
+    }
+
+    .hr-modal-sm {
+        width: 500px;
+        max-width: 96vw;
+    }
+
+    .hr-modal-hdr {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--c-border);
+        flex-shrink: 0;
+    }
+
+    .hr-modal-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: .875rem;
+    }
+
+    .hr-modal-ico {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .hr-ico-primary {
+        background: rgba(79,70,229,.1);
+        color: var(--c-primary);
+    }
+
+    .hr-ico-success {
+        background: rgba(5,150,105,.1);
+        color: var(--c-success);
+    }
+
+    .hr-ico-warning {
+        background: rgba(217,119,6,.1);
+        color: var(--c-warning);
+    }
+
+    .hr-ico-danger {
+        background: rgba(220,38,38,.1);
+        color: var(--c-danger);
+    }
+
+    .hr-ico-info {
+        background: rgba(8,145,178,.1);
+        color: var(--c-info);
+    }
+
+    .hr-modal-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--c-text);
+        margin: 0;
+    }
+
+    .hr-modal-sub {
+        font-size: .78rem;
+        color: var(--c-muted);
+        margin: .1rem 0 0;
+    }
+
+    .hr-modal-body {
         padding: 1.5rem;
         overflow-y: auto;
+        flex: 1;
     }
 
-    .asset-info-chip {
-        background: #f8f9ff;
-        border: 1px solid #e8e4ff;
+    .hr-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: .625rem;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .hr-close {
+        background: none;
+        border: none;
+        color: var(--c-muted);
+        cursor: pointer;
+        padding: .25rem;
+        font-size: 1rem;
+        border-radius: 6px;
+    }
+
+        .hr-close:hover {
+            background: #f3f4f6;
+        }
+
+    /* Form */
+    .hr-form-grp {
+        margin-bottom: .875rem;
+        display: flex;
+        flex-direction: column;
+        gap: .3rem;
+    }
+
+    .hr-lbl {
+        font-size: .78rem;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .hr-req {
+        color: var(--c-danger);
+    }
+
+    .hr-hint {
+        color: var(--c-muted);
+        font-weight: 400;
+    }
+
+    textarea.hr-inp {
+        height: auto;
+        resize: vertical;
+        padding: .5rem .75rem;
+    }
+
+    .hr-val-err {
+        font-size: .75rem;
+        color: var(--c-danger);
+        margin-top: .15rem;
+    }
+
+    /* Chip */
+    .hr-chip {
+        background: #f8f9fc;
+        border: 1px solid var(--c-border);
         border-radius: 10px;
-        padding: 0.6rem 1rem;
+        padding: .75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+
+    .hr-chip-ico {
+        font-size: 1.25rem;
+        color: var(--c-primary);
+        flex-shrink: 0;
+    }
+
+    .hr-chip-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: .1rem;
+    }
+
+    .hr-chip-name {
+        font-weight: 600;
+        color: var(--c-text);
+        font-size: .9rem;
+    }
+
+    .hr-chip-code {
+        font-family: monospace;
+        font-size: .75rem;
+        color: var(--c-muted);
+    }
+
+    .hr-chip-sub {
+        font-size: .78rem;
+        color: var(--c-muted);
+    }
+
+    /* Info boxes */
+    .hr-info-box {
+        display: flex;
+        align-items: flex-start;
+        gap: .625rem;
+        padding: .75rem 1rem;
+        border-radius: 8px;
+        font-size: .8rem;
+        line-height: 1.55;
+        margin-bottom: .875rem;
+    }
+
+        .hr-info-box i {
+            flex-shrink: 0;
+            margin-top: .1rem;
+        }
+
+    .hr-info-blue {
+        background: rgba(8,145,178,.07);
+        color: #155e75;
+        border: 1px solid rgba(8,145,178,.2);
+    }
+
+    .hr-info-amber {
+        background: rgba(217,119,6,.07);
+        color: #92400e;
+        border: 1px solid rgba(217,119,6,.2);
+    }
+
+    /* Alerts */
+    .hr-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: .5rem;
+        padding: .625rem .875rem;
+        border-radius: 8px;
+        font-size: .82rem;
+        margin-bottom: .5rem;
+    }
+
+    .hr-alert-err {
+        background: rgba(220,38,38,.07);
+        color: #991b1b;
+        border: 1px solid rgba(220,38,38,.2);
+    }
+
+    .hr-alert-warn {
+        background: rgba(217,119,6,.07);
+        color: #92400e;
+        border: 1px solid rgba(217,119,6,.2);
+    }
+
+    /* Inline load */
+    .hr-inline-load {
+        display: flex;
+        align-items: center;
+        gap: .625rem;
+        padding: .5rem 0;
+    }
+
+    /* Toast */
+    .hr-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: .875rem 1.25rem;
+        border-radius: 10px;
+        font-size: .85rem;
+        font-weight: 500;
+        z-index: 9999;
+        box-shadow: var(--c-shadow-lg);
+        animation: hr-slideup .3s ease;
         display: flex;
         align-items: center;
     }
 
+    .hr-toast-ok {
+        background: #064e3b;
+        color: #fff;
+        border: 1px solid #065f46;
+    }
+
+    .hr-toast-err {
+        background: #7f1d1d;
+        color: #fff;
+        border: 1px solid #991b1b;
+    }
+
+    @@keyframes hr-slideup {
+        from {
+            transform: translateY(1rem);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
 </style>
 
 @code {
+    // ── Tab enum ──────────────────────────────────────────────────────────────
+    private enum Tab { Inventory, Requests, Procurement }
+    private Tab activeTab = Tab.Inventory;
 
-    private List<AssetListDto> assets = new();
-    private List<AssetListDto> filteredAssets = new();
-
-    private AssetFilterDto filter = new()
-    {
-        PageSize = 20
-    };
-
-    private bool loading = true;
-    private string searchText = "";
-
-    private int totalCount;
-    private int availableCount;
-    private int assignedCount;
-    private int inRepairCount;
-    private int totalPages;
-
-    private List<string> categories = new();
-
-    private bool showAssignModal;
-    private bool showReturnModal;
-
-    private AssetListDto? selectedAsset;
-
-    private AssignAssetDto assignDto = new();
-
-    private string assignEmployeeId = "";
-    private string returnNotes = "";
-
-    private bool submitting;
-    private string errorMessage = "";
-
+    // ── Context ───────────────────────────────────────────────────────────────
     private Guid orgId;
-    private Guid? hrDepartmentId;
+    private Guid hrDeptId;
+    private Guid hrEmpId;
+    private string hrUserId = "";
+    private string departmentName = "";
+    private bool pageLoading = true;
 
-    private string userId = "";
-    private string userRole = "HR";
+    // ── KPI ───────────────────────────────────────────────────────────────────
+    private int kpiTotal, kpiAvailable, kpiAssigned, kpiRepair, kpiPendingRequests;
 
-    private List<EmployeeSelectItem> employees = new();
+    // ── Inventory ─────────────────────────────────────────────────────────────
+    private List<AssetListDto> invAll = new();
+    private List<AssetListDto> invFiltered = new();
+    private AssetFilterDto invFilter = new() { PageSize = 20 };
+    private List<string> invCategories = new();
+    private string invSearch = "";
+    private int invTotalCount, invTotalPages;
+    private bool invLoading = false;
 
+    // ── Requests ──────────────────────────────────────────────────────────────
+    private List<AssetRequestDto> reqAll = new();
+    private List<AssetRequestDto> reqFiltered = new();
+    private string reqStatusFilter = "";
+    private string reqTypeFilter = "";
+    private bool reqLoading = false;
+
+    // ── Procurement ───────────────────────────────────────────────────────────
+    private List<ProcurementRequestDto> procurements = new();
+    private bool procLoading = false;
+
+    // ── Modal state ───────────────────────────────────────────────────────────
+    private bool showAssignModal, showReturnModal, showRequestModal, showProcurementModal;
+    private AssetListDto? modalAsset;
+    private string requestType = "";
+    private string assignEmpId = "";
+    private string assignNotes = "";
+    private string returnNotes = "";
+    private string requestReason = "";
+    private bool submitting = false;
+    private string modalError = "";
+    private bool empLoading = false;
+    private List<EmployeeDropdownDto> assignableEmps = new();
+    private CreateProcurementRequestDto procDto = new();
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    private string toastMsg = "", toastCss = "", toastIcon = "";
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
         var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
-
         orgId = ctx.OrganizationId;
-        userId = ctx.UserId;
+        hrUserId = ctx.UserId;
 
-        var hrEmployee = await EmployeeService.GetEmployeeByUserIdAsync(userId);
+        var emp = await EmployeeService.GetEmployeeByUserIdAsync(hrUserId);
+        if (emp == null)
+        {
+            Toast("Could not load your employee profile. Please contact admin.", false);
+            pageLoading = false;
+            return;
+        }
 
-        hrDepartmentId = hrEmployee?.DepartmentId;
+        hrEmpId = emp.EmployeeId;
+        // hrDeptId = emp.DepartmentId ?? Guid.Empty;
+        hrDeptId = emp.DepartmentId;
 
-        await LoadAsync();
-        await LoadEmployeesAsync();
+        // Load department name
+        if (hrDeptId != Guid.Empty)
+        {
+            // Quick lookup via EF through GetAssetForHR would be overkill;
+            // re-use the department name from employee navigation if available.
+            // The Employee entity doesn't expose DepartmentName directly,
+            // so we rely on the EmployeeListDto which has it.
+            var allEmps = await EmployeeService.GetEmployeesByOrganizationIdAsync(orgId);
+            var myRecord = allEmps.FirstOrDefault(e => e.EmployeeId == hrEmpId);
+            departmentName = myRecord?.Department ?? "Your Department";
+        }
+
+        await LoadInventoryAsync();
+        pageLoading = false;
     }
 
-    private async Task LoadAsync()
+    // ─────────────────────────────────────────────────────────────────────────
+    // TAB SWITCHING
+    // ─────────────────────────────────────────────────────────────────────────
+    private async Task SetTab(Tab t)
     {
-        loading = true;
+        activeTab = t;
+        switch (t)
+        {
+            case Tab.Requests when !reqAll.Any(): await LoadRequestsAsync(); break;
+            case Tab.Procurement when !procurements.Any(): await LoadProcurementAsync(); break;
+        }
+    }
 
+    private async Task RefreshAllAsync()
+    {
+        invAll.Clear(); reqAll.Clear(); procurements.Clear();
+        await LoadInventoryAsync();
+        if (activeTab == Tab.Requests) await LoadRequestsAsync();
+        if (activeTab == Tab.Procurement) await LoadProcurementAsync();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // INVENTORY
+    // ─────────────────────────────────────────────────────────────────────────
+    private async Task LoadInventoryAsync()
+    {
+        if (hrDeptId == Guid.Empty) return;
+        invLoading = true;
         StateHasChanged();
 
-        var result = await AssetService.GetAssetsAsync(orgId, filter);
-
-        assets = result.Items
-            .Where(a => a.DepartmentId == hrDepartmentId)
-            .ToList();
-
-        filteredAssets = assets.ToList();
-
-        totalCount = assets.Count;
-
-        availableCount = assets.Count(a => a.Status == AssetStatus.Available);
-
-        assignedCount = assets.Count(a => a.Status == AssetStatus.Assigned);
-
-        inRepairCount = assets.Count(a => a.Status == AssetStatus.InRepair);
-
-        totalPages = result.TotalPages;
-
-        categories = assets
-            .Select(a => a.Category)
-            .Distinct()
-            .OrderBy(c => c)
-            .ToList();
-
-        ApplySearch();
-
-        loading = false;
-    }
-
-    private async Task LoadEmployeesAsync()
-    {
-        var result = await EmployeeService.GetEmployeesByOrganizationIdAsync(orgId);
-
-        employees = result
-            .Where(e => e.DepartmentId == hrDepartmentId)
-            .Select(e => new EmployeeSelectItem
-            {
-                EmployeeId = e.EmployeeId,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                EmployeeCode = e.EmployeeCode
-            })
-            .ToList();
-    }
-
-    private void ApplySearch()
-    {
-        filteredAssets = string.IsNullOrWhiteSpace(searchText)
-
-            ? assets.ToList()
-
-            : assets.Where(a =>
-
-                a.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-
-                || a.AssetCode.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-
-                || (a.CurrentEmployeeName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false)
-
-            ).ToList();
-    }
-
-    private async Task RefreshAsync()
-    {
-        await LoadAsync();
-    }
-
-    private async Task ClearFilters()
-    {
-        filter = new AssetFilterDto
+        try
         {
-            PageSize = 20
-        };
+            var result = await AssetService.GetAssetsForHRAsync(orgId, hrDeptId, invFilter);
+            invAll = result.Items;
+            invTotalCount = result.TotalCount;
+            invTotalPages = result.TotalPages;
 
-        searchText = "";
+            // Recompute KPIs from full un-paged set
+            var allFilter = new AssetFilterDto { PageSize = 10000 };
+            var allResult = await AssetService.GetAssetsForHRAsync(orgId, hrDeptId, allFilter);
 
-        await LoadAsync();
-    }
+            kpiTotal = allResult.TotalCount;
+            kpiAvailable = allResult.Items.Count(a => a.Status == AssetStatus.Available);
+            kpiAssigned = allResult.Items.Count(a => a.Status == AssetStatus.Assigned);
+            kpiRepair = allResult.Items.Count(a => a.Status == AssetStatus.InRepair);
 
-    private async Task GoToPage(int p)
-    {
-        filter.Page = p;
-        await LoadAsync();
-    }
+            invCategories = allResult.Items
+                .Select(a => a.Category).Distinct().OrderBy(c => c).ToList();
 
-    private async Task PrevPage()
-    {
-        if (filter.Page > 1)
-        {
-            filter.Page--;
-            await LoadAsync();
+            ApplyInvSearch();
         }
-    }
-
-    private async Task NextPage()
-    {
-        if (filter.Page < totalPages)
+        catch (Exception ex)
         {
-            filter.Page++;
-            await LoadAsync();
+            Toast($"Error loading assets: {ex.Message}", false);
         }
+        finally { invLoading = false; }
     }
 
-    private void ViewAsset(Guid id)
+    private void ApplyInvSearch()
     {
-        Nav.NavigateTo($"/hr/assets/{id}");
+        invFiltered = string.IsNullOrWhiteSpace(invSearch)
+            ? invAll.ToList()
+            : invAll.Where(a =>
+                a.Name.Contains(invSearch, StringComparison.OrdinalIgnoreCase) ||
+                a.AssetCode.Contains(invSearch, StringComparison.OrdinalIgnoreCase) ||
+                (a.CurrentEmployeeName?.Contains(invSearch, StringComparison.OrdinalIgnoreCase) ?? false))
+              .ToList();
     }
 
-    private void OpenAssignModal(AssetListDto asset)
+    private async Task ClearInvFilters()
     {
-        selectedAsset = asset;
+        invFilter = new AssetFilterDto { PageSize = 20 };
+        invSearch = "";
+        await LoadInventoryAsync();
+    }
 
-        assignDto = new AssignAssetDto
+    private async Task InvGoPage(int p) { invFilter.Page = p; await LoadInventoryAsync(); }
+    private async Task InvPrev() { if (invFilter.Page > 1) { invFilter.Page--; await LoadInventoryAsync(); } }
+    private async Task InvNext() { if (invFilter.Page < invTotalPages) { invFilter.Page++; await LoadInventoryAsync(); } }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REQUESTS
+    // ─────────────────────────────────────────────────────────────────────────
+    private async Task LoadRequestsAsync()
+    {
+        if (hrDeptId == Guid.Empty) return;
+        reqLoading = true;
+        StateHasChanged();
+        try
         {
-            AssetId = asset.AssetId
-        };
+            reqAll = await AssetService.GetAssetRequestsByDepartmentAsync(
+                orgId, hrDeptId, string.IsNullOrEmpty(reqStatusFilter) ? null : reqStatusFilter);
 
-        assignEmployeeId = "";
+            kpiPendingRequests = reqAll.Count(r => r.Status == AssetRequestStatus.Pending);
+            ApplyReqFilters();
+        }
+        catch (Exception ex) { Toast($"Error loading requests: {ex.Message}", false); }
+        finally { reqLoading = false; }
+    }
 
-        errorMessage = "";
+    private void ApplyReqFilters()
+    {
+        reqFiltered = reqAll
+            .Where(r =>
+                (string.IsNullOrEmpty(reqTypeFilter) || r.RequestType == reqTypeFilter) &&
+                (string.IsNullOrEmpty(reqStatusFilter) || r.Status == reqStatusFilter))
+            .ToList();
+    }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROCUREMENT
+    // ─────────────────────────────────────────────────────────────────────────
+    private async Task LoadProcurementAsync()
+    {
+        if (hrDeptId == Guid.Empty) return;
+        procLoading = true;
+        StateHasChanged();
+        try
+        {
+            procurements = await AssetService.GetProcurementRequestsAsync(orgId, null, hrDeptId);
+        }
+        catch (Exception ex) { Toast($"Error loading procurement: {ex.Message}", false); }
+        finally { procLoading = false; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ASSIGN MODAL
+    // ─────────────────────────────────────────────────────────────────────────
+    private async Task OpenAssignModal(AssetListDto asset)
+    {
+        modalAsset = asset;
+        assignEmpId = "";
+        assignNotes = "";
+        modalError = "";
         showAssignModal = true;
+
+        empLoading = true;
+        StateHasChanged();
+        try
+        {
+            // Uses the new HR-specific method: excludes HR + OrgAdmin roles
+            assignableEmps = await AssetService.GetAssignableEmployeesForHRAsync(
+                orgId, asset.AssetId, UserManager);
+        }
+        catch (Exception ex) { assignableEmps = new(); modalError = ex.Message; }
+        finally { empLoading = false; }
     }
 
     private async Task SubmitAssignAsync()
     {
-        if (!Guid.TryParse(assignEmployeeId, out var empId))
+        if (!Guid.TryParse(assignEmpId, out var empId))
         {
-            errorMessage = "Please select an employee.";
+            modalError = "Please select an employee.";
             return;
         }
-
-        assignDto.EmployeeId = empId;
-
-        submitting = true;
-
-        errorMessage = "";
-
+        submitting = true; modalError = "";
         try
         {
-            await AssetService.AssignAssetAsync(
-                orgId,
-                assignDto,
-                userId,
-                userRole
-            );
+            await AssetService.AssignAssetAsync(orgId,
+                new AssignAssetDto
+                {
+                    AssetId = modalAsset!.AssetId,
+                    EmployeeId = empId,
+                    Notes = assignNotes
+                },
+                hrUserId, "HR");
+            var assetName = modalAsset!.Name;
 
-            CloseModals();
+            CloseAll();
+            await LoadInventoryAsync();
 
-            await LoadAsync();
+            Toast($"{assetName} returned successfully.", true);
         }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-        }
-        finally
-        {
-            submitting = false;
-        }
+        catch (Exception ex) { modalError = ex.Message; }
+        finally { submitting = false; }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // RETURN MODAL
+    // ─────────────────────────────────────────────────────────────────────────
     private void OpenReturnModal(AssetListDto asset)
     {
-        selectedAsset = asset;
-
+        modalAsset = asset;
         returnNotes = "";
-
-        errorMessage = "";
-
+        modalError = "";
         showReturnModal = true;
     }
 
     private async Task SubmitReturnAsync()
     {
         submitting = true;
-
-        errorMessage = "";
+        modalError = "";
 
         try
         {
+            var assetName = modalAsset!.Name;
+
             await AssetService.ReturnAssetAsync(
                 orgId,
                 new ReturnAssetDto
                 {
-                    AssetId = selectedAsset!.AssetId,
+                    AssetId = modalAsset.AssetId,
                     Notes = returnNotes
                 },
-                userId,
-                userRole
-            );
+                hrUserId,
+                "HR");
 
-            CloseModals();
+            CloseAll();
 
-            await LoadAsync();
+            await LoadInventoryAsync();
+
+            Toast($"{assetName} returned successfully.", true);
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
+            modalError = ex.Message;
         }
         finally
         {
@@ -938,40 +2342,178 @@
         }
     }
 
-    private void CloseModals()
+    // ─────────────────────────────────────────────────────────────────────────
+    // REQUEST MODAL  (Repair / Replacement / Return)
+    // ─────────────────────────────────────────────────────────────────────────
+    private void OpenRequestModal(AssetListDto asset, string type)
     {
-        showAssignModal = false;
-        showReturnModal = false;
-
-        selectedAsset = null;
-
-        errorMessage = "";
+        modalAsset = asset;
+        requestType = type;
+        requestReason = "";
+        modalError = "";
+        showRequestModal = true;
     }
 
-    private RenderFragment GetStatusBadge(string status) => status switch
+    private async Task SubmitRequestAsync()
     {
-        AssetStatus.Available => @<span class="badge bg-soft-success text-success">Available</span>,
+        submitting = true; modalError = "";
+        try
+        {
+            // HR raises on behalf of the department — uses the new HR-aware method
+            await AssetService.CreateAssetRequestByHRAsync(
+                orgId, hrDeptId, hrEmpId,
+                new CreateAssetRequestDto
+                {
+                    AssetId = modalAsset!.AssetId,
+                    RequestType = requestType,
+                    Reason = requestReason
+                });
 
-        AssetStatus.Assigned => @<span class="badge bg-soft-info text-info">Assigned</span>,
+            var assetName = modalAsset!.Name;
 
-        AssetStatus.InRepair => @<span class="badge bg-soft-warning text-warning">In Repair</span>,
+            CloseAll();
+            await LoadInventoryAsync();
+            reqAll.Clear();
 
-        AssetStatus.Retired => @<span class="badge bg-soft-secondary text-secondary">Retired</span>,
+            kpiPendingRequests++;
 
-        AssetStatus.Lost => @<span class="badge bg-danger">Lost</span>,
+            Toast($"{requestType} request submitted for {assetName}. OrgAdmin will review.", true);
+        }
+        catch (Exception ex) { modalError = ex.Message; }
+        finally { submitting = false; }
+    }
 
-        _ => @<span class="badge bg-light text-dark">@status</span>
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROCUREMENT MODAL
+    // ─────────────────────────────────────────────────────────────────────────
+    private void OpenProcurementModal()
+    {
+        procDto = new CreateProcurementRequestDto();
+        modalError = "";
+        showProcurementModal = true;
+        activeTab = Tab.Procurement;
+    }
+
+    private async Task SubmitProcurementAsync()
+    {
+        submitting = true; modalError = "";
+        try
+        {
+            await AssetService.CreateProcurementRequestAsync(
+                orgId, hrDeptId, hrEmpId, procDto, hrUserId);
+
+            CloseAll();
+            procurements.Clear();
+            await LoadProcurementAsync();
+            Toast("Procurement request submitted. OrgAdmin will review.", true);
+        }
+        catch (Exception ex) { modalError = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+    private void CloseAll()
+    {
+        showAssignModal = showReturnModal = showRequestModal = showProcurementModal = false;
+        modalAsset = null;
+        modalError = "";
+    }
+
+    private async void Toast(string msg, bool success)
+    {
+        toastMsg = msg;
+        toastCss = success ? "hr-toast hr-toast-ok" : "hr-toast hr-toast-err";
+        toastIcon = success ? "bi bi-check-circle-fill" : "bi bi-exclamation-circle-fill";
+        StateHasChanged();
+        await Task.Delay(4000);
+        toastMsg = "";
+        StateHasChanged();
+    }
+
+    // Status badge helpers
+    private static string StatusClass(string s) => s switch
+    {
+        AssetStatus.Available => "hr-status hr-s-available",
+        AssetStatus.Assigned => "hr-status hr-s-assigned",
+        AssetStatus.InRepair => "hr-status hr-s-inrepair",
+        AssetStatus.Retired => "hr-status hr-s-retired",
+        AssetStatus.Lost => "hr-status hr-s-lost",
+        _ => "hr-status"
+    };
+    private static string StatusLabel(string s) =>
+        s == AssetStatus.InRepair ? "In Repair" : s;
+
+    private static string ReqTypeClass(string t) => t switch
+    {
+        AssetRequestType.Repair => "hr-rt-repair",
+        AssetRequestType.Replacement => "hr-rt-replacement",
+        AssetRequestType.Return => "hr-rt-return",
+        _ => "hr-rt-repair"
+    };
+    private static string ReqTypeIcon(string t) => t switch
+    {
+        AssetRequestType.Repair => "🔧",
+        AssetRequestType.Replacement => "🔄",
+        AssetRequestType.Return => "↩️",
+        _ => ""
+    };
+    private static string ReqStatusClass(string s) => s switch
+    {
+        AssetRequestStatus.Pending => "hr-rs-pending",
+        AssetRequestStatus.Approved => "hr-rs-approved",
+        AssetRequestStatus.Rejected => "hr-rs-rejected",
+        AssetRequestStatus.Completed => "hr-rs-completed",
+        AssetRequestStatus.Cancelled => "hr-rs-cancelled",
+        _ => "hr-rs-pending"
+    };
+    private static string RoleClass(string r) =>
+        r == AssetRequestorRole.HR ? "hr-role-hr" : "hr-role-employee";
+
+    private static string ProcStatusClass(string s) => s switch
+    {
+        ProcurementStatus.Pending => "hr-ps-pending",
+        ProcurementStatus.Approved => "hr-ps-approved",
+        ProcurementStatus.Rejected => "hr-ps-rejected",
+        ProcurementStatus.Fulfilled => "hr-ps-fulfilled",
+        _ => "hr-ps-pending"
     };
 
-    private class EmployeeSelectItem
+    // Request modal helpers
+    private string RequestModalIconClass() => requestType switch
     {
-        public Guid EmployeeId { get; set; }
-
-        public string FirstName { get; set; } = "";
-
-        public string LastName { get; set; } = "";
-
-        public string EmployeeCode { get; set; } = "";
-    }
-
+        AssetRequestType.Repair => "hr-modal-ico hr-ico-warning",
+        AssetRequestType.Replacement => "hr-modal-ico hr-ico-primary",
+        AssetRequestType.Return => "hr-modal-ico hr-ico-info",
+        _ => "hr-modal-ico hr-ico-warning"
+    };
+    private string RequestModalIcon() => requestType switch
+    {
+        AssetRequestType.Repair => "bi bi-tools",
+        AssetRequestType.Replacement => "bi bi-arrow-repeat",
+        AssetRequestType.Return => "bi bi-arrow-return-left",
+        _ => "bi bi-tools"
+    };
+    private string RequestChipIconColor() => requestType switch
+    {
+        AssetRequestType.Repair => "text-warning",
+        AssetRequestType.Replacement => "text-primary",
+        AssetRequestType.Return => "text-info",
+        _ => ""
+    };
+    private string RequestSubmitBtnClass() => requestType switch
+    {
+        AssetRequestType.Repair => "hr-btn hr-btn-warning",
+        AssetRequestType.Replacement => "hr-btn hr-btn-primary",
+        AssetRequestType.Return => "hr-btn hr-btn-danger",
+        _ => "hr-btn hr-btn-primary"
+    };
+    private string RequestReasonPlaceholder() => requestType switch
+    {
+        AssetRequestType.Repair => "Describe the issue — e.g. screen cracked, battery not charging…",
+        AssetRequestType.Replacement => "Reason for replacement — e.g. asset is beyond repair, too old…",
+        AssetRequestType.Return => "Reason for returning — e.g. employee resigned, no longer needed…",
+        _ => "Reason…"
+    };
 }

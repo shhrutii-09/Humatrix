@@ -2,11 +2,14 @@
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "OrgAdmin")]
 
+@using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.DTOs.Assets
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Services.Assets
 @using Humatrix_HRMS.Infrastructure.Constants
 @using Microsoft.AspNetCore.Authorization
+
+@inject DepartmentService DepartmentService
 @inject EmployeeService EmployeeService
 @inject AssetService AssetService
 @inject CurrentUserService CurrentUserService
@@ -15,297 +18,395 @@
 
 <PageTitle>Asset Inventory | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 py-4">
+<div class="am-wrapper">
 
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold text-dark mb-0">Asset Inventory</h2>
-            <p class="text-muted mb-0">Manage and track all organisational assets.</p>
+    <!-- ── Page Header ────────────────────────────────────────────────────── -->
+    <div class="am-header">
+        <div class="am-header-left">
+            <div class="am-header-icon">
+                <i class="bi bi-box-seam-fill"></i>
+            </div>
+            <div>
+                <h1 class="am-title">Asset Inventory</h1>
+                <p class="am-subtitle">Manage, assign and track all organisational assets</p>
+            </div>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary btn-sm px-3" @onclick="RefreshAsync">
-                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        <div class="am-header-actions">
+            <button class="am-btn am-btn-ghost" @onclick="RefreshAsync" disabled="@loading">
+                <i class="bi bi-arrow-clockwise @(loading ? "spin" : "")"></i>
+                <span>Refresh</span>
             </button>
-            <button class="btn btn-primary btn-sm px-3" @onclick="OpenCreateModal">
-                <i class="bi bi-plus-lg me-1"></i> Add Asset
+            <button class="am-btn am-btn-primary" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg"></i>
+                <span>Add Asset</span>
             </button>
         </div>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="row g-3 mb-4">
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-primary">
-                        <i class="bi bi-box-seam text-primary"></i>
-                    </div>
-                    <div>
-                        <div class="stat-label">Total Assets</div>
-                        <div class="stat-value">@totalCount</div>
-                    </div>
-                </div>
+    <!-- ── KPI Strip ─────────────────────────────────────────────────────── -->
+    <div class="am-kpi-row">
+        <div class="am-kpi-card am-kpi-total">
+            <div class="am-kpi-icon"><i class="bi bi-layers-fill"></i></div>
+            <div class="am-kpi-body">
+                <span class="am-kpi-label">Total Assets</span>
+                <span class="am-kpi-value">@totalCount</span>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-success">
-                        <i class="bi bi-check-circle text-success"></i>
-                    </div>
-                    <div>
-                        <div class="stat-label">Available</div>
-                        <div class="stat-value text-success">@availableCount</div>
-                    </div>
-                </div>
+        <div class="am-kpi-card am-kpi-available">
+            <div class="am-kpi-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="am-kpi-body">
+                <span class="am-kpi-label">Available</span>
+                <span class="am-kpi-value">@availableCount</span>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-info">
-                        <i class="bi bi-person-check text-info"></i>
-                    </div>
-                    <div>
-                        <div class="stat-label">Assigned</div>
-                        <div class="stat-value text-info">@assignedCount</div>
-                    </div>
-                </div>
+        <div class="am-kpi-card am-kpi-assigned">
+            <div class="am-kpi-icon"><i class="bi bi-person-check-fill"></i></div>
+            <div class="am-kpi-body">
+                <span class="am-kpi-label">Assigned</span>
+                <span class="am-kpi-value">@assignedCount</span>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm asset-stat-card">
-                <div class="card-body p-3 d-flex align-items-center gap-3">
-                    <div class="stat-icon bg-soft-warning">
-                        <i class="bi bi-tools text-warning"></i>
-                    </div>
-                    <div>
-                        <div class="stat-label">In Repair</div>
-                        <div class="stat-value text-warning">@inRepairCount</div>
-                    </div>
-                </div>
+        <div class="am-kpi-card am-kpi-repair">
+            <div class="am-kpi-icon"><i class="bi bi-tools"></i></div>
+            <div class="am-kpi-body">
+                <span class="am-kpi-label">In Repair</span>
+                <span class="am-kpi-value">@inRepairCount</span>
+            </div>
+        </div>
+        <div class="am-kpi-card am-kpi-retired">
+            <div class="am-kpi-icon"><i class="bi bi-archive-fill"></i></div>
+            <div class="am-kpi-body">
+                <span class="am-kpi-label">Retired</span>
+                <span class="am-kpi-value">@retiredCount</span>
             </div>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-3">
-            <div class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small fw-semibold text-muted">CATEGORY</label>
-                    <select class="form-select form-select-sm" @bind="filter.Category" @bind:after="RefreshAsync">
-                        <option value="">All Categories</option>
-                        @foreach (var cat in categories)
-                        {
-                            <option value="@cat">@cat</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-semibold text-muted">STATUS</label>
-                    <select class="form-select form-select-sm" @bind="filter.Status" @bind:after="RefreshAsync">
-                        <option value="">All Statuses</option>
-                        <option value="@AssetStatus.Available">Available</option>
-                        <option value="@AssetStatus.Assigned">Assigned</option>
-                        <option value="@AssetStatus.InRepair">In Repair</option>
-                        <option value="@AssetStatus.Retired">Retired</option>
-                        <option value="@AssetStatus.Lost">Lost</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small fw-semibold text-muted">SEARCH</label>
-                    <input class="form-control form-control-sm"
-                           placeholder="Name, code, serial…"
-                           @bind="searchText"
-                           @bind:event="oninput"
-                           @bind:after="ApplySearch" />
-                </div>
-                <div class="col-md-2 text-end">
-                    <button class="btn btn-link btn-sm text-muted p-0" @onclick="ClearFilters">
-                        <i class="bi bi-x-circle me-1"></i>Clear
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Table -->
-    <div class="card border-0 shadow-sm">
-        <div class="card-body p-0">
-            @if (loading)
-            {
-                <div class="d-flex justify-content-center align-items-center py-5">
-                    <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;"></div>
-                </div>
-            }
-            else if (assets == null || !assets.Any())
-            {
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-box-seam fs-1 mb-3 d-block opacity-25"></i>
-                    <p class="mb-1 fw-semibold">No assets found</p>
-                    <p class="small">Try changing your filters or add a new asset.</p>
-                </div>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0 asset-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-4">Asset</th>
-                                <th>Category</th>
-                                <th>Code</th>
-                                <th>Status</th>
-                                <th>Assigned To</th>
-                                <th>Added</th>
-                                <th class="text-end pe-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var asset in filteredAssets)
-                            {
-                                <tr>
-                                    <td class="ps-4 fw-semibold">@asset.Name</td>
-                                    <td>
-                                        <span class="badge bg-soft-secondary text-secondary">@asset.Category</span>
-                                    </td>
-                                    <td class="font-monospace small text-muted">@asset.AssetCode</td>
-                                    <td>@GetStatusBadge(asset.Status)</td>
-                                    <td class="text-muted small">@(asset.CurrentEmployeeName ?? "—")</td>
-                                    <td class="text-muted small">@asset.CreatedAt.ToString("dd MMM yyyy")</td>
-                                    <td class="text-end pe-4">
-                                        <div class="d-flex gap-1 justify-content-end">
-                                            <button class="btn btn-xs btn-outline-primary"
-                                                    @onclick="() => ViewAsset(asset.AssetId)"
-                                                    title="View details">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            @if (asset.Status == AssetStatus.Available)
-                                            {
-                                                <button class="btn btn-xs btn-outline-success"
-                                                        @onclick="() => OpenAssignModal(asset)"
-                                                        title="Assign">
-                                                    <i class="bi bi-person-plus"></i>
-                                                </button>
-                                            }
-                                            @if (asset.Status == AssetStatus.Assigned)
-                                            {
-                                                <button class="btn btn-xs btn-outline-warning"
-                                                        @onclick="() => OpenReturnModal(asset)"
-                                                        title="Return">
-                                                    <i class="bi bi-arrow-return-left"></i>
-                                                </button>
-                                            }
-                                            @if (asset.Status == AssetStatus.Available)
-                                            {
-                                                <button class="btn btn-xs btn-outline-danger"
-                                                        @onclick="() => ConfirmRetire(asset)"
-                                                        title="Retire">
-                                                    <i class="bi bi-archive"></i>
-                                                </button>
-                                            }
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                @if (totalPages > 1)
+    <!-- ── Filter Bar ────────────────────────────────────────────────────── -->
+    <div class="am-filter-bar">
+        <div class="am-filter-group">
+            <label class="am-filter-label">Department</label>
+            <select class="am-select" @bind="selectedDepartmentId" @bind:after="RefreshAsync">
+                <option value="">All Departments</option>
+                @foreach (var dept in departments)
                 {
-                    <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top">
-                        <span class="text-muted small">
-                            Showing @((filter.Page - 1) * filter.PageSize + 1)–@Math.Min(filter.Page * filter.PageSize, totalCount) of @totalCount assets
-                        </span>
-                        <div class="d-flex gap-1">
-                            <button class="btn btn-xs btn-outline-secondary" disabled="@(filter.Page <= 1)"
-                                    @onclick="PrevPage">
-                                <i class="bi bi-chevron-left"></i>
-                            </button>
-                            @for (int p = 1; p <= totalPages; p++)
-                            {
-                                var pg = p;
-                                <button class="btn btn-xs @(filter.Page == pg ? "btn-primary" : "btn-outline-secondary")"
-                                        @onclick="() => GoToPage(pg)">
-                                    @pg
-                                </button>
-                            }
-                            <button class="btn btn-xs btn-outline-secondary" disabled="@(filter.Page >= totalPages)"
-                                    @onclick="NextPage">
-                                <i class="bi bi-chevron-right"></i>
-                            </button>
-                        </div>
-                    </div>
+                    <option value="@dept.DepartmentId">@dept.Name</option>
                 }
-            }
+            </select>
+        </div>
+        <div class="am-filter-group">
+            <label class="am-filter-label">Category</label>
+            <select class="am-select" @bind="filter.Category" @bind:after="RefreshAsync">
+                <option value="">All Categories</option>
+                @foreach (var cat in categories)
+                {
+                    <option value="@cat">@cat</option>
+                }
+            </select>
+        </div>
+        <div class="am-filter-group">
+            <label class="am-filter-label">Status</label>
+            <select class="am-select" @bind="filter.Status" @bind:after="RefreshAsync">
+                <option value="">All Statuses</option>
+                <option value="@AssetStatus.Available">Available</option>
+                <option value="@AssetStatus.Assigned">Assigned</option>
+                <option value="@AssetStatus.InRepair">In Repair</option>
+                <option value="@AssetStatus.Retired">Retired</option>
+                <option value="@AssetStatus.Lost">Lost</option>
+            </select>
+        </div>
+        <div class="am-filter-group am-filter-search">
+            <label class="am-filter-label">Search</label>
+            <div class="am-search-wrap">
+                <i class="bi bi-search am-search-icon"></i>
+                <input class="am-input am-input-search"
+                       placeholder="Name, code, serial, employee…"
+                       @bind="searchText"
+                       @bind:event="oninput"
+                       @bind:after="ApplySearch" />
+                @if (!string.IsNullOrEmpty(searchText))
+                {
+                    @* <button class="am-search-clear" @onclick="() => { searchText = \"\"; ApplySearch(); }">
+                        <i class="bi bi-x"></i>
+                    </button> *@
+                    <button class="am-search-clear"
+                            @onclick="@(() => { searchText = string.Empty; ApplySearch(); })">
+                        <i class="bi bi-x"></i>
+                    </button>
+
+                }
+            </div>
+        </div>
+        <div class="am-filter-group am-filter-end">
+            <button class="am-btn am-btn-ghost am-btn-sm" @onclick="ClearFilters">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
         </div>
     </div>
+
+    <!-- ── Asset Table ───────────────────────────────────────────────────── -->
+    <div class="am-table-card">
+        @if (loading)
+        {
+            <div class="am-state-center">
+                <div class="am-spinner"></div>
+                <p class="am-state-text">Loading assets…</p>
+            </div>
+        }
+        else if (!filteredAssets.Any())
+        {
+            <div class="am-state-center">
+                <div class="am-empty-icon"><i class="bi bi-box-seam"></i></div>
+                <p class="am-state-title">No assets found</p>
+                <p class="am-state-sub">Try adjusting your filters or add a new asset.</p>
+                <button class="am-btn am-btn-primary am-btn-sm mt-3" @onclick="OpenCreateModal">
+                    <i class="bi bi-plus-lg"></i> Add First Asset
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="am-table">
+                    <thead>
+                        <tr>
+                            <th class="am-th-asset">Asset</th>
+                            <th>Department</th>
+                            <th>Category</th>
+                            <th>Code</th>
+                            <th>Status</th>
+                            <th>Assigned To</th>
+                            <th>Warranty</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var asset in filteredAssets)
+                        {
+                            <tr class="am-row @(asset.Status == AssetStatus.Lost ? "am-row-danger" : "")">
+                                <td class="am-td-asset">
+                                    <div class="am-asset-name">@asset.Name</div>
+                                    @if (!string.IsNullOrEmpty(GetBrandModel(asset)))
+                                    {
+                                        <div class="am-asset-meta">@GetBrandModel(asset)</div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (asset.DepartmentId.HasValue)
+                                    {
+                                        <span class="am-dept-badge">
+                                            <i class="bi bi-building me-1"></i>
+                                            @GetDepartmentName(asset.DepartmentId)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="am-text-muted">Org-Wide</span>
+                                    }
+                                </td>
+                                <td><span class="am-cat-badge">@asset.Category</span></td>
+                                <td><code class="am-code">@asset.AssetCode</code></td>
+                                <td><span class="@GetStatusClass(asset.Status)">@GetStatusLabel(asset.Status)</span></td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(asset.CurrentEmployeeName))
+                                    {
+                                        <div class="am-assignee">
+                                            <div class="am-assignee-avatar">@asset.CurrentEmployeeName[0]</div>
+                                            <span>@asset.CurrentEmployeeName</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="am-text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (IsWarrantyExpiringSoon(asset))
+                                    {
+                                        <span class="am-badge am-badge-warning" title="Expiring soon">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Soon
+                                        </span>
+                                    }
+                                    else if (IsWarrantyExpired(asset))
+                                    {
+                                        <span class="am-badge am-badge-danger">Expired</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="am-text-muted small">—</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <div class="am-actions">
+                                        <button class="am-action-btn am-action-view"
+                                                @onclick="() => ViewAsset(asset.AssetId)"
+                                                title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="am-action-btn am-action-edit"
+                                                @onclick="() => OpenEditModal(asset)"
+                                                title="Edit Asset">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        @if (asset.Status == AssetStatus.Available)
+                                        {
+                                            <button class="am-action-btn am-action-assign"
+                                                    @onclick="() => OpenAssignModal(asset)"
+                                                    title="Assign to Employee">
+                                                <i class="bi bi-person-plus"></i>
+                                            </button>
+                                            <button class="am-action-btn am-action-retire"
+                                                    @onclick="() => ConfirmRetire(asset)"
+                                                    title="Retire Asset">
+                                                <i class="bi bi-archive"></i>
+                                            </button>
+                                        }
+                                        @if (asset.Status == AssetStatus.Assigned)
+                                        {
+                                            <button class="am-action-btn am-action-return"
+                                                    @onclick="() => OpenReturnModal(asset)"
+                                                    title="Return Asset">
+                                                <i class="bi bi-arrow-return-left"></i>
+                                            </button>
+                                        }
+                                        @if (asset.Status == AssetStatus.InRepair)
+                                        {
+                                            <button class="am-action-btn am-action-repair"
+                                                    @onclick="() => OpenRepairCompleteModal(asset)"
+                                                    title="Mark Repair Complete">
+                                                <i class="bi bi-check2-circle"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            @if (totalPages > 1)
+            {
+                <div class="am-pagination">
+                    <span class="am-pagination-info">
+                        Showing @((filter.Page - 1) * filter.PageSize + 1)–@Math.Min(filter.Page * filter.PageSize, totalCount) of @totalCount
+                    </span>
+                    <div class="am-pagination-pages">
+                        <button class="am-page-btn" disabled="@(filter.Page <= 1)" @onclick="PrevPage">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        @for (int p = Math.Max(1, filter.Page - 2); p <= Math.Min(totalPages, filter.Page + 2); p++)
+                        {
+                            var pg = p;
+                            <button class="am-page-btn @(filter.Page == pg ? "active" : "")" @onclick="() => GoToPage(pg)">@pg</button>
+                        }
+                        <button class="am-page-btn" disabled="@(filter.Page >= totalPages)" @onclick="NextPage">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
 </div>
 
-<!-- ── CREATE ASSET MODAL ─────────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: CREATE ASSET
+════════════════════════════════════════════════════════════════════════════ -->
 @if (showCreateModal)
 {
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-    <div class="modal-panel">
-        <div class="modal-panel-header">
-            <h5 class="fw-bold mb-0"><i class="bi bi-plus-circle me-2 text-primary"></i>Add New Asset</h5>
-            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+    <div class="am-overlay" @onclick="CloseModals"></div>
+    <div class="am-modal am-modal-lg">
+        <div class="am-modal-header">
+            <div class="am-modal-title-group">
+                <div class="am-modal-icon am-modal-icon-primary"><i class="bi bi-plus-circle"></i></div>
+                <div>
+                    <h5 class="am-modal-title">Add New Asset</h5>
+                    <p class="am-modal-sub">Asset will be created with Available status</p>
+                </div>
+            </div>
+            <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
         </div>
-        <div class="modal-panel-body">
+        <div class="am-modal-body">
             <EditForm Model="createDto" OnValidSubmit="SubmitCreateAsync">
                 <DataAnnotationsValidator />
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Asset Name <span class="text-danger">*</span></label>
-                        <InputText class="form-control" @bind-Value="createDto.Name" placeholder="e.g. Dell Laptop" />
-                        <ValidationMessage For="() => createDto.Name" class="text-danger small" />
+                <div class="am-form-grid">
+                    <div class="am-form-col">
+                        <label class="am-label">Asset Name <span class="am-required">*</span></label>
+                        <InputText class="am-input" @bind-Value="createDto.Name" placeholder="e.g. Dell Laptop Pro" />
+                        <ValidationMessage For="() => createDto.Name" class="am-error" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Category <span class="text-danger">*</span></label>
-                        <InputText class="form-control" @bind-Value="createDto.Category" placeholder="e.g. Laptop" />
-                        <ValidationMessage For="() => createDto.Category" class="text-danger small" />
+                    <div class="am-form-col">
+                        <label class="am-label">Category <span class="am-required">*</span></label>
+                        <InputText class="am-input" @bind-Value="createDto.Category" placeholder="e.g. Laptop, Monitor" />
+                        <ValidationMessage For="() => createDto.Category" class="am-error" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Brand</label>
-                        <InputText class="form-control" @bind-Value="createDto.Brand" placeholder="e.g. Dell" />
+                    <div class="am-form-col">
+                        <label class="am-label">Brand</label>
+                        <InputText class="am-input" @bind-Value="createDto.Brand" placeholder="e.g. Dell, HP, Apple" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Model</label>
-                        <InputText class="form-control" @bind-Value="createDto.Model" placeholder="e.g. Latitude 5520" />
+                    <div class="am-form-col">
+                        <label class="am-label">Model</label>
+                        <InputText class="am-input" @bind-Value="createDto.Model" placeholder="e.g. Latitude 5540" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Serial Number</label>
-                        <InputText class="form-control" @bind-Value="createDto.SerialNumber" placeholder="e.g. SN123456" />
+                    <div class="am-form-col">
+                        <label class="am-label">Serial Number</label>
+                        <InputText class="am-input" @bind-Value="createDto.SerialNumber" placeholder="e.g. SN-ABC-123456" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Purchase Price</label>
-                        <InputNumber class="form-control" @bind-Value="createDto.PurchasePrice" placeholder="0.00" />
+                    <div class="am-form-col">
+                        <label class="am-label">
+                            Department
+                            <span class="am-hint" title="Restricts assignment to this department only">
+                                <i class="bi bi-info-circle"></i>
+                            </span>
+                        </label>
+                        <select class="am-input am-select-input" @bind="createDto.DepartmentId">
+                            <option value="">— Org-Wide (any department) —</option>
+                            @foreach (var dept in departments)
+                            {
+                                <option value="@dept.DepartmentId">@dept.Name</option>
+                            }
+                        </select>
+                        @if (createDto.DepartmentId.HasValue)
+                        {
+                            <p class="am-field-hint">
+                                <i class="bi bi-shield-check text-success me-1"></i>
+                                Only employees in <strong>@GetDepartmentName(createDto.DepartmentId)</strong> can be assigned this asset.
+                            </p>
+                        }
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Purchase Date</label>
-                        <InputDate class="form-control" @bind-Value="createDto.PurchaseDate" />
+                    <div class="am-form-col">
+                        <label class="am-label">Purchase Price</label>
+                        <div class="am-input-prefix-wrap">
+                            <span class="am-input-prefix">₹</span>
+                            <InputNumber class="am-input am-input-prefixed" @bind-Value="createDto.PurchasePrice" placeholder="0.00" />
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Warranty Expiry</label>
-                        <InputDate class="form-control" @bind-Value="createDto.WarrantyExpiryDate" />
+                    <div class="am-form-col">
+                        <label class="am-label">Purchase Date</label>
+                        <InputDate class="am-input" @bind-Value="createDto.PurchaseDate" />
                     </div>
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold">Notes</label>
-                        <InputTextArea class="form-control" @bind-Value="createDto.Notes" rows="2" />
+                    <div class="am-form-col">
+                        <label class="am-label">Warranty Expiry</label>
+                        <InputDate class="am-input" @bind-Value="createDto.WarrantyExpiryDate" />
+                    </div>
+                    <div class="am-form-col am-form-col-full">
+                        <label class="am-label">Notes</label>
+                        <InputTextArea class="am-input" @bind-Value="createDto.Notes" rows="2" placeholder="Optional notes about this asset…" />
                     </div>
                 </div>
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div class="alert alert-danger mt-3 py-2 small">@errorMessage</div>
+                    <div class="am-alert am-alert-danger mt-3">
+                        <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                    </div>
                 }
-                <div class="d-flex justify-content-end gap-2 mt-4">
-                    <button type="button" class="btn btn-light" @onclick="CloseModals">Cancel</button>
-                    <button type="submit" class="btn btn-primary" disabled="@submitting">
-                        @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                <div class="am-modal-footer">
+                    <button type="button" class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                    <button type="submit" class="am-btn am-btn-primary" disabled="@submitting">
+                        @if (submitting) { <span class="am-spinner-sm"></span> }
                         Create Asset
                     </button>
                 </div>
@@ -314,46 +415,108 @@
     </div>
 }
 
-<!-- ── ASSIGN MODAL ─────────────────────────────────────────────────────── -->
-@if (showAssignModal && selectedAsset != null)
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: EDIT ASSET
+════════════════════════════════════════════════════════════════════════════ -->
+@if (showEditModal && selectedAsset != null)
 {
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-    <div class="modal-panel modal-panel-sm">
-        <div class="modal-panel-header">
-            <h5 class="fw-bold mb-0"><i class="bi bi-person-plus me-2 text-success"></i>Assign Asset</h5>
-            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
-        </div>
-        <div class="modal-panel-body">
-            <div class="asset-info-chip mb-4">
-                <i class="bi bi-box-seam text-primary me-2"></i>
-                <span class="fw-semibold">@selectedAsset.Name</span>
-                <span class="font-monospace text-muted ms-2 small">@selectedAsset.AssetCode</span>
-            </div>
-            <EditForm Model="assignDto" OnValidSubmit="SubmitAssignAsync">
-                <DataAnnotationsValidator />
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Assign To <span class="text-danger">*</span></label>
-                    <select class="form-select" @bind="assignEmployeeId">
-                        <option value="">— Select Employee —</option>
-                        @foreach (var emp in employees)
-                        {
-                            <option value="@emp.EmployeeId">@emp.FirstName @emp.LastName (@emp.EmployeeCode)</option>
-                        }
-                    </select>
+    <div class="am-overlay" @onclick="CloseModals"></div>
+    <div class="am-modal am-modal-lg">
+        <div class="am-modal-header">
+            <div class="am-modal-title-group">
+                <div class="am-modal-icon am-modal-icon-secondary"><i class="bi bi-pencil-square"></i></div>
+                <div>
+                    <h5 class="am-modal-title">Edit Asset</h5>
+                    <p class="am-modal-sub">@selectedAsset.AssetCode — @selectedAsset.Name</p>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Notes</label>
-                    <InputTextArea class="form-control" @bind-Value="assignDto.Notes" rows="2" placeholder="Optional assignment notes…" />
+            </div>
+            <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="am-modal-body">
+            <EditForm Model="editDto" OnValidSubmit="SubmitEditAsync">
+                <DataAnnotationsValidator />
+                <div class="am-form-grid">
+                    <div class="am-form-col">
+                        <label class="am-label">Asset Name</label>
+                        <InputText class="am-input" @bind-Value="editDto.Name" />
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">Brand</label>
+                        <InputText class="am-input" @bind-Value="editDto.Brand" />
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">Model</label>
+                        <InputText class="am-input" @bind-Value="editDto.Model" />
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">Serial Number</label>
+                        <InputText class="am-input" @bind-Value="editDto.SerialNumber" />
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">
+                            Department
+                            @if (selectedAsset.Status == AssetStatus.Assigned)
+                            {
+                                <span class="am-badge am-badge-warning ms-1" title="Cannot change department of an assigned asset">
+                                    Locked
+                                </span>
+                            }
+                        </label>
+                        <select class="am-input am-select-input"
+                                @bind="editDto.DepartmentId"
+                                disabled="@(selectedAsset.Status == AssetStatus.Assigned)">
+                            <option value="">— Org-Wide —</option>
+                            @foreach (var dept in departments)
+                            {
+                                <option value="@dept.DepartmentId">@dept.Name</option>
+                            }
+                        </select>
+                        @if (selectedAsset.Status == AssetStatus.Assigned)
+                        {
+                            <p class="am-field-hint am-field-hint-warn">
+                                <i class="bi bi-lock me-1"></i>
+                                Department cannot be changed while asset is assigned.
+                            </p>
+                        }
+                        else if (editDto.DepartmentId.HasValue)
+                        {
+                            <p class="am-field-hint">
+                                <i class="bi bi-shield-check text-success me-1"></i>
+                                Only employees in <strong>@GetDepartmentName(editDto.DepartmentId)</strong> can be assigned.
+                            </p>
+                        }
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">Purchase Price</label>
+                        <div class="am-input-prefix-wrap">
+                            <span class="am-input-prefix">₹</span>
+                            <InputNumber class="am-input am-input-prefixed" @bind-Value="editDto.PurchasePrice" />
+                        </div>
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">Purchase Date</label>
+                        <InputDate class="am-input" @bind-Value="editDto.PurchaseDate" />
+                    </div>
+                    <div class="am-form-col">
+                        <label class="am-label">Warranty Expiry</label>
+                        <InputDate class="am-input" @bind-Value="editDto.WarrantyExpiryDate" />
+                    </div>
+                    <div class="am-form-col am-form-col-full">
+                        <label class="am-label">Notes</label>
+                        <InputTextArea class="am-input" @bind-Value="editDto.Notes" rows="2" />
+                    </div>
                 </div>
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div class="alert alert-danger py-2 small">@errorMessage</div>
+                    <div class="am-alert am-alert-danger mt-3">
+                        <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                    </div>
                 }
-                <div class="d-flex justify-content-end gap-2 mt-3">
-                    <button type="button" class="btn btn-light" @onclick="CloseModals">Cancel</button>
-                    <button type="submit" class="btn btn-success" disabled="@submitting">
-                        @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                        Assign
+                <div class="am-modal-footer">
+                    <button type="button" class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                    <button type="submit" class="am-btn am-btn-primary" disabled="@submitting">
+                        @if (submitting) { <span class="am-spinner-sm"></span> }
+                        Save Changes
                     </button>
                 </div>
             </EditForm>
@@ -361,33 +524,138 @@
     </div>
 }
 
-<!-- ── RETURN MODAL ─────────────────────────────────────────────────────── -->
-@if (showReturnModal && selectedAsset != null)
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: ASSIGN ASSET
+════════════════════════════════════════════════════════════════════════════ -->
+@if (showAssignModal && selectedAsset != null)
 {
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-    <div class="modal-panel modal-panel-sm">
-        <div class="modal-panel-header">
-            <h5 class="fw-bold mb-0"><i class="bi bi-arrow-return-left me-2 text-warning"></i>Return Asset</h5>
-            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
-        </div>
-        <div class="modal-panel-body">
-            <div class="asset-info-chip mb-4">
-                <i class="bi bi-box-seam text-primary me-2"></i>
-                <span class="fw-semibold">@selectedAsset.Name</span>
-                <span class="text-muted ms-2 small">currently assigned to <strong>@selectedAsset.CurrentEmployeeName</strong></span>
+    <div class="am-overlay" @onclick="CloseModals"></div>
+    <div class="am-modal am-modal-sm">
+        <div class="am-modal-header">
+            <div class="am-modal-title-group">
+                <div class="am-modal-icon am-modal-icon-success"><i class="bi bi-person-plus"></i></div>
+                <div>
+                    <h5 class="am-modal-title">Assign Asset</h5>
+                    <p class="am-modal-sub">Select an employee to assign this asset</p>
+                </div>
             </div>
-            <div class="mb-3">
-                <label class="form-label small fw-semibold">Return Notes</label>
-                <textarea class="form-control" @bind="returnNotes" rows="2" placeholder="Optional notes on condition, reason…"></textarea>
+            <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="am-modal-body">
+            <!-- Asset chip -->
+            <div class="am-asset-chip">
+                <i class="bi bi-box-seam-fill am-chip-icon"></i>
+                <div class="am-chip-info">
+                    <span class="am-chip-name">@selectedAsset.Name</span>
+                    <code class="am-chip-code">@selectedAsset.AssetCode</code>
+                </div>
+                @if (selectedAsset.DepartmentId.HasValue)
+                {
+                    <span class="am-chip-dept">
+                        <i class="bi bi-building me-1"></i>@GetDepartmentName(selectedAsset.DepartmentId)
+                    </span>
+                }
+            </div>
+
+            @if (selectedAsset.DepartmentId.HasValue)
+            {
+                <div class="am-info-banner am-info-banner-blue">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    <span>
+                        This asset belongs to <strong>@GetDepartmentName(selectedAsset.DepartmentId)</strong>.
+                        Only employees from that department are listed below.
+                    </span>
+                </div>
+            }
+
+            <div class="am-form-group">
+                <label class="am-label">Assign To <span class="am-required">*</span></label>
+                @if (loadingEmployees)
+                {
+                    <div class="am-loading-row">
+                        <span class="am-spinner-sm"></span>
+                        <span class="text-muted small">Loading eligible employees…</span>
+                    </div>
+                }
+                else if (!assignableEmployees.Any())
+                {
+                    <div class="am-alert am-alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        No eligible employees found for this department.
+                    </div>
+                }
+                else
+                {
+                    <select class="am-input am-select-input" @bind="assignEmployeeId">
+                        <option value="">— Select Employee —</option>
+                        @foreach (var emp in assignableEmployees)
+                        {
+                            <option value="@emp.EmployeeId">@emp.FullName</option>
+                        }
+                    </select>
+                }
+            </div>
+            <div class="am-form-group">
+                <label class="am-label">Assignment Notes</label>
+                <textarea class="am-input" @bind="assignNotes" rows="2" placeholder="Optional notes (e.g. project, reason)…"></textarea>
             </div>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="alert alert-danger py-2 small">@errorMessage</div>
+                <div class="am-alert am-alert-danger">
+                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                </div>
             }
-            <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-light" @onclick="CloseModals">Cancel</button>
-                <button class="btn btn-warning" @onclick="SubmitReturnAsync" disabled="@submitting">
-                    @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            <div class="am-modal-footer">
+                <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                <button class="am-btn am-btn-success" @onclick="SubmitAssignAsync"
+                        disabled="@(submitting || string.IsNullOrEmpty(assignEmployeeId) || !assignableEmployees.Any())">
+                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                    Assign Asset
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: RETURN ASSET
+════════════════════════════════════════════════════════════════════════════ -->
+@if (showReturnModal && selectedAsset != null)
+{
+    <div class="am-overlay" @onclick="CloseModals"></div>
+    <div class="am-modal am-modal-sm">
+        <div class="am-modal-header">
+            <div class="am-modal-title-group">
+                <div class="am-modal-icon am-modal-icon-warning"><i class="bi bi-arrow-return-left"></i></div>
+                <div>
+                    <h5 class="am-modal-title">Return Asset</h5>
+                    <p class="am-modal-sub">Mark this asset as returned</p>
+                </div>
+            </div>
+            <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="am-modal-body">
+            <div class="am-asset-chip">
+                <i class="bi bi-box-seam-fill am-chip-icon"></i>
+                <div class="am-chip-info">
+                    <span class="am-chip-name">@selectedAsset.Name</span>
+                    <span class="am-chip-meta">Currently assigned to <strong>@selectedAsset.CurrentEmployeeName</strong></span>
+                </div>
+            </div>
+            <div class="am-form-group">
+                <label class="am-label">Return Notes</label>
+                <textarea class="am-input" @bind="returnNotes" rows="2" placeholder="Condition on return, any remarks…"></textarea>
+            </div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="am-alert am-alert-danger">
+                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                </div>
+            }
+            <div class="am-modal-footer">
+                <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                <button class="am-btn am-btn-warning" @onclick="SubmitReturnAsync" disabled="@submitting">
+                    @if (submitting) { <span class="am-spinner-sm"></span> }
                     Confirm Return
                 </button>
             </div>
@@ -395,95 +663,372 @@
     </div>
 }
 
-<!-- ── RETIRE CONFIRM ────────────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: RETIRE CONFIRM
+════════════════════════════════════════════════════════════════════════════ -->
 @if (showRetireConfirm && selectedAsset != null)
 {
-    <div class="modal-backdrop-custom" @onclick="CloseModals"></div>
-    <div class="modal-panel modal-panel-sm">
-        <div class="modal-panel-header">
-            <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-archive me-2"></i>Retire Asset</h5>
-            <button class="btn btn-link text-muted p-0" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+    <div class="am-overlay" @onclick="CloseModals"></div>
+    <div class="am-modal am-modal-xs">
+        <div class="am-modal-header">
+            <div class="am-modal-title-group">
+                <div class="am-modal-icon am-modal-icon-danger"><i class="bi bi-archive"></i></div>
+                <div>
+                    <h5 class="am-modal-title">Retire Asset</h5>
+                    <p class="am-modal-sub">This action cannot be undone</p>
+                </div>
+            </div>
+            <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
         </div>
-        <div class="modal-panel-body">
-            <p class="text-muted">Are you sure you want to retire <strong>@selectedAsset.Name (@selectedAsset.AssetCode)</strong>? This action cannot be undone.</p>
+        <div class="am-modal-body">
+            <p class="am-confirm-text">
+                Are you sure you want to retire <strong>@selectedAsset.Name</strong>
+                <code class="am-code">(@selectedAsset.AssetCode)</code>?
+                It will be permanently decommissioned and removed from active inventory.
+            </p>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="alert alert-danger py-2 small">@errorMessage</div>
+                <div class="am-alert am-alert-danger">
+                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                </div>
             }
-            <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-light" @onclick="CloseModals">Cancel</button>
-                <button class="btn btn-danger" @onclick="SubmitRetireAsync" disabled="@submitting">
-                    @if (submitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
-                    Yes, Retire
+            <div class="am-modal-footer">
+                <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                <button class="am-btn am-btn-danger" @onclick="SubmitRetireAsync" disabled="@submitting">
+                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                    Yes, Retire Asset
                 </button>
             </div>
         </div>
     </div>
 }
 
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: COMPLETE REPAIR
+════════════════════════════════════════════════════════════════════════════ -->
+@if (showRepairCompleteModal && selectedAsset != null)
+{
+    <div class="am-overlay" @onclick="CloseModals"></div>
+    <div class="am-modal am-modal-sm">
+        <div class="am-modal-header">
+            <div class="am-modal-title-group">
+                <div class="am-modal-icon am-modal-icon-info"><i class="bi bi-check2-circle"></i></div>
+                <div>
+                    <h5 class="am-modal-title">Complete Repair</h5>
+                    <p class="am-modal-sub">Mark this asset as repaired</p>
+                </div>
+            </div>
+            <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="am-modal-body">
+            <div class="am-asset-chip">
+                <i class="bi bi-tools am-chip-icon text-warning"></i>
+                <div class="am-chip-info">
+                    <span class="am-chip-name">@selectedAsset.Name</span>
+                    <code class="am-chip-code">@selectedAsset.AssetCode</code>
+                </div>
+            </div>
+            <div class="am-info-banner am-info-banner-blue mb-3">
+                <i class="bi bi-info-circle-fill"></i>
+                <span>Asset will be set back to <strong>Available</strong> after marking repair complete.</span>
+            </div>
+            <div class="am-form-group">
+                <label class="am-label">Repair Notes</label>
+                <textarea class="am-input" @bind="repairCompleteNotes" rows="2" placeholder="What was repaired, parts replaced…"></textarea>
+            </div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="am-alert am-alert-danger">
+                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                </div>
+            }
+            <div class="am-modal-footer">
+                <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                <button class="am-btn am-btn-info" @onclick="SubmitRepairCompleteAsync" disabled="@submitting">
+                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                    Mark Repaired
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ── Toast notification ───────────────────────────────────────────────── -->
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="am-toast am-toast-success">
+        <i class="bi bi-check-circle-fill me-2"></i>@successMessage
+    </div>
+}
+
 <style>
-    .text-primary { color: #5c4ac7 !important; }
-    .btn-primary { background: #5c4ac7; border-color: #5c4ac7; }
-    .btn-primary:hover { background: #4a39b0; border-color: #4a39b0; }
+    /* ── Design tokens ──────────────────────────────────────────────────── */
+    :root {
+        --am-primary: #4f46e5;
+        --am-primary-dark: #4338ca;
+        --am-success: #059669;
+        --am-warning: #d97706;
+        --am-danger: #dc2626;
+        --am-info: #0891b2;
+        --am-bg: #f8f9fc;
+        --am-surface: #ffffff;
+        --am-border: #e5e7eb;
+        --am-text: #111827;
+        --am-muted: #6b7280;
+        --am-radius: 12px;
+        --am-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+        --am-shadow-lg: 0 10px 40px rgba(0,0,0,.12);
+    }
 
-    .asset-stat-card { border-radius: 12px; }
-    .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
-    .stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6c757d; }
-    .stat-value { font-size: 1.6rem; font-weight: 800; line-height: 1; color: #1a1a2e; }
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    .am-wrapper { padding: 1.75rem 1.5rem; max-width: 1600px; background: var(--am-bg); min-height: 100vh; }
 
-    .bg-soft-primary { background: rgba(92,74,199,0.1); }
-    .bg-soft-success { background: rgba(25,135,84,0.1); }
-    .bg-soft-info { background: rgba(13,202,240,0.1); }
-    .bg-soft-warning { background: rgba(255,193,7,0.1); }
-    .bg-soft-secondary { background: rgba(108,117,125,0.1); }
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    .am-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
+    .am-header-left { display: flex; align-items: center; gap: 1rem; }
+    .am-header-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--am-primary); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.25rem; }
+    .am-title { font-size: 1.5rem; font-weight: 800; color: var(--am-text); margin: 0; letter-spacing: -.02em; }
+    .am-subtitle { font-size: .825rem; color: var(--am-muted); margin: 0; }
+    .am-header-actions { display: flex; gap: .625rem; }
 
-    .asset-table th { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #6c757d; padding: 0.85rem 1rem; }
-    .asset-table td { padding: 0.85rem 1rem; font-size: 0.875rem; }
+    /* ── KPI strip ──────────────────────────────────────────────────────── */
+    .am-kpi-row { display: grid; grid-template-columns: repeat(5,1fr); gap: .875rem; margin-bottom: 1.25rem; }
+    @@media(max-width:1100px){ .am-kpi-row { grid-template-columns: repeat(3,1fr); } }
+    @@media(max-width:640px){ .am-kpi-row { grid-template-columns: repeat(2,1fr); } }
+    .am-kpi-card { background: var(--am-surface); border-radius: var(--am-radius); box-shadow: var(--am-shadow); padding: .875rem 1rem; display: flex; align-items: center; gap: .75rem; border: 1px solid var(--am-border); }
+    .am-kpi-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+    .am-kpi-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--am-muted); display: block; }
+    .am-kpi-value { font-size: 1.65rem; font-weight: 800; line-height: 1.1; color: var(--am-text); display: block; }
+    .am-kpi-total .am-kpi-icon { background: rgba(79,70,229,.1); color: var(--am-primary); }
+    .am-kpi-available .am-kpi-icon { background: rgba(5,150,105,.1); color: var(--am-success); }
+    .am-kpi-available .am-kpi-value { color: var(--am-success); }
+    .am-kpi-assigned .am-kpi-icon { background: rgba(8,145,178,.1); color: var(--am-info); }
+    .am-kpi-assigned .am-kpi-value { color: var(--am-info); }
+    .am-kpi-repair .am-kpi-icon { background: rgba(217,119,6,.1); color: var(--am-warning); }
+    .am-kpi-repair .am-kpi-value { color: var(--am-warning); }
+    .am-kpi-retired .am-kpi-icon { background: rgba(107,114,128,.1); color: var(--am-muted); }
 
-    .btn-xs { padding: 0.2rem 0.5rem; font-size: 0.78rem; border-radius: 6px; }
+    /* ── Filter bar ─────────────────────────────────────────────────────── */
+    .am-filter-bar { background: var(--am-surface); border: 1px solid var(--am-border); border-radius: var(--am-radius); padding: .875rem 1rem; margin-bottom: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+    .am-filter-group { display: flex; flex-direction: column; gap: .3rem; min-width: 140px; }
+    .am-filter-search { flex: 1; min-width: 220px; }
+    .am-filter-end { margin-left: auto; justify-content: flex-end; }
+    .am-filter-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--am-muted); }
+    .am-select, .am-input { height: 36px; padding: 0 .625rem; border: 1px solid var(--am-border); border-radius: 8px; font-size: .85rem; color: var(--am-text); background: var(--am-surface); outline: none; transition: border-color .15s; width: 100%; }
+    .am-select:focus, .am-input:focus { border-color: var(--am-primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+    .am-search-wrap { position: relative; }
+    .am-search-icon { position: absolute; left: .625rem; top: 50%; transform: translateY(-50%); color: var(--am-muted); font-size: .8rem; pointer-events: none; }
+    .am-input-search { padding-left: 2rem; }
+    .am-search-clear { position: absolute; right: .5rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--am-muted); cursor: pointer; padding: 0; line-height: 1; }
 
-    .modal-backdrop-custom { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1040; backdrop-filter: blur(2px); }
-    .modal-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.18); z-index: 1050; width: 640px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; }
-    .modal-panel-sm { width: 480px; }
-    .modal-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid #f0f0f0; }
-    .modal-panel-body { padding: 1.5rem; overflow-y: auto; }
+    /* ── Table card ─────────────────────────────────────────────────────── */
+    .am-table-card { background: var(--am-surface); border: 1px solid var(--am-border); border-radius: var(--am-radius); box-shadow: var(--am-shadow); overflow: hidden; }
+    .am-table { width: 100%; border-collapse: collapse; }
+    .am-table thead tr { background: #f9fafb; border-bottom: 1px solid var(--am-border); }
+    .am-table th { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--am-muted); padding: .75rem 1rem; white-space: nowrap; }
+    .am-table td { padding: .75rem 1rem; font-size: .85rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+    .am-row:hover td { background: #fafafa; }
+    .am-row-danger td { background: #fef2f2; }
+    .am-th-asset { padding-left: 1.25rem; }
+    .am-td-asset { padding-left: 1.25rem; }
+    .am-asset-name { font-weight: 600; color: var(--am-text); }
+    .am-asset-meta { font-size: .75rem; color: var(--am-muted); margin-top: 1px; }
+    .am-text-muted { color: var(--am-muted); }
+    .am-code { font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: var(--am-muted); background: #f3f4f6; padding: .1rem .35rem; border-radius: 4px; }
+    .am-cat-badge { background: #f3f4f6; color: #374151; font-size: .72rem; font-weight: 600; padding: .2rem .55rem; border-radius: 20px; }
+    .am-dept-badge { background: rgba(79,70,229,.08); color: var(--am-primary); font-size: .72rem; font-weight: 600; padding: .2rem .55rem; border-radius: 20px; }
 
-    .asset-info-chip { background: #f8f9ff; border: 1px solid #e8e4ff; border-radius: 10px; padding: 0.6rem 1rem; display: flex; align-items: center; }
+    /* ── Status badges ──────────────────────────────────────────────────── */
+    .am-status { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 700; padding: .25rem .6rem; border-radius: 20px; }
+    .am-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .am-status-available { background: rgba(5,150,105,.1); color: #065f46; }
+    .am-status-available::before { background: var(--am-success); }
+    .am-status-assigned { background: rgba(8,145,178,.1); color: #155e75; }
+    .am-status-assigned::before { background: var(--am-info); }
+    .am-status-inrepair { background: rgba(217,119,6,.1); color: #92400e; }
+    .am-status-inrepair::before { background: var(--am-warning); }
+    .am-status-retired { background: rgba(107,114,128,.1); color: #374151; }
+    .am-status-retired::before { background: var(--am-muted); }
+    .am-status-lost { background: rgba(220,38,38,.1); color: #991b1b; }
+    .am-status-lost::before { background: var(--am-danger); }
+
+    /* ── Badges ─────────────────────────────────────────────────────────── */
+    .am-badge { display: inline-block; font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 20px; }
+    .am-badge-warning { background: rgba(217,119,6,.1); color: #92400e; }
+    .am-badge-danger { background: rgba(220,38,38,.1); color: #991b1b; }
+
+    /* ── Assignee cell ──────────────────────────────────────────────────── */
+    .am-assignee { display: flex; align-items: center; gap: .5rem; }
+    .am-assignee-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--am-primary); color: #fff; font-size: .7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; text-transform: uppercase; flex-shrink: 0; }
+
+    /* ── Action buttons ─────────────────────────────────────────────────── */
+    .am-actions { display: flex; gap: .3rem; justify-content: flex-end; }
+    .am-action-btn { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--am-border); background: var(--am-surface); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; cursor: pointer; transition: all .15s; color: var(--am-muted); }
+    .am-action-btn:hover { border-color: currentColor; }
+    .am-action-view:hover { color: var(--am-primary); background: rgba(79,70,229,.06); }
+    .am-action-edit:hover { color: #374151; background: #f3f4f6; }
+    .am-action-assign:hover { color: var(--am-success); background: rgba(5,150,105,.06); }
+    .am-action-return:hover { color: var(--am-warning); background: rgba(217,119,6,.06); }
+    .am-action-retire:hover { color: var(--am-danger); background: rgba(220,38,38,.06); }
+    .am-action-repair:hover { color: var(--am-info); background: rgba(8,145,178,.06); }
+
+    /* ── Pagination ─────────────────────────────────────────────────────── */
+    .am-pagination { display: flex; justify-content: space-between; align-items: center; padding: .875rem 1rem; border-top: 1px solid var(--am-border); }
+    .am-pagination-info { font-size: .8rem; color: var(--am-muted); }
+    .am-pagination-pages { display: flex; gap: .3rem; }
+    .am-page-btn { width: 32px; height: 32px; border-radius: 7px; border: 1px solid var(--am-border); background: var(--am-surface); font-size: .82rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--am-text); transition: all .15s; }
+    .am-page-btn:hover:not(:disabled) { border-color: var(--am-primary); color: var(--am-primary); }
+    .am-page-btn.active { background: var(--am-primary); color: #fff; border-color: var(--am-primary); font-weight: 700; }
+    .am-page-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── State screens ──────────────────────────────────────────────────── */
+    .am-state-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; text-align: center; }
+    .am-empty-icon { font-size: 3rem; color: #d1d5db; margin-bottom: .75rem; }
+    .am-state-title { font-size: 1rem; font-weight: 600; color: var(--am-text); margin: 0; }
+    .am-state-sub { font-size: .85rem; color: var(--am-muted); margin: .25rem 0 0; }
+    .am-state-text { color: var(--am-muted); font-size: .85rem; margin-top: .75rem; }
+    .am-spinner { width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: var(--am-primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    .am-spinner-sm { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin-right: .35rem; vertical-align: middle; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin .7s linear infinite; }
+
+    /* ── Buttons ────────────────────────────────────────────────────────── */
+    .am-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1rem; border-radius: 8px; font-size: .85rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all .15s; text-decoration: none; }
+    .am-btn-sm { padding: .35rem .75rem; font-size: .8rem; }
+    .am-btn-primary { background: var(--am-primary); color: #fff; border-color: var(--am-primary); }
+    .am-btn-primary:hover:not(:disabled) { background: var(--am-primary-dark); border-color: var(--am-primary-dark); }
+    .am-btn-success { background: var(--am-success); color: #fff; border-color: var(--am-success); }
+    .am-btn-success:hover:not(:disabled) { background: #047857; border-color: #047857; }
+    .am-btn-warning { background: var(--am-warning); color: #fff; border-color: var(--am-warning); }
+    .am-btn-warning:hover:not(:disabled) { background: #b45309; }
+    .am-btn-danger { background: var(--am-danger); color: #fff; border-color: var(--am-danger); }
+    .am-btn-danger:hover:not(:disabled) { background: #b91c1c; }
+    .am-btn-info { background: var(--am-info); color: #fff; border-color: var(--am-info); }
+    .am-btn-info:hover:not(:disabled) { background: #0e7490; }
+    .am-btn-ghost { background: var(--am-surface); color: var(--am-text); border-color: var(--am-border); }
+    .am-btn-ghost:hover:not(:disabled) { background: #f3f4f6; }
+    .am-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ── Modals ─────────────────────────────────────────────────────────── */
+    .am-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1040; backdrop-filter: blur(3px); }
+    .am-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--am-surface); border-radius: 16px; box-shadow: var(--am-shadow-lg); z-index: 1050; display: flex; flex-direction: column; max-height: 92vh; }
+    .am-modal-xs { width: 420px; max-width: 95vw; }
+    .am-modal-sm { width: 500px; max-width: 95vw; }
+    .am-modal-lg { width: 680px; max-width: 95vw; }
+    .am-modal-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--am-border); flex-shrink: 0; }
+    .am-modal-title-group { display: flex; align-items: center; gap: .875rem; }
+    .am-modal-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+    .am-modal-icon-primary { background: rgba(79,70,229,.1); color: var(--am-primary); }
+    .am-modal-icon-secondary { background: #f3f4f6; color: #374151; }
+    .am-modal-icon-success { background: rgba(5,150,105,.1); color: var(--am-success); }
+    .am-modal-icon-warning { background: rgba(217,119,6,.1); color: var(--am-warning); }
+    .am-modal-icon-danger { background: rgba(220,38,38,.1); color: var(--am-danger); }
+    .am-modal-icon-info { background: rgba(8,145,178,.1); color: var(--am-info); }
+    .am-modal-title { font-size: 1rem; font-weight: 700; color: var(--am-text); margin: 0; }
+    .am-modal-sub { font-size: .78rem; color: var(--am-muted); margin: .1rem 0 0; }
+    .am-modal-body { padding: 1.5rem; overflow-y: auto; }
+    .am-modal-footer { display: flex; justify-content: flex-end; gap: .625rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #f3f4f6; }
+    .am-close-btn { background: none; border: none; color: var(--am-muted); cursor: pointer; padding: .25rem; font-size: 1rem; border-radius: 6px; display: flex; align-items: center; }
+    .am-close-btn:hover { background: #f3f4f6; color: var(--am-text); }
+
+    /* ── Form elements in modals ────────────────────────────────────────── */
+    .am-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; }
+    .am-form-col { display: flex; flex-direction: column; gap: .35rem; }
+    .am-form-col-full { grid-column: 1 / -1; }
+    .am-label { font-size: .78rem; font-weight: 600; color: #374151; }
+    .am-required { color: var(--am-danger); }
+    .am-hint { color: var(--am-muted); cursor: help; margin-left: .25rem; }
+    .am-select-input { height: 38px; }
+    .am-input { border-radius: 8px; border: 1px solid var(--am-border); padding: .5rem .75rem; font-size: .85rem; color: var(--am-text); width: 100%; transition: border-color .15s; }
+    .am-input:focus { outline: none; border-color: var(--am-primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+    textarea.am-input { height: auto; resize: vertical; }
+    .am-form-group { margin-bottom: .875rem; display: flex; flex-direction: column; gap: .35rem; }
+    .am-input-prefix-wrap { display: flex; }
+    .am-input-prefix { background: #f3f4f6; border: 1px solid var(--am-border); border-right: none; border-radius: 8px 0 0 8px; padding: 0 .625rem; font-size: .85rem; color: var(--am-muted); display: flex; align-items: center; }
+    .am-input-prefixed { border-radius: 0 8px 8px 0; }
+    .am-error { font-size: .75rem; color: var(--am-danger); margin-top: .2rem; }
+    .am-field-hint { font-size: .75rem; color: var(--am-muted); margin: .25rem 0 0; }
+    .am-field-hint-warn { color: var(--am-warning); }
+
+    /* ── Asset chip ─────────────────────────────────────────────────────── */
+    .am-asset-chip { background: #f8f9fc; border: 1px solid var(--am-border); border-radius: 10px; padding: .75rem 1rem; display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+    .am-chip-icon { font-size: 1.25rem; color: var(--am-primary); flex-shrink: 0; }
+    .am-chip-info { flex: 1; display: flex; flex-direction: column; gap: .1rem; }
+    .am-chip-name { font-weight: 600; color: var(--am-text); font-size: .9rem; }
+    .am-chip-code { font-family: monospace; font-size: .78rem; color: var(--am-muted); }
+    .am-chip-meta { font-size: .78rem; color: var(--am-muted); }
+    .am-chip-dept { font-size: .72rem; font-weight: 600; background: rgba(79,70,229,.08); color: var(--am-primary); padding: .2rem .55rem; border-radius: 20px; flex-shrink: 0; }
+
+    /* ── Info banner ────────────────────────────────────────────────────── */
+    .am-info-banner { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem 1rem; border-radius: 8px; font-size: .8rem; line-height: 1.5; margin-bottom: .875rem; }
+    .am-info-banner i { flex-shrink: 0; margin-top: .1rem; }
+    .am-info-banner-blue { background: rgba(8,145,178,.08); color: #155e75; border: 1px solid rgba(8,145,178,.2); }
+
+    /* ── Alerts ─────────────────────────────────────────────────────────── */
+    .am-alert { display: flex; align-items: flex-start; gap: .5rem; padding: .625rem .875rem; border-radius: 8px; font-size: .82rem; line-height: 1.5; }
+    .am-alert-danger { background: rgba(220,38,38,.07); color: #991b1b; border: 1px solid rgba(220,38,38,.2); }
+    .am-alert-warning { background: rgba(217,119,6,.07); color: #92400e; border: 1px solid rgba(217,119,6,.2); }
+
+    /* ── Loading row ────────────────────────────────────────────────────── */
+    .am-loading-row { display: flex; align-items: center; gap: .625rem; padding: .5rem 0; }
+
+    /* ── Confirm text ───────────────────────────────────────────────────── */
+    .am-confirm-text { font-size: .875rem; color: var(--am-text); line-height: 1.6; margin: 0; }
+
+    /* ── Toast ──────────────────────────────────────────────────────────── */
+    .am-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #1a1a2e; color: #fff; padding: .875rem 1.25rem; border-radius: 10px; font-size: .85rem; font-weight: 500; z-index: 9999; box-shadow: var(--am-shadow-lg); animation: slideUp .3s ease; }
+    .am-toast-success { background: #064e3b; border: 1px solid #065f46; }
+    @@keyframes slideUp { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @@media(max-width:768px) { .am-form-grid { grid-template-columns: 1fr; } .am-actions { flex-wrap: wrap; } }
 </style>
 
 @code {
+    // ── State ─────────────────────────────────────────────────────────────────
     private List<AssetListDto> assets = new();
     private List<AssetListDto> filteredAssets = new();
     private AssetFilterDto filter = new() { PageSize = 20 };
     private bool loading = true;
+    private bool loadingEmployees;
     private string searchText = "";
-    private int totalCount, availableCount, assignedCount, inRepairCount, totalPages;
+    private string selectedDepartmentId = "";
+    private int totalCount, availableCount, assignedCount, inRepairCount, retiredCount, totalPages;
     private List<string> categories = new();
+    private List<DepartmentDto> departments = new();
 
     // Modal state
-    private bool showCreateModal, showAssignModal, showReturnModal, showRetireConfirm;
+    private bool showCreateModal, showAssignModal, showReturnModal, showRetireConfirm, showEditModal, showRepairCompleteModal;
     private AssetListDto? selectedAsset;
     private CreateAssetDto createDto = new();
-    private AssignAssetDto assignDto = new();
+    private UpdateAssetDto editDto = new();
+    private Guid editingAssetId;
     private string assignEmployeeId = "";
+    private string assignNotes = "";
     private string returnNotes = "";
+    private string repairCompleteNotes = "";
     private bool submitting;
     private string errorMessage = "";
-
-    // Employee list for assign dropdown
-    private List<EmployeeSelectItem> employees = new();
+    private string successMessage = "";
+    private List<EmployeeDropdownDto> assignableEmployees = new();
 
     // Context
     private Guid orgId;
     private string userId = "", userRole = "OrgAdmin";
 
+    // ── Init ──────────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
         var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
         orgId = ctx.OrganizationId;
         userId = ctx.UserId;
-        await LoadAsync();
-        await LoadEmployeesAsync();
+        await Task.WhenAll(LoadAsync(), LoadDepartmentsAsync());
+    }
+
+    // ── Data loading ──────────────────────────────────────────────────────────
+    private async Task LoadDepartmentsAsync()
+    {
+        departments = await DepartmentService.GetDepartmentsByOrganizationAsync(orgId);
     }
 
     private async Task LoadAsync()
@@ -491,54 +1036,32 @@
         loading = true;
         StateHasChanged();
 
+        // Set department filter from the UI selector
+        filter.DepartmentId = string.IsNullOrEmpty(selectedDepartmentId)
+            ? null
+            : Guid.Parse(selectedDepartmentId);
+
         var result = await AssetService.GetAssetsAsync(orgId, filter);
         assets = result.Items;
         totalCount = result.TotalCount;
         totalPages = result.TotalPages;
 
-        // Compute quick counts (load all for sidebar — or use dedicated endpoints)
-        var allFilter = new AssetFilterDto { PageSize = 10000 };
+        // Counts across ALL assets (not just current page)
+        var allFilter = new AssetFilterDto
+        {
+            PageSize = 10000,
+            DepartmentId = filter.DepartmentId
+        };
         var allResult = await AssetService.GetAssetsAsync(orgId, allFilter);
-        availableCount  = allResult.Items.Count(a => a.Status == AssetStatus.Available);
-        assignedCount   = allResult.Items.Count(a => a.Status == AssetStatus.Assigned);
-        inRepairCount   = allResult.Items.Count(a => a.Status == AssetStatus.InRepair);
-        categories      = allResult.Items.Select(a => a.Category).Distinct().OrderBy(c => c).ToList();
+        availableCount = allResult.Items.Count(a => a.Status == AssetStatus.Available);
+        assignedCount = allResult.Items.Count(a => a.Status == AssetStatus.Assigned);
+        inRepairCount = allResult.Items.Count(a => a.Status == AssetStatus.InRepair);
+        retiredCount = allResult.Items.Count(a => a.Status == AssetStatus.Retired);
+        categories = allResult.Items.Select(a => a.Category).Distinct().OrderBy(c => c).ToList();
 
         ApplySearch();
         loading = false;
     }
-
-    private async Task LoadEmployeesAsync()
-    {
-        var result = await EmployeeService.GetEmployeesByOrganizationIdAsync(orgId);
-
-        employees = result
-            .Select(e => new EmployeeSelectItem
-            {
-                EmployeeId = e.EmployeeId,
-                FirstName = e.FirstName,
-                LastName = e.LastName,
-                EmployeeCode = e.EmployeeCode
-            })
-            .ToList();
-    }
-
-    // private void ApplySearch()
-    // {
-    //     filteredAssets = string.IsNullOrWhiteSpace(searchText)
-    //         ? assets.ToList()
-    //         : assets.Where(a =>
-    //             a.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-    //             a.AssetCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-    //             (a.CurrentEmployeeName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false))
-    //           .ToList();
-    // }
-
-    // private async Task OnSearchInput(ChangeEventArgs e)
-    // {
-    //     searchText = e.Value?.ToString() ?? "";
-    //     ApplySearch();
-    // }
 
     private void ApplySearch()
     {
@@ -552,27 +1075,20 @@
     }
 
     private async Task RefreshAsync() => await LoadAsync();
-
     private async Task ClearFilters()
     {
         filter = new AssetFilterDto { PageSize = 20 };
         searchText = "";
+        selectedDepartmentId = "";
         await LoadAsync();
     }
-
     private async Task GoToPage(int p) { filter.Page = p; await LoadAsync(); }
     private async Task PrevPage() { if (filter.Page > 1) { filter.Page--; await LoadAsync(); } }
     private async Task NextPage() { if (filter.Page < totalPages) { filter.Page++; await LoadAsync(); } }
-
     private void ViewAsset(Guid id) => Nav.NavigateTo($"/org/assets/{id}");
 
     // ── CREATE ────────────────────────────────────────────────────────────────
-    private void OpenCreateModal()
-    {
-        createDto = new CreateAssetDto();
-        errorMessage = "";
-        showCreateModal = true;
-    }
+    private void OpenCreateModal() { createDto = new CreateAssetDto(); errorMessage = ""; showCreateModal = true; }
 
     private async Task SubmitCreateAsync()
     {
@@ -582,73 +1098,141 @@
             await AssetService.CreateAssetAsync(orgId, createDto, userId, userRole);
             CloseModals();
             await LoadAsync();
+            ShowSuccess("Asset created successfully.");
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    // ── EDIT ──────────────────────────────────────────────────────────────────
+    private async Task OpenEditModal(AssetListDto asset)
+    {
+        errorMessage = "";
+        var full = await AssetService.GetAssetByIdAsync(asset.AssetId, orgId);
+        selectedAsset = asset;
+        editingAssetId = full.AssetId;
+        editDto = new UpdateAssetDto
+        {
+            Name = full.Name, Brand = full.Brand, Model = full.Model,
+            SerialNumber = full.SerialNumber, PurchasePrice = full.PurchasePrice,
+            PurchaseDate = full.PurchaseDate, WarrantyExpiryDate = full.WarrantyExpiryDate,
+            Notes = full.Notes, DepartmentId = full.DepartmentId
+        };
+        showEditModal = true;
+    }
+
+    private async Task SubmitEditAsync()
+    {
+        submitting = true; errorMessage = "";
+        try
+        {
+            await AssetService.UpdateAssetAsync(editingAssetId, orgId, editDto, userId, userRole);
+            CloseModals();
+            await LoadAsync();
+            ShowSuccess("Asset updated.");
         }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { submitting = false; }
     }
 
     // ── ASSIGN ────────────────────────────────────────────────────────────────
-    private void OpenAssignModal(AssetListDto asset)
+    private async Task OpenAssignModal(AssetListDto asset)
     {
         selectedAsset = asset;
-        assignDto = new AssignAssetDto { AssetId = asset.AssetId };
-        assignEmployeeId = "";
+        assignEmployeeId = null;
+        assignNotes = "";
         errorMessage = "";
         showAssignModal = true;
+
+        loadingEmployees = true;
+
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine("START LOADING EMPLOYEES");
+
+            assignableEmployees =
+                await AssetService.GetAssignableEmployeesAsync(
+                    orgId,
+                    asset.AssetId);
+
+            Console.WriteLine($"EMPLOYEE COUNT: {assignableEmployees.Count}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+
+            errorMessage = ex.Message;
+
+            assignableEmployees = new();
+        }
+        finally
+        {
+            loadingEmployees = false;
+
+            StateHasChanged();
+        }
     }
 
+    // private async Task SubmitAssignAsync()
+    // {
+    //     if (!Guid.TryParse(assignEmployeeId, out var empId)) { errorMessage = "Please select an employee."; return; }
+    //     submitting = true; errorMessage = "";
+    //     try
+    //     {
+    //         await AssetService.AssignAssetAsync(orgId,
+    //             new AssignAssetDto { AssetId = selectedAsset!.AssetId, EmployeeId = empId, Notes = assignNotes },
+    //             userId, userRole);
+    //         CloseModals();
+    //         await LoadAsync();
+    //         ShowSuccess("Asset assigned successfully.");
+    //     }
+    //     catch (Exception ex) { errorMessage = ex.Message; }
+    //     finally { submitting = false; }
+    // }
     private async Task SubmitAssignAsync()
     {
-        if (!Guid.TryParse(assignEmployeeId, out var empId))
-        {
-            errorMessage = "Please select an employee.";
-            return;
-        }
-        assignDto.EmployeeId = empId;
+        if (!Guid.TryParse(assignEmployeeId, out var empId)) { errorMessage = "Please select an employee."; return; }
         submitting = true; errorMessage = "";
         try
         {
-            await AssetService.AssignAssetAsync(orgId, assignDto, userId, userRole);
+            await AssetService.AssignAssetAsync(orgId,
+                new AssignAssetDto { AssetId = selectedAsset!.AssetId, EmployeeId = empId, Notes = assignNotes },
+                userId, userRole);
             CloseModals();
             await LoadAsync();
+            ShowSuccess("Asset assigned successfully.");
         }
-        catch (Exception ex) { errorMessage = ex.Message; }
+        catch (Exception ex)
+        {
+            // 💡 EXTRACT THE REAL INNER EXCEPTION HERE:
+            var realError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            errorMessage = $"Save Failed: {realError}";
+        }
         finally { submitting = false; }
     }
-
     // ── RETURN ────────────────────────────────────────────────────────────────
-    private void OpenReturnModal(AssetListDto asset)
-    {
-        selectedAsset = asset;
-        returnNotes = "";
-        errorMessage = "";
-        showReturnModal = true;
-    }
+    private void OpenReturnModal(AssetListDto asset) { selectedAsset = asset; returnNotes = ""; errorMessage = ""; showReturnModal = true; }
 
     private async Task SubmitReturnAsync()
     {
         submitting = true; errorMessage = "";
         try
         {
-            await AssetService.ReturnAssetAsync(orgId, new ReturnAssetDto
-            {
-                AssetId = selectedAsset!.AssetId,
-                Notes = returnNotes
-            }, userId, userRole);
+            await AssetService.ReturnAssetAsync(orgId,
+                new ReturnAssetDto { AssetId = selectedAsset!.AssetId, Notes = returnNotes },
+                userId, userRole);
             CloseModals();
             await LoadAsync();
+            ShowSuccess("Asset returned successfully.");
         }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { submitting = false; }
     }
 
     // ── RETIRE ────────────────────────────────────────────────────────────────
-    private void ConfirmRetire(AssetListDto asset)
-    {
-        selectedAsset = asset;
-        errorMessage = "";
-        showRetireConfirm = true;
-    }
+    private void ConfirmRetire(AssetListDto asset) { selectedAsset = asset; errorMessage = ""; showRetireConfirm = true; }
 
     private async Task SubmitRetireAsync()
     {
@@ -658,33 +1242,74 @@
             await AssetService.RetireAssetAsync(selectedAsset!.AssetId, orgId, userId, userRole);
             CloseModals();
             await LoadAsync();
+            ShowSuccess("Asset retired.");
         }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { submitting = false; }
     }
 
+    // ── REPAIR COMPLETE ───────────────────────────────────────────────────────
+    private void OpenRepairCompleteModal(AssetListDto asset) { selectedAsset = asset; repairCompleteNotes = ""; errorMessage = ""; showRepairCompleteModal = true; }
+
+    private async Task SubmitRepairCompleteAsync()
+    {
+        submitting = true; errorMessage = "";
+        try
+        {
+            await AssetService.CompleteRepairAsync(selectedAsset!.AssetId, orgId, userId, repairCompleteNotes);
+            CloseModals();
+            await LoadAsync();
+            ShowSuccess("Repair marked complete. Asset is now Available.");
+        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
     private void CloseModals()
     {
-        showCreateModal = showAssignModal = showReturnModal = showRetireConfirm = false;
-        selectedAsset = null; errorMessage = "";
+        showCreateModal = showAssignModal = showReturnModal = showRetireConfirm = showEditModal = showRepairCompleteModal = false;
+        selectedAsset = null;
+        errorMessage = "";
     }
 
-    private RenderFragment GetStatusBadge(string status) => status switch
+    private async void ShowSuccess(string msg)
     {
-        AssetStatus.Available => @<span class="badge bg-soft-success text-success">Available</span>,
-        AssetStatus.Assigned  => @<span class="badge bg-soft-info text-info">Assigned</span>,
-        AssetStatus.InRepair  => @<span class="badge bg-soft-warning text-warning">In Repair</span>,
-        AssetStatus.Retired   => @<span class="badge bg-soft-secondary text-secondary">Retired</span>,
-        AssetStatus.Lost      => @<span class="badge bg-danger">Lost</span>,
-        _                     => @<span class="badge bg-light text-dark">@status</span>
+        successMessage = msg;
+        StateHasChanged();
+        await Task.Delay(3000);
+        successMessage = "";
+        StateHasChanged();
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        AssetStatus.Available => "am-status am-status-available",
+        AssetStatus.Assigned => "am-status am-status-assigned",
+        AssetStatus.InRepair => "am-status am-status-inrepair",
+        AssetStatus.Retired => "am-status am-status-retired",
+        AssetStatus.Lost => "am-status am-status-lost",
+        _ => "am-status"
     };
 
-    // Simple select item — replace with your real Employee DTO if different
-    private class EmployeeSelectItem
+    private string GetStatusLabel(string status) => status switch
     {
-        public Guid EmployeeId { get; set; }
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string EmployeeCode { get; set; } = "";
+        AssetStatus.InRepair => "In Repair",
+        _ => status
+    };
+
+    private string GetDepartmentName(Guid? deptId) =>
+        deptId.HasValue
+            ? departments.FirstOrDefault(d => d.DepartmentId == deptId.Value)?.Name ?? "—"
+            : "—";
+
+    private bool IsWarrantyExpiringSoon(AssetListDto asset)
+    {
+        // We only have this from AssetDto, so skip if not loaded - but we can add it to AssetListDto
+        return false; // See backend update note below
     }
+
+    private bool IsWarrantyExpired(AssetListDto asset) => false;
+
+    private string GetBrandModel(AssetListDto asset) => ""; // AssetListDto doesn't have Brand/Model — see note
 }

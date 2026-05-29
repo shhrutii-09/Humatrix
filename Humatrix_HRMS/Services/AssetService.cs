@@ -3,6 +3,7 @@ using Humatrix_HRMS.DTOs.Assets;
 using Humatrix_HRMS.Infrastructure.Constants;
 using Humatrix_HRMS.Infrastructure.Services;
 using Humatrix_HRMS.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services.Assets
@@ -55,11 +56,14 @@ namespace Humatrix_HRMS.Services.Assets
         {
             await using var tx = await _db.Database.BeginTransactionAsync();
 
+            await ValidateDepartmentAsync(dto.DepartmentId, organizationId);
+
             var code = await AssetCodeGenerator.NextCodeAsync(_db, organizationId, dto.Category);
 
             var asset = new Asset
             {
                 OrganizationId = organizationId,
+                DepartmentId = dto.DepartmentId,
                 Name = dto.Name.Trim(),
                 Category = dto.Category.Trim(),
                 AssetCode = code,
@@ -96,13 +100,21 @@ namespace Humatrix_HRMS.Services.Assets
             string actorRole)
         {
             var asset = await GetAssetOrThrowAsync(assetId, organizationId);
+            await ValidateDepartmentAsync(dto.DepartmentId, organizationId);
 
             var old = new { asset.Name, asset.Brand, asset.Model, asset.SerialNumber, asset.Notes };
-
+            if (asset.Status == AssetStatus.Assigned &&
+    dto.DepartmentId.HasValue &&
+    dto.DepartmentId != asset.DepartmentId)
+            {
+                throw new InvalidOperationException(
+                    "Cannot change department of an assigned asset.");
+            }
             asset.Name = dto.Name?.Trim() ?? asset.Name;
             asset.Brand = dto.Brand?.Trim() ?? asset.Brand;
             asset.Model = dto.Model?.Trim() ?? asset.Model;
             asset.SerialNumber = dto.SerialNumber?.Trim() ?? asset.SerialNumber;
+            asset.DepartmentId = dto.DepartmentId ?? asset.DepartmentId;
             asset.PurchasePrice = dto.PurchasePrice ?? asset.PurchasePrice;
             asset.PurchaseDate = dto.PurchaseDate ?? asset.PurchaseDate;
             asset.WarrantyExpiryDate = dto.WarrantyExpiryDate ?? asset.WarrantyExpiryDate;
@@ -181,6 +193,16 @@ namespace Humatrix_HRMS.Services.Assets
                 .FirstOrDefaultAsync(e => e.EmployeeId == dto.EmployeeId && e.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Employee not found in this organisation.");
 
+            // Asset can only be assigned within its department
+            if (asset.DepartmentId.HasValue)
+            {
+                if (employee.DepartmentId != asset.DepartmentId.Value)
+                {
+                    throw new InvalidOperationException(
+                        "This asset can only be assigned to employees of the same department.");
+                }
+            }
+
             AssetStatusMachine.EnsureCanTransition(asset.Status, AssetStatus.Assigned);
 
             // 1. Create assignment record
@@ -194,7 +216,6 @@ namespace Humatrix_HRMS.Services.Assets
                 AssignmentNotes = dto.Notes?.Trim()
             };
             _db.AssetAssignments.Add(assignment);
-
             // 2. Sync asset status
             asset.Status = AssetStatus.Assigned;
             asset.CurrentEmployeeId = employee.EmployeeId;
@@ -409,6 +430,13 @@ namespace Humatrix_HRMS.Services.Assets
                         };
                         _db.AssetAssignments.Add(newAssignment);
 
+                        if (newAsset.DepartmentId.HasValue &&
+    request.RequestedByEmployee.DepartmentId != newAsset.DepartmentId)
+                        {
+                            throw new InvalidOperationException(
+                                "Replacement asset department mismatch.");
+                        }
+
                         newAsset.Status = AssetStatus.Assigned;
                         newAsset.CurrentEmployeeId = request.RequestedByEmployeeId;
                         newAsset.UpdatedAt = DateTime.UtcNow;
@@ -446,6 +474,7 @@ namespace Humatrix_HRMS.Services.Assets
             CreateProcurementRequestDto dto,
             string actorUserId)
         {
+            await ValidateDepartmentAsync(departmentId, organizationId);
             var procurement = new ProcurementRequest
             {
                 OrganizationId = organizationId,
@@ -553,6 +582,7 @@ namespace Humatrix_HRMS.Services.Assets
                 var asset = new Asset
                 {
                     OrganizationId = organizationId,
+                    DepartmentId = procurement.DepartmentId,
                     Name = dto.AssetName.Trim(),
                     Category = procurement.AssetCategory,
                     AssetCode = code,
@@ -597,11 +627,18 @@ namespace Humatrix_HRMS.Services.Assets
 
         public async Task<PagedResult<AssetListDto>> GetAssetsAsync(
             Guid organizationId,
-            AssetFilterDto filter)
+            AssetFilterDto filter, Guid? departmentId = null,
+bool restrictToDepartment = false)
         {
             var q = _db.Assets
-                .Include(a => a.CurrentEmployee)
-                .Where(a => a.OrganizationId == organizationId);
+      .Include(a => a.CurrentEmployee)
+      .Include(a => a.Department)
+      .Where(a => a.OrganizationId == organizationId);
+
+            if (restrictToDepartment && departmentId.HasValue)
+            {
+                q = q.Where(a => a.DepartmentId == departmentId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(filter.Category))
                 q = q.Where(a => a.Category == filter.Category);
@@ -658,8 +695,8 @@ namespace Humatrix_HRMS.Services.Assets
         public async Task<AssetDto> GetAssetByIdAsync(Guid assetId, Guid organizationId)
         {
             var asset = await _db.Assets
-                .Include(a => a.CurrentEmployee)
-                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
+.Include(a => a.CurrentEmployee)
+.Include(a => a.Department).FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Asset not found.");
 
             var empName = asset.CurrentEmployee != null
@@ -699,7 +736,8 @@ namespace Humatrix_HRMS.Services.Assets
             Guid employeeId, Guid organizationId)
         {
             return await _db.AssetAssignments
-                .Include(a => a.Asset)
+    .Include(a => a.Asset)
+    .Include(a => a.Employee)
                 .Where(a => a.EmployeeId == employeeId
                          && a.Asset.OrganizationId == organizationId
                          && a.ReturnedAt == null)
@@ -763,11 +801,25 @@ namespace Humatrix_HRMS.Services.Assets
                 .ToListAsync();
         }
 
+        //private async Task<Asset> GetAssetOrThrowAsync(Guid assetId, Guid organizationId)
+        //{
+        //    return await _db.Assets
+        //        .Include(a => a.Department)
+        //        .Include(a => a.CurrentEmployee)
+        //        .FirstOrDefaultAsync(a =>
+        //            a.AssetId == assetId &&
+        //            a.OrganizationId == organizationId)
+        //        ?? throw new KeyNotFoundException($"Asset '{assetId}' not found.");
+        //}
         private async Task<Asset> GetAssetOrThrowAsync(Guid assetId, Guid organizationId)
         {
             return await _db.Assets
-                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
-                ?? throw new KeyNotFoundException($"Asset {assetId} not found.");
+                .Include(a => a.Department)
+                .Include(a => a.CurrentEmployee)
+                .FirstOrDefaultAsync(a =>
+                    a.AssetId == assetId &&
+                    a.OrganizationId == organizationId)
+                ?? throw new KeyNotFoundException($"Asset '{assetId}' not found.");
         }
         private async Task _ApplyReturnAsync(Asset asset, string actorUserId)
         {
@@ -864,7 +916,8 @@ namespace Humatrix_HRMS.Services.Assets
             PurchaseDate = a.PurchaseDate,
             WarrantyExpiryDate = a.WarrantyExpiryDate,
             Notes = a.Notes,
-            CreatedAt = a.CreatedAt
+            CreatedAt = a.CreatedAt,
+            DepartmentId = a.DepartmentId
         };
 
         private static AssignmentDto MapAssignmentDto(
@@ -923,5 +976,275 @@ namespace Humatrix_HRMS.Services.Assets
             ReviewNotes = p.ReviewNotes,
             FulfilledAt = p.FulfilledAt
         };
+
+
+        private async Task ValidateDepartmentAsync(Guid? departmentId, Guid organizationId)
+        {
+            if (!departmentId.HasValue)
+                return;
+
+            var exists = await _db.Departments
+                .AnyAsync(d =>
+                    d.DepartmentId == departmentId.Value &&
+                    d.OrganizationId == organizationId);
+
+            if (!exists)
+                throw new InvalidOperationException("Invalid department.");
+        }
+
+        public async Task CompleteRepairAsync(
+    Guid assetId,
+    Guid organizationId,
+    string actorUserId,
+    string actorRole)
+        {
+            var asset = await GetAssetOrThrowAsync(assetId, organizationId);
+
+            if (asset.Status != AssetStatus.InRepair)
+                throw new InvalidOperationException(
+                    "Only assets in repair can be completed.");
+
+            // If asset still belongs to employee,
+            // return back to Assigned status
+            if (asset.CurrentEmployeeId.HasValue)
+            {
+                AssetStatusMachine.EnsureCanTransition(
+                    asset.Status,
+                    AssetStatus.Assigned);
+
+                asset.Status = AssetStatus.Assigned;
+            }
+            else
+            {
+                AssetStatusMachine.EnsureCanTransition(
+                    asset.Status,
+                    AssetStatus.Available);
+
+                asset.Status = AssetStatus.Available;
+            }
+
+            asset.UpdatedAt = DateTime.UtcNow;
+            asset.UpdatedByUserId = actorUserId;
+
+            await _db.SaveChangesAsync();
+
+            _ = _activityLog.LogAsync(
+                organizationId,
+                AssetModuleName.Asset,
+                "RepairCompleted",
+                "Asset",
+                asset.AssetId,
+                actorUserId,
+                actorRole);
+        }
+
+        public async Task<List<EmployeeDropdownDto>> GetAssignableEmployeesAsync(
+        Guid organizationId,
+        Guid assetId)
+        {
+            // Load asset directly
+            var asset = await _db.Assets
+                .FirstOrDefaultAsync(a =>
+                    a.AssetId == assetId &&
+                    a.OrganizationId == organizationId);
+
+            if (asset == null)
+                throw new Exception("Asset not found.");
+
+            // Get employees from same department
+            var employees = await _db.Employees
+                .Where(e =>
+                    e.OrganizationId == organizationId &&
+                    e.DepartmentId == asset.DepartmentId)
+                .OrderBy(e => e.FirstName)
+                .Select(e => new EmployeeDropdownDto
+                {
+                    EmployeeId = e.EmployeeId,
+                    FullName = (e.FirstName ?? "") + " " + (e.LastName ?? ""),
+                    DepartmentId = e.DepartmentId
+                })
+                .ToListAsync();
+
+            return employees;
+        }
+
+        public async Task<PagedResult<AssetListDto>> GetAssetsForHRAsync(
+    Guid organizationId,
+    Guid hrDepartmentId,
+    AssetFilterDto filter)
+        {
+            var q = _db.Assets
+                .Include(a => a.CurrentEmployee)
+                .Include(a => a.Department)
+                .Where(a =>
+                    a.OrganizationId == organizationId &&
+                    (a.DepartmentId == hrDepartmentId || a.DepartmentId == null));
+
+            if (!string.IsNullOrWhiteSpace(filter.Category))
+                q = q.Where(a => a.Category == filter.Category);
+
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+                q = q.Where(a => a.Status == filter.Status);
+
+            if (filter.EmployeeId.HasValue)
+                q = q.Where(a => a.CurrentEmployeeId == filter.EmployeeId);
+
+            var total = await q.CountAsync();
+            var items = await q
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .Select(a => new AssetListDto
+                {
+                    AssetId = a.AssetId,
+                    Name = a.Name,
+                    Category = a.Category,
+                    AssetCode = a.AssetCode,
+                    Status = a.Status,
+                    DepartmentId = a.DepartmentId,
+                    CurrentEmployeeName = a.CurrentEmployee != null
+                        ? a.CurrentEmployee.FirstName + " " + a.CurrentEmployee.LastName
+                        : null,
+                    CreatedAt = a.CreatedAt
+                })
+                .ToListAsync();
+
+            return new PagedResult<AssetListDto>
+            {
+                Items = items,
+                TotalCount = total,
+                Page = filter.Page,
+                PageSize = filter.PageSize
+            };
+        }
+
+        public async Task<List<EmployeeDropdownDto>> GetAssignableEmployeesForHRAsync(
+    Guid organizationId,
+    Guid assetId,
+    UserManager<ApplicationUser> userManager)
+        {
+            var asset = await _db.Assets
+                .FirstOrDefaultAsync(a =>
+                    a.AssetId == assetId &&
+                    a.OrganizationId == organizationId)
+                ?? throw new KeyNotFoundException("Asset not found.");
+
+            // Asset must belong to the HR's department (or be org-wide)
+            // The caller already verified this; we just scope the employee query.
+            var targetDeptId = asset.DepartmentId;
+
+            // Base employee query — same org
+            var employeeQuery = _db.Employees
+                .Where(e => e.OrganizationId == organizationId);
+
+            // If the asset has a department, restrict to that department
+            if (targetDeptId.HasValue)
+                employeeQuery = employeeQuery.Where(e => e.DepartmentId == targetDeptId.Value);
+
+            var employees = await employeeQuery
+                .OrderBy(e => e.FirstName)
+                .ToListAsync();
+
+            // Filter out HR and OrgAdmin users so HR cannot assign to another HR
+            var result = new List<EmployeeDropdownDto>();
+            foreach (var emp in employees)
+            {
+                if (string.IsNullOrEmpty(emp.UserId)) continue;
+                var user = await userManager.FindByIdAsync(emp.UserId);
+                if (user == null) continue;
+                var roles = await userManager.GetRolesAsync(user);
+                if (roles.Any(r => r is "HR" or "OrgAdmin")) continue;
+
+                result.Add(new EmployeeDropdownDto
+                {
+                    EmployeeId = emp.EmployeeId,
+                    FullName = $"{emp.FirstName} {emp.LastName}".Trim(),
+                    DepartmentId = emp.DepartmentId
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<AssetRequestDto> CreateAssetRequestByHRAsync(
+    Guid organizationId,
+    Guid hrDepartmentId,
+    Guid hrEmployeeId,
+    CreateAssetRequestDto dto)
+        {
+            if (!AssetRequestType_IsValid(dto.RequestType))
+                throw new ArgumentException($"Invalid request type '{dto.RequestType}'.");
+
+            var asset = await GetAssetOrThrowAsync(dto.AssetId, organizationId);
+
+            // HR can only raise requests for assets in their department (or org-wide)
+            if (asset.DepartmentId.HasValue && asset.DepartmentId != hrDepartmentId)
+                throw new InvalidOperationException(
+                    "You can only raise requests for assets belonging to your department.");
+
+            // Asset must be in a state where a request makes sense
+            if (asset.Status == AssetStatus.Retired || asset.Status == AssetStatus.Lost)
+                throw new InvalidOperationException(
+                    $"Cannot raise a request for a {asset.Status} asset.");
+
+            // No duplicate pending request of same type
+            var duplicate = await _db.AssetRequests.AnyAsync(r =>
+                r.AssetId == dto.AssetId &&
+                r.RequestType == dto.RequestType &&
+                r.Status == AssetRequestStatus.Pending);
+
+            if (duplicate)
+                throw new InvalidOperationException(
+                    $"A pending '{dto.RequestType}' request already exists for this asset.");
+
+            var request = new AssetRequest
+            {
+                AssetId = asset.AssetId,
+                OrganizationId = organizationId,
+                RequestedByEmployeeId = hrEmployeeId,
+                RequestorRole = AssetRequestorRole.HR,
+                RequestType = dto.RequestType,
+                Reason = dto.Reason.Trim(),
+                Status = AssetRequestStatus.Pending,
+                RequestedAt = DateTime.UtcNow
+            };
+
+            _db.AssetRequests.Add(request);
+            await _db.SaveChangesAsync();
+
+            _ = _activityLog.LogAsync(
+                organizationId, AssetModuleName.AssetRequest, "Raised",
+                "AssetRequest", request.AssetRequestId,
+                await GetUserIdForEmployeeAsync(hrEmployeeId),
+                AssetRequestorRole.HR,
+                newValues: new { asset.AssetCode, dto.RequestType });
+
+            _ = NotifyAssetRequestRaisedAsync(request, asset, organizationId, AssetRequestorRole.HR);
+
+            return await GetAssetRequestDtoAsync(request.AssetRequestId);
+        }
+
+        public async Task<List<AssetRequestDto>> GetAssetRequestsByDepartmentAsync(
+    Guid organizationId,
+    Guid departmentId,
+    string? status = null)
+        {
+            var q = _db.AssetRequests
+                .Include(r => r.Asset)
+                .Include(r => r.RequestedByEmployee)
+                .Include(r => r.ReviewedByEmployee)
+                .Where(r =>
+                    r.OrganizationId == organizationId &&
+                    (r.Asset.DepartmentId == departmentId || r.Asset.DepartmentId == null));
+
+            if (!string.IsNullOrWhiteSpace(status))
+                q = q.Where(r => r.Status == status);
+
+            return await q
+                .OrderByDescending(r => r.RequestedAt)
+                .Select(r => MapAssetRequestDto(r))
+                .ToListAsync();
+        }
+
     }
 }

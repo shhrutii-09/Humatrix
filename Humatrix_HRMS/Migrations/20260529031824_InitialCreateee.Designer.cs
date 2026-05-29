@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260525203211_AssetsmoduleAdded")]
-    partial class AssetsmoduleAdded
+    [Migration("20260529031824_InitialCreateee")]
+    partial class InitialCreateee
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,49 +24,6 @@ namespace Humatrix_HRMS.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("AssetAssignmentHistory", b =>
-                {
-                    b.Property<Guid>("HistoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AssetId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("AssignedByEmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AssignmentNotes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ReturnCondition")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("ReturnedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("HistoryId");
-
-                    b.HasIndex("AssetId");
-
-                    b.HasIndex("AssignedByEmployeeId");
-
-                    b.HasIndex("AssetId", "ReturnedAt")
-                        .HasFilter("[ReturnedAt] IS NULL");
-
-                    b.HasIndex("EmployeeId", "AssignedAt");
-
-                    b.ToTable("AssetAssignmentHistories");
-                });
 
             modelBuilder.Entity("Humatrix_HRMS.Data.ApplicationUser", b =>
                 {
@@ -365,11 +322,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("AssetName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("Brand")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -379,16 +331,12 @@ namespace Humatrix_HRMS.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("Condition")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedByUserId")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<Guid?>("CurrentEmployeeId")
                         .HasColumnType("uniqueidentifier");
@@ -400,19 +348,24 @@ namespace Humatrix_HRMS.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Notes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal?>("PurchaseCost")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTime?>("PurchaseDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("PurchasePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("SerialNumber")
                         .HasMaxLength(100)
@@ -420,31 +373,86 @@ namespace Humatrix_HRMS.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("WarrantyExpiry")
+                    b.Property<string>("UpdatedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("WarrantyExpiryDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("AssetId");
 
-                    b.HasIndex("CreatedByUserId");
-
                     b.HasIndex("CurrentEmployeeId");
 
-                    b.HasIndex("DepartmentId", "Status");
+                    b.HasIndex("DepartmentId");
 
                     b.HasIndex("OrganizationId", "AssetCode")
                         .IsUnique();
 
-                    b.HasIndex("OrganizationId", "Category");
+                    b.HasIndex("OrganizationId", "CurrentEmployeeId");
+
+                    b.HasIndex("OrganizationId", "SerialNumber")
+                        .IsUnique()
+                        .HasFilter("[SerialNumber] IS NOT NULL");
 
                     b.HasIndex("OrganizationId", "Status");
 
                     b.ToTable("Assets");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.AssetAssignment", b =>
+                {
+                    b.Property<Guid>("AssetAssignmentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AssignedByUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AssignmentNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReturnNotes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReturnedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("AssetAssignmentId");
+
+                    b.HasIndex("AssetId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AssetAssignment_OneActivePerAsset")
+                        .HasFilter("[ReturnedAt] IS NULL");
+
+                    b.HasIndex("AssetId", "AssignedAt");
+
+                    b.HasIndex("EmployeeId", "ReturnedAt");
+
+                    b.ToTable("AssetAssignments");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.AssetRequest", b =>
@@ -453,13 +461,7 @@ namespace Humatrix_HRMS.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("ApprovalRequestId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("AssetId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("EmployeeId")
+                    b.Property<Guid>("AssetId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("OrganizationId")
@@ -467,28 +469,31 @@ namespace Humatrix_HRMS.Migrations
 
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("ReplacementAssetId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("RequestType")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime>("RequestedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("RequestedCategory")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<Guid>("RequestedByEmployeeId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("RequestedSpecs")
+                    b.Property<string>("RequestorRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ReviewNotes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("ReviewComments")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("datetime2");
@@ -498,20 +503,25 @@ namespace Humatrix_HRMS.Migrations
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("AssetRequestId");
 
-                    b.HasIndex("ApprovalRequestId");
-
-                    b.HasIndex("AssetId");
+                    b.HasIndex("ReplacementAssetId");
 
                     b.HasIndex("ReviewedByEmployeeId");
 
-                    b.HasIndex("EmployeeId", "RequestedAt");
+                    b.HasIndex("AssetId", "RequestType")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AssetRequest_OnePendingPerTypePerAsset")
+                        .HasFilter("[Status] = 'Pending'");
 
-                    b.HasIndex("OrganizationId", "Status", "RequestType");
+                    b.HasIndex("AssetId", "Status");
+
+                    b.HasIndex("OrganizationId", "Status");
+
+                    b.HasIndex("RequestedByEmployeeId", "Status");
 
                     b.ToTable("AssetRequests");
                 });
@@ -1350,6 +1360,73 @@ namespace Humatrix_HRMS.Migrations
                     b.ToTable("OvertimeRequests");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.ProcurementRequest", b =>
+                {
+                    b.Property<Guid>("ProcurementRequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssetCategory")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("AssetName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("FulfilledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Justification")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("QuantityFulfilled")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityRequested")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("RequestedByEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReviewNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("ProcurementRequestId");
+
+                    b.HasIndex("RequestedByEmployeeId");
+
+                    b.HasIndex("DepartmentId", "Status");
+
+                    b.HasIndex("OrganizationId", "Status");
+
+                    b.ToTable("ProcurementRequests");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.Shift", b =>
                 {
                     b.Property<Guid>("ShiftId")
@@ -1709,33 +1786,6 @@ namespace Humatrix_HRMS.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("AssetAssignmentHistory", b =>
-                {
-                    b.HasOne("Humatrix_HRMS.Models.Asset", "Asset")
-                        .WithMany("AssignmentHistory")
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "AssignedByEmployee")
-                        .WithMany()
-                        .HasForeignKey("AssignedByEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Asset");
-
-                    b.Navigation("AssignedByEmployee");
-
-                    b.Navigation("Employee");
-                });
-
             modelBuilder.Entity("Humatrix_HRMS.Models.ApprovalHistory", b =>
                 {
                     b.HasOne("Humatrix_HRMS.Models.ApprovalRequest", "ApprovalRequest")
@@ -1775,11 +1825,6 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Asset", b =>
                 {
-                    b.HasOne("Humatrix_HRMS.Data.ApplicationUser", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Humatrix_HRMS.Models.Employee", "CurrentEmployee")
                         .WithMany()
                         .HasForeignKey("CurrentEmployeeId")
@@ -1796,8 +1841,6 @@ namespace Humatrix_HRMS.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("CreatedByUser");
-
                     b.Navigation("CurrentEmployee");
 
                     b.Navigation("Department");
@@ -1805,21 +1848,41 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("Organization");
                 });
 
-            modelBuilder.Entity("Humatrix_HRMS.Models.AssetRequest", b =>
+            modelBuilder.Entity("Humatrix_HRMS.Models.AssetAssignment", b =>
                 {
-                    b.HasOne("Humatrix_HRMS.Models.ApprovalRequest", "ApprovalRequest")
-                        .WithMany()
-                        .HasForeignKey("ApprovalRequestId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Humatrix_HRMS.Models.Asset", "Asset")
-                        .WithMany("Requests")
+                        .WithMany("Assignments")
                         .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.AssetRequest", b =>
+                {
+                    b.HasOne("Humatrix_HRMS.Models.Asset", "Asset")
+                        .WithMany("Requests")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Humatrix_HRMS.Models.Asset", "ReplacementAsset")
+                        .WithMany()
+                        .HasForeignKey("ReplacementAssetId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Humatrix_HRMS.Models.Employee", "RequestedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("RequestedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1828,11 +1891,11 @@ namespace Humatrix_HRMS.Migrations
                         .HasForeignKey("ReviewedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("ApprovalRequest");
-
                     b.Navigation("Asset");
 
-                    b.Navigation("Employee");
+                    b.Navigation("ReplacementAsset");
+
+                    b.Navigation("RequestedByEmployee");
 
                     b.Navigation("ReviewedByEmployee");
                 });
@@ -2017,6 +2080,33 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.ProcurementRequest", b =>
+                {
+                    b.HasOne("Humatrix_HRMS.Models.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Humatrix_HRMS.Models.Employee", "RequestedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("RequestedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("RequestedByEmployee");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.TaskItem", b =>
                 {
                     b.HasOne("Humatrix_HRMS.Models.Employee", "AssignedToEmployee")
@@ -2106,7 +2196,7 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Asset", b =>
                 {
-                    b.Navigation("AssignmentHistory");
+                    b.Navigation("Assignments");
 
                     b.Navigation("Requests");
                 });

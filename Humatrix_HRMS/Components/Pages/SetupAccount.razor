@@ -174,73 +174,76 @@
             }
 
             var user = await UserManager.FindByIdAsync(userId);
+
             if (user == null)
             {
                 error = "User not found.";
                 return;
             }
 
-            var invite = await Db.UserInvites.FirstOrDefaultAsync(x => x.UserId == userId && x.Token == token);
+            var invite = await Db.UserInvites
+                .FirstOrDefaultAsync(x => x.UserId == userId);
+
             if (invite == null || invite.IsUsed)
             {
                 error = "Invalid or expired activation link.";
                 return;
             }
 
-            var isTokenValid = await UserManager.VerifyUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite", token);
-            if (!isTokenValid)
-            {
-                error = "Invalid or expired security token.";
-                return;
-            }
+            // Decode token from URL
+            var decodedToken = Uri.UnescapeDataString(token);
 
-            IdentityResult passwordResult;
-            if (await UserManager.HasPasswordAsync(user))
-            {
-                var resetToken = await UserManager.GeneratePasswordResetTokenAsync(user);
-                passwordResult = await UserManager.ResetPasswordAsync(user, resetToken, model.Password);
-            }
-            else
-            {
-                passwordResult = await UserManager.AddPasswordAsync(user, model.Password);
-            }
+            // Set password using original token
+            var passwordResult = await UserManager.ResetPasswordAsync(
+                user,
+                decodedToken,
+                model.Password);
 
             if (passwordResult.Succeeded)
             {
                 using var transaction = await Db.Database.BeginTransactionAsync();
+
                 try
                 {
+                    // Activate user
                     user.IsActive = true;
+
                     await UserManager.UpdateAsync(user);
 
-                    if (!await UserManager.IsInRoleAsync(user, "OrgAdmin"))
+                    // ONLY handle OrgAdmin replacement if user is OrgAdmin
+                    if (await UserManager.IsInRoleAsync(user, "OrgAdmin"))
                     {
-                        await UserManager.AddToRoleAsync(user, "OrgAdmin");
-                    }
+                        var oldAdminIds = await (
+                            from u in Db.Users
+                            join ur in Db.UserRoles on u.Id equals ur.UserId
+                            join r in Db.Roles on ur.RoleId equals r.Id
+                            where u.OrganizationId == user.OrganizationId
+                                  && r.Name == "OrgAdmin"
+                                  && u.Id != user.Id
+                                  && u.IsActive == true
+                            select u.Id
+                        ).ToListAsync();
 
-                    // ✅ FIX: Yahan sirf 'u.IsActive == true' wale purane active admin ko hi uthayenge
-                    var oldAdminIds = await (from u in Db.Users
-                                             join ur in Db.UserRoles on u.Id equals ur.UserId
-                                             join r in Db.Roles on ur.RoleId equals r.Id
-                                             where u.OrganizationId == user.OrganizationId
-                                                   && r.Name == "OrgAdmin"
-                                                   && u.Id != user.Id
-                                                   && u.IsActive == true // 👈 Yeh condition zaroori thi
-                                             select u.Id).ToListAsync();
-
-                    foreach (var oldAdminId in oldAdminIds)
-                    {
-                        var oldAdmin = await UserManager.FindByIdAsync(oldAdminId);
-                        if (oldAdmin != null)
+                        foreach (var oldAdminId in oldAdminIds)
                         {
-                            await UserManager.RemoveFromRoleAsync(oldAdmin, "OrgAdmin");
-                            oldAdmin.IsActive = false;
-                            await UserManager.UpdateAsync(oldAdmin);
+                            var oldAdmin = await UserManager.FindByIdAsync(oldAdminId);
+
+                            if (oldAdmin != null)
+                            {
+                                await UserManager.RemoveFromRoleAsync(oldAdmin, "OrgAdmin");
+
+                                oldAdmin.IsActive = false;
+
+                                await UserManager.UpdateAsync(oldAdmin);
+                            }
                         }
                     }
 
+                    // Mark invite used
                     invite.IsUsed = true;
+
                     await Db.SaveChangesAsync();
+
                     await transaction.CommitAsync();
                 }
                 catch
@@ -249,14 +252,18 @@
                     throw;
                 }
 
-                successMessage = "Admin activated successfully! Redirecting to login...";
+                successMessage = "Account activated successfully! Redirecting to login...";
+
                 StateHasChanged();
+
                 await Task.Delay(2000);
+
                 Nav.NavigateTo("/Account/Login", true);
             }
             else
             {
-                error = string.Join(", ", passwordResult.Errors.Select(x => x.Description));
+                error = string.Join(", ",
+                    passwordResult.Errors.Select(x => x.Description));
             }
         }
         catch (Exception ex)
