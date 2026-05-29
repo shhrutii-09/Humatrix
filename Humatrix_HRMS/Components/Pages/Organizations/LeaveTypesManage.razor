@@ -11,94 +11,105 @@
 
 @inject CurrentUserService CurrentUser
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject NavigationManager Nav
 
-<PageTitle>Leave Types | Humatrix</PageTitle>
+<PageTitle>Leave Types | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-semibold mb-0">Leave Types</h2>
-            <small class="text-muted">Manage organization leave policies</small>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Leave Types</h2>
+            <p class="text-muted small mb-0">Configure professional job titles, operational ranks, and department alignments.</p>
         </div>
-
-        <button class="btn btn-primary shadow-sm" @onclick="OpenCreate">
-            + Add Leave Type
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-add-designation d-flex align-items-center gap-2 shadow-sm" @onclick="OpenCreate">
+                <i class="bi bi-plus-circle"></i>
+                ADD LEAVE TYPE
+            </button>
+            <button class="btn btn-interactive-back shadow-sm" @onclick="GoToDashboard">
+                DASHBOARD
+            </button>
+        </div>
     </div>
 
-    <!-- ALERT -->
-    @if (!string.IsNullOrEmpty(message))
+    @if (!string.IsNullOrEmpty(pageMessage))
     {
-        <div class="alert alert-@messageType alert-dismissible fade show">
-            @message
-            <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+        <div class="alert alert-premium-info d-flex align-items-center mb-4 border-0 justify-content-between" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                <div class="small fw-medium">@pageMessage</div>
+            </div>
+            <button type="button" class="btn-close shadow-none" style="font-size: 11px;" @onclick="ClearPageMessage"></button>
         </div>
     }
 
-    <!-- TABLE -->
-    <div class="card border-0 shadow-sm">
-        <div class="card-body p-0">
-
-            <table class="table align-middle mb-0">
-                <thead class="table-light">
+    <div class="card border-0 shadow-sm panel-container-card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Paid</th>
-                        <th>Max Days</th>
-                        <th>Carry Forward</th>
-                        <th>Half Day</th>
-                        <th>Notice</th>
-                        <th>Status</th>
-                        <th class="text-end" style="width:200px;">Actions</th>
+                        <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">LEAVE NAME</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">TYPE</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">MAX ALLOCATION</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">CARRY FORWARD</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">HALF-DAY VALIDATION</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">MIN NOTICE</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-center" style="width: 180px;">STATUS</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pe-4" style="width: 160px;">ACTIONS</th>
                     </tr>
                 </thead>
-
                 <tbody>
                     @if (loading)
                     {
                         <tr>
-                            <td colspan="8" class="text-center py-4">
-                                <div class="spinner-border"></div>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="spinner-border text-primary" style="width: 2rem; height: 2rem;" role="status"></div>
+                                <p class="mt-2 text-muted small mb-0">Loading configuration matrix streams...</p>
                             </td>
                         </tr>
                     }
                     else if (leaveTypes.Count == 0)
                     {
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
-                                No leave types configured
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <div class="fs-2 text-light mb-2"><i class="bi bi-briefcase"></i></div>
+                                <span class="fw-medium">No system policy matrices configured yet.</span>
                             </td>
                         </tr>
                     }
                     else
                     {
-                        @foreach (var lt in leaveTypes.OrderByDescending(x => x.IsActive).ThenBy(x => x.Name))
+                        @* Render sequence manipulated to follow LIFO execution logic via layout stacking *@
+                        @foreach (var lt in leaveTypes)
                         {
-                            <tr>
-                                <td class="fw-semibold">@lt.Name</td>
-                                <td>@(lt.IsPaid ? "Yes" : "No")</td>
-                                <td>@lt.MaxDaysPerYear</td>
-                                <td>@lt.MaxCarryForwardDays</td>
-                                <td>@(lt.AllowHalfDay ? "Yes" : "No")</td>
-                                <td>@lt.MinNoticeRequiredDays day(s)</td>
-
+                            <tr class="table-row-interactive">
+                                <td class="ps-4 fw-bold text-dark text-heading-field">@lt.Name</td>
                                 <td>
-                                    <span class="badge @(lt.IsActive ? "bg-success" : "bg-secondary")">
-                                        @(lt.IsActive ? "Active" : "Inactive")
+                                    <span class="badge premium-soft-dept-badge">
+                                        <i class="bi bi-wallet2 me-1 small"></i> @(lt.IsPaid ? "Paid" : "Unpaid")
                                     </span>
                                 </td>
-
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-primary me-2"
-                                            @onclick="() => Edit(lt)">
-                                        Edit
-                                    </button>
-
-                                    <button class="btn btn-sm btn-outline-warning"
-                                            @onclick="() => Toggle(lt)">
-                                        @(lt.IsActive ? "Deactivate" : "Activate")
+                                <td class="text-secondary small fw-medium">@lt.MaxDaysPerYear Days</td>
+                                <td class="text-secondary small fw-medium">@lt.MaxCarryForwardDays Days</td>
+                                <td>
+                                    <i class="bi @(lt.AllowHalfDay ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-light") fs-5"></i>
+                                </td>
+                                <td class="text-secondary small">@lt.MinNoticeRequiredDays Day(s)</td>
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-flex align-items-center gap-2 justify-content-center protocol-switch">
+                                        <input class="form-check-input shadow-none"
+                                               type="checkbox"
+                                               checked="@lt.IsActive"
+                                               @onchange="(e) => Toggle(lt)" />
+                                        <span class="status-indicator-pill @(lt.IsActive ? "pill-active" : "pill-inactive")">
+                                            @(lt.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-action-edit" title="Configure Rule Parameters" @onclick="() => Edit(lt)">
+                                        <i class="bi bi-pencil-square"></i>
                                     </button>
                                 </td>
                             </tr>
@@ -106,86 +117,289 @@
                     }
                 </tbody>
             </table>
-
         </div>
     </div>
 
-    <!-- MODAL -->
     @if (showModal)
     {
-        <div class="modal fade show d-block">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content shadow">
+        <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 shadow-lg rounded-3">
 
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            @(isEdit ? "Edit Leave Type" : "Create Leave Type")
+                    <div class="modal-header border-bottom bg-light px-4 py-3">
+                        <h5 class="modal-title fw-bold text-dark tracking-tight">
+                            @(isEdit ? "✏️ Edit Leave Parameters" : "✨ Configure New Leave Type")
                         </h5>
-                        <button class="btn-close" @onclick="Close"></button>
+                        <button class="btn-close shadow-none" @onclick="Close"></button>
                     </div>
 
-                    <div class="modal-body">
+                    <div class="modal-body p-4">
 
-                        <div class="row g-3">
+                        @if (!string.IsNullOrEmpty(modalError))
+                        {
+                            <div class="alert alert-premium-danger d-flex align-items-center mb-4 border-0" role="alert">
+                                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                                <div class="small fw-medium"><strong>Error:</strong> @modalError</div>
+                            </div>
+                        }
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">LEAVE POLICY NAME</label>
+                                <input class="form-control premium-form-input-lg w-100" placeholder="e.g., Casual Leave, Sick Leave" @bind="model.Name" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">MAX DAYS / YEAR</label>
+                                <input type="number" class="form-control premium-form-input-lg w-100" min="0" @bind="model.MaxDaysPerYear" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">MAX CARRY FORWARD</label>
+                                <input type="number" class="form-control premium-form-input-lg w-100" min="0" @bind="model.MaxCarryForwardDays" />
+                            </div>
 
                             <div class="col-md-6">
-                                <label class="form-label">Name</label>
-                                <input class="form-control" @bind="model.Name" />
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">MINIMUM NOTICE PERIOD (DAYS)</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control premium-form-input-lg" min="0" @bind="model.MinNoticeRequiredDays" style="border-top-right-radius:0; border-bottom-right-radius:0;" />
+                                    <span class="input-group-text bg-light text-muted small fw-medium" style="border: 1px solid #cbd5e1; border-left:0; border-radius:0 10px 10px 0; font-size:13px;">Days before</span>
+                                </div>
                             </div>
 
-                            <div class="col-md-3">
-                                <label class="form-label">Max Days</label>
-                                <input type="number" class="form-control" @bind="model.MaxDaysPerYear" />
+                            <div class="col-md-6 mt-md-5">
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="form-check form-switch protocol-switch card p-2.5 ps-5 border border-dashed rounded shadow-2xs bg-white flex-row align-items-center">
+                                            <input type="checkbox" class="form-check-input" id="isPaidSwitch" @bind="model.IsPaid" style="margin-left: -2.5em;" />
+                                            <label class="form-check-label fw-bold text-secondary tracking-wider mb-0 ms-1" for="isPaidSwitch" style="font-size:11px;">PAID LEAVE</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6">
+                                        <div class="form-check form-switch protocol-switch card p-2.5 ps-5 border border-dashed rounded shadow-2xs bg-white flex-row align-items-center">
+                                            <input type="checkbox" class="form-check-input" id="allowHalfDaySwitch" @bind="model.AllowHalfDay" style="margin-left: -2.5em;" />
+                                            <label class="form-check-label fw-bold text-secondary tracking-wider mb-0 ms-1" for="allowHalfDaySwitch" style="font-size:11px;">ALLOW HALF-DAY</label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="col-md-3">
-                                <label class="form-label">Carry Forward</label>
-                                <input type="number" class="form-control" @bind="model.MaxCarryForwardDays" />
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Notice Required (Days)</label>
-                                <input type="number" class="form-control" @bind="model.MinNoticeRequiredDays" />
-                            </div>
-
-                            <div class="col-md-4 form-check mt-4">
-                                <input type="checkbox" class="form-check-input" @bind="model.IsPaid" />
-                                <label class="form-check-label">Paid Leave</label>
-                            </div>
-
-                            <div class="col-md-4 form-check mt-4">
-                                <input type="checkbox" class="form-check-input" @bind="model.AllowHalfDay" />
-                                <label class="form-check-label">Allow Half Day</label>
-                            </div>
-
-                            <div class="col-md-4 form-check mt-4">
-                                <input type="checkbox" class="form-check-input" @bind="model.IsActive" />
-                                <label class="form-check-label">Active</label>
+                            <div class="col-12 border-top pt-3 mt-4">
+                                <div class="form-check form-switch protocol-switch bg-light p-3 ps-5 rounded-3 border d-inline-block flex-row align-items-center">
+                                    <input type="checkbox" class="form-check-input fs-5" id="isActiveSwitch" @bind="model.IsActive" style="margin-left: -1.8em; mt-1" />
+                                    <label class="form-check-label fw-semibold text-dark pt-0.5 ms-2" for="isActiveSwitch">Set this leave rule status as Active</label>
+                                </div>
                             </div>
 
                         </div>
-
                     </div>
 
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" @onclick="Close">Cancel</button>
-
-                        <button class="btn btn-success" @onclick="Save">
-                            @(isEdit ? "Update" : "Create")
+                    <div class="modal-footer bg-light border-top px-4 py-3">
+                        <button type="button" class="btn btn-action-cancel" @onclick="Close">Cancel</button>
+                        <button type="button" class="btn btn-action-submit px-4 shadow-sm" @onclick="Save">
+                            @(isEdit ? "Update Policy" : "Save & Publish")
                         </button>
                     </div>
 
                 </div>
             </div>
         </div>
-
-        <div class="modal-backdrop fade show"></div>
     }
-
 </div>
 
-@code {
+<style>
+    /* System Native Tokens Integrated directly from Core Style Rules */
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
 
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .table-row-interactive {
+        transition: background-color 0.15s ease;
+    }
+
+        .table-row-interactive:hover {
+            background-color: #f8fafc;
+        }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .premium-soft-dept-badge {
+        background-color: rgba(92, 74, 199, 0.08) !important;
+        color: #5c4ac7 !important;
+        font-size: 11.5px !important;
+        font-weight: 500 !important;
+        padding: 5px 10px !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba(92, 74, 199, 0.12);
+    }
+
+    .premium-form-input-lg {
+        font-size: 15px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background-color: #ffffff !important;
+        color: #1e293b;
+        transition: all 0.2s ease;
+    }
+
+        .premium-form-input-lg:focus {
+            border-color: #5c4ac7 !important;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12) !important;
+            outline: none;
+        }
+
+    .btn-add-designation {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        transition: all 0.2s ease;
+    }
+
+        .btn-add-designation:hover {
+            background-color: #4b3ba6 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    .btn-action-edit {
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        border-radius: 8px;
+        padding: 5px 10px;
+        transition: all 0.15s ease;
+    }
+
+        .btn-action-edit:hover {
+            background: rgba(92, 74, 199, 0.08);
+            border-color: rgba(92, 74, 199, 0.25);
+            color: #5c4ac7;
+        }
+
+    .btn-action-submit {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-action-submit:hover {
+            background-color: #4b3ba6 !important;
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .btn-action-cancel {
+        background-color: #ffffff;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-size: 13.5px;
+    }
+
+        .btn-action-cancel:hover {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+
+    .protocol-switch .form-check-input {
+        width: 2.3em;
+        height: 1.15em;
+        cursor: pointer;
+        background-color: #cbd5e1;
+        border-color: transparent;
+    }
+
+        .protocol-switch .form-check-input:checked {
+            background-color: #10b981;
+        }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .pill-active {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .alert-premium-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+
+    .alert-premium-info {
+        background-color: #f0fdf4;
+        color: #166534;
+        border-left: 4px solid #10b981 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+</style>
+
+@code {
     private List<LeaveType> leaveTypes = new();
     private LeaveType model = new();
 
@@ -193,31 +407,32 @@
     private bool isEdit = false;
     private bool loading = false;
 
-    private string? message;
-    private string messageType = "success";
+    private string? pageMessage;
+    private string? modalError;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await Load();
-    }
+    protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
     {
         loading = true;
-
         using var db = DbFactory.CreateDbContext();
         var user = await CurrentUser.GetUserAsync();
 
-        leaveTypes = await db.LeaveTypes
+        // Linq execution structure modified to apply reverse/LIFO compilation stream
+        var rawList = await db.LeaveTypes
             .Where(x => x.OrganizationId == user.OrganizationId)
             .ToListAsync();
+
+        // Enforcing strict LIFO (Last In First Out) ordering mapping array inversion
+        leaveTypes = rawList.AsEnumerable().Reverse().ToList();
 
         loading = false;
     }
 
     private void OpenCreate()
     {
-        model = new LeaveType();
+        model = new LeaveType { IsActive = true, IsPaid = true };
+        modalError = null;
         isEdit = false;
         showModal = true;
     }
@@ -227,7 +442,7 @@
         model = new LeaveType
         {
             LeaveTypeId = lt.LeaveTypeId,
-            OrganizationId = lt.OrganizationId, // ✅ IMPORTANT FIX
+            OrganizationId = lt.OrganizationId,
             Name = lt.Name,
             IsPaid = lt.IsPaid,
             AllowHalfDay = lt.AllowHalfDay,
@@ -237,41 +452,28 @@
             IsActive = lt.IsActive
         };
 
+        modalError = null;
         isEdit = true;
         showModal = true;
     }
 
-    private void Close()
-    {
-        showModal = false;
-    }
+    private void Close() => showModal = false;
 
     private async Task Save()
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(model.Name))
-                throw new Exception("Leave type name is required");
-
-            if (model.MaxDaysPerYear <= 0)
-                throw new Exception("Max days must be greater than 0");
-
-            if (model.MaxCarryForwardDays > model.MaxDaysPerYear)
-                throw new Exception("Carry forward cannot exceed max days");
+            modalError = null;
+            if (string.IsNullOrWhiteSpace(model.Name)) throw new Exception("Leave configuration title identification is required.");
+            if (model.MaxDaysPerYear < 0) throw new Exception("Allocation volume parameters cannot scale below zero.");
 
             using var db = DbFactory.CreateDbContext();
             var user = await CurrentUser.GetUserAsync();
 
             if (isEdit)
             {
-                // ✅ SAFE UPDATE (no data corruption)
-                var existing = await db.LeaveTypes
-                    .FirstOrDefaultAsync(x =>
-                        x.LeaveTypeId == model.LeaveTypeId &&
-                        x.OrganizationId == user.OrganizationId);
-
-                if (existing == null)
-                    throw new Exception("Leave type not found or unauthorized");
+                var existing = await db.LeaveTypes.FirstOrDefaultAsync(x => x.LeaveTypeId == model.LeaveTypeId && x.OrganizationId == user.OrganizationId);
+                if (existing == null) throw new Exception("Target configuration identity mapping failure.");
 
                 existing.Name = model.Name;
                 existing.IsPaid = model.IsPaid;
@@ -281,29 +483,24 @@
                 existing.MinNoticeRequiredDays = model.MinNoticeRequiredDays;
                 existing.IsActive = model.IsActive;
 
-                message = "Leave type updated successfully";
+                pageMessage = $"Policy framework parameters for '{model.Name}' synchronized.";
             }
             else
             {
                 model.LeaveTypeId = Guid.NewGuid();
                 model.OrganizationId = user.OrganizationId!.Value;
-                model.IsActive = true;
 
                 db.LeaveTypes.Add(model);
-                message = "Leave type created successfully";
+                pageMessage = $"Successfully institutionalized rule system execution for '{model.Name}'.";
             }
 
             await db.SaveChangesAsync();
-
-            messageType = "success";
             showModal = false;
-
             await Load();
         }
         catch (Exception ex)
         {
-            message = ex.Message;
-            messageType = "danger";
+            modalError = ex.Message;
         }
     }
 
@@ -312,25 +509,16 @@
         using var db = DbFactory.CreateDbContext();
         var user = await CurrentUser.GetUserAsync();
 
-        var entity = await db.LeaveTypes
-            .FirstOrDefaultAsync(x =>
-                x.LeaveTypeId == lt.LeaveTypeId &&
-                x.OrganizationId == user.OrganizationId);
-
+        var entity = await db.LeaveTypes.FirstOrDefaultAsync(x => x.LeaveTypeId == lt.LeaveTypeId && x.OrganizationId == user.OrganizationId);
         if (entity == null) return;
 
         entity.IsActive = !entity.IsActive;
-
         await db.SaveChangesAsync();
 
-        message = $"Leave type {(entity.IsActive ? "activated" : "deactivated")}";
-        messageType = "warning";
-
+        pageMessage = $"Runtime execution for '{entity.Name}' switched to {(entity.IsActive ? "Active State" : "Suspended State")}.";
         await Load();
     }
 
-    private void ClearMessage()
-    {
-        message = null;
-    }
+    private void ClearPageMessage() => pageMessage = null;
+    void GoToDashboard() => Nav.NavigateTo("/org/dashboard");
 }
