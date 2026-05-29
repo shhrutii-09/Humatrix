@@ -10,73 +10,54 @@
 @inject DepartmentService DeptService
 @inject NavigationManager Nav
 
-<PageTitle>Departments</PageTitle>
+<PageTitle>Departments | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-normal">Departments</h2>
-            <p class="text-muted small">Manage organization departments</p>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Departments</h2>
+            <p class="text-muted small mb-0">Configure, structure, and audit organization business units.</p>
         </div>
         <div class="d-flex gap-2">
-        <button class="btn btn-primary shadow-sm"
-                style="background-color:#5c4ac7;border:none;"
-                @onclick="GoToCreate">
-            <i class="bi bi-plus-circle me-2"></i>
-            ADD DEPARTMENT
-        </button>
-
-        <button class="btn btn-outline-secondary shadow-sm" @onclick="GoBack">
-            DASHBOARD
-        </button>
-        </div>
-    </div>
-
-    @* <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-normal">Designations</h2>
-            <p class="text-muted small">Manage job titles and their associated departments.</p>
-        </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary shadow-sm"
-                    style="background-color: #5c4ac7; border: none;"
-                    @onclick="GoToCreate">
-                <i class="bi bi-plus-circle me-2"></i> ADD DESIGNATION
+            <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="GoToCreate">
+                <i class="bi bi-plus-circle"></i>
+                ADD DEPARTMENT
             </button>
-            <button class="btn btn-outline-secondary shadow-sm" @onclick="GoBack">
+
+            <button class="btn btn-interactive-back shadow-sm" @onclick="GoBack">
                 DASHBOARD
             </button>
         </div>
-    </div> *@
+    </div>
 
-    <!-- TABLE -->
-    <div class="card shadow-sm border-0">
+    <div class="card border-0 shadow-sm panel-container-card">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-
-                <thead class="bg-light">
+                <thead>
                     <tr>
-                        <th class="ps-4 text-muted small">DEPARTMENT</th>
-                        <th class="text-muted small">DESCRIPTION</th>
-                        <th class="text-muted small text-center">STATUS</th>
-                        <th class="text-muted small text-end pe-4">ACTIONS</th>
+                        <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">DEPARTMENT NAME</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">DESCRIPTION</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-center" style="width: 180px;">STATUS</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pe-4" style="width: 160px;">ACTIONS</th>
                     </tr>
                 </thead>
-
                 <tbody>
                     @if (departments == null)
                     {
                         <tr>
-                            <td colspan="4" class="text-center py-4">Loading...</td>
+                            <td colspan="4" class="text-center py-5">
+                                <div class="spinner-border text-primary" style="width: 2rem; height: 2rem;" role="status"></div>
+                                <p class="mt-2 text-muted small mb-0">Loading system data...</p>
+                            </td>
                         </tr>
                     }
                     else if (!departments.Any())
                     {
                         <tr>
-                            <td colspan="4" class="text-center py-5">
-                                <span class="text-muted">No departments found</span>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <div class="fs-2 text-light mb-2"><i class="bi bi-diagram-3"></i></div>
+                                <span class="fw-medium">No departments configured yet.</span>
                             </td>
                         </tr>
                     }
@@ -84,100 +65,226 @@
                     {
                         @foreach (var d in departments)
                         {
-                            <tr>
-
-                                <!-- NAME -->
+                            <tr class="table-row-interactive">
                                 <td class="ps-4">
                                     @if (editId == d.DepartmentId)
                                     {
-                                        <InputText class="form-control bg-light"
-                                                   @bind-Value="editName" />
+                                        <InputText class="form-control premium-edit-input" @bind-Value="editName" />
                                     }
                                     else
                                     {
-                                        <div class="fw-bold">@d.Name</div>
+                                        <div class="fw-bold text-dark text-heading-field">@d.Name</div>
                                     }
                                 </td>
 
-                                <!-- DESCRIPTION -->
                                 <td>
                                     @if (editId == d.DepartmentId)
                                     {
-                                        <InputText class="form-control bg-light"
-                                                   @bind-Value="editDesc" />
+                                        <InputText class="form-control premium-edit-input" @bind-Value="editDesc" />
                                     }
                                     else
                                     {
-                                        <span class="text-muted">
+                                        <span class="text-muted row-description-text">
                                             @(string.IsNullOrEmpty(d.Description) ? "—" : d.Description)
                                         </span>
                                     }
                                 </td>
 
-                                <!-- STATUS -->
                                 <td class="text-center">
-                                    <div class="form-check form-switch d-inline-block">
+                                    <div class="form-check form-switch d-inline-flex align-items-center gap-2 justify-content-center protocol-switch">
                                         <input class="form-check-input shadow-none"
                                                type="checkbox"
                                                checked="@d.IsActive"
                                                @onchange="(e) => ToggleDeptStatus(d, e)" />
 
-                                        <span class="small @(d.IsActive ? "text-success" : "text-danger") ms-2">
+                                        <span class="status-indicator-pill @(d.IsActive ? "pill-active" : "pill-inactive")">
                                             @(d.IsActive ? "Active" : "Inactive")
                                         </span>
                                     </div>
                                 </td>
 
-                                <!-- ACTIONS -->
                                 <td class="text-end pe-4">
                                     @if (editId == d.DepartmentId)
                                     {
-                                        <button class="btn btn-sm btn-success me-2"
-                                                @onclick="() => SaveEdit(d.DepartmentId)">
+                                        <button class="btn btn-sm btn-action-save me-1" @onclick="() => SaveEdit(d.DepartmentId)">
                                             Save
                                         </button>
-
-                                        <button class="btn btn-sm btn-light border"
-                                                @onclick="CancelEdit">
+                                        <button class="btn btn-sm btn-action-cancel" @onclick="CancelEdit">
                                             Cancel
                                         </button>
                                     }
                                     else
                                     {
-                                        <button class="btn btn-sm btn-light border text-primary me-1"
-                                                @onclick="() => StartEdit(d)">
+                                        <button class="btn btn-sm btn-action-edit" @onclick="() => StartEdit(d)" title="Edit Unit">
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
                                     }
                                 </td>
-
                             </tr>
                         }
                     }
                 </tbody>
-
             </table>
         </div>
     </div>
-
-    <!-- BACK -->
-    @* <button class="btn btn-light mt-3"
-            @onclick="GoBack">
-        ← Back
-    </button> *@
-
 </div>
 
 <style>
-    .form-switch .form-check-input {
-        width: 2.5em;
-        height: 1.25em;
-        cursor: pointer;
+    /* Premium Styling Core Definitions */
+    .tracking-tight {
+        letter-spacing: -0.025em;
     }
 
-    .form-control:focus {
-        border-color: #5c4ac7;
-        box-shadow: 0 0 0 0.2rem rgba(92,74,199,0.1);
+    .tracking-wider {
+        letter-spacing: 0.04em;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    /* Table Component Refinements */
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 11px;
+    }
+
+    .table-row-interactive {
+        transition: background-color 0.15s ease;
+    }
+
+        .table-row-interactive:hover {
+            background-color: #f8fafc;
+        }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .row-description-text {
+        font-size: 13.5px;
+    }
+
+    /* Action Buttons Architecture */
+    .btn-add-dept {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        transition: all 0.2s ease;
+    }
+
+        .btn-add-dept:hover {
+            background-color: #4b3ba6 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    /* Action Control Triggers */
+    .btn-action-edit {
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        border-radius: 8px;
+        padding: 5px 10px;
+        transition: all 0.15s ease;
+    }
+
+        .btn-action-edit:hover {
+            background: rgba(92, 74, 199, 0.08);
+            border-color: rgba(92, 74, 199, 0.25);
+            color: #5c4ac7;
+        }
+
+    .btn-action-save {
+        background-color: #10b981;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 12.5px;
+        font-weight: 500;
+    }
+
+    .btn-action-cancel {
+        background-color: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 12.5px;
+    }
+
+    /* Premium Form Inputs Overrides */
+    .premium-edit-input {
+        font-size: 13.5px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+    }
+
+        .premium-edit-input:focus {
+            border-color: #5c4ac7;
+            box-shadow: 0 0 0 3px rgba(92, 74, 199, 0.12);
+            background-color: #ffffff !important;
+        }
+
+    /* Status Badging & Custom Protocol Toggles */
+    .protocol-switch .form-check-input {
+        width: 2.3em;
+        height: 1.15em;
+        cursor: pointer;
+        background-color: #cbd5e1;
+        border-color: transparent;
+    }
+
+        .protocol-switch .form-check-input:checked {
+            background-color: #10b981;
+        }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 60px;
+    }
+
+    .pill-active {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
     }
 </style>
 
@@ -195,7 +302,13 @@
 
     private async Task LoadDepartments()
     {
-        departments = await DeptService.GetAllAsync();
+        var rawData = await DeptService.GetAllAsync();
+
+        if (rawData != null)
+        {
+            // Reverse order rendering logic to satisfy strict LIFO processing requirements
+            departments = rawData.AsEnumerable().Reverse().ToList();
+        }
     }
 
     void GoToCreate() => Nav.NavigateTo("/org/create-department");
@@ -226,14 +339,14 @@
 
     private async Task ToggleDeptStatus(DepartmentDto d, ChangeEventArgs e)
     {
-        var isActive = (bool)e.Value;
+        var isActive = (bool)e.Value!;
 
-        // ✅ update instantly for UI responsiveness
+        // Update instantly for responsive UI experience
         d.IsActive = isActive;
 
         await DeptService.ToggleStatusAsync(d.DepartmentId, isActive);
 
-        // reload to sync with DB
+        // Re-sync array matrix with database system
         await LoadDepartments();
     }
 }

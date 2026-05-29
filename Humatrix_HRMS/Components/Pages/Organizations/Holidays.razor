@@ -8,62 +8,79 @@
 @attribute [Authorize(Roles = "OrgAdmin,HR")]
 
 @inject HolidayService HolidayService
+@inject NavigationManager Nav
 
 <PageTitle>Holidays | Humatrix</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        @* <h2 class="fw-normal">Holiday Calendar</h2> *@
-        <h2 class="fw-normal">@(isEditing ? "Edit Holiday" : "Add Holiday")</h2>
-        <button class="btn btn-primary" @onclick="Open">
-            + Add Holiday
-        </button>
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Holiday Calendar</h2>
+            <p class="text-muted small mb-0">Manage and configure public holidays, optional leaves, and corporate calendar events.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-add-holiday d-flex align-items-center gap-2 shadow-sm" @onclick="Open">
+                <i class="bi bi-plus-circle"></i>
+                ADD HOLIDAY
+            </button>
+            <button class="btn btn-interactive-back shadow-sm" @onclick="GoToDashboard">
+                DASHBOARD
+            </button>
+        </div>
     </div>
 
-    <!-- TABLE -->
-    <div class="card border-0 shadow-sm">
-        <div class="card-body p-0">
+    @if (!string.IsNullOrEmpty(pageMessage))
+    {
+        <div class="alert alert-premium-info d-flex align-items-center mb-4 border-0 justify-content-between" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                <div class="small fw-medium">@pageMessage</div>
+            </div>
+            <button type="button" class="btn-close shadow-none" style="font-size: 11px;" @onclick="ClearPageMessage"></button>
+        </div>
+    }
 
-            <table class="table mb-0 align-middle">
-                <thead class="table-light">
+    <div class="card border-0 shadow-sm panel-container-card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th style="width:120px;"></th>
+                        <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">DATE</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">HOLIDAY NAME</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">TYPE</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pr-4" style="width: 160px;">ACTIONS</th>
                     </tr>
                 </thead>
-
                 <tbody>
                     @if (holidays.Count == 0)
                     {
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
-                                No holidays configured
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <div class="fs-2 text-light mb-2"><i class="bi bi-calendar-x"></i></div>
+                                <span class="fw-medium">No holidays configured yet.</span>
                             </td>
                         </tr>
                     }
                     else
                     {
-                        @foreach (var h in holidays)
+                        @foreach (var h in holidays.OrderBy(x => x.Date))
                         {
-                            <tr>
-                                <td>@h.Date.ToString("dd MMM yyyy")</td>
-                                <td class="fw-semibold">@h.Name</td>
+                            <tr class="table-row-interactive">
+                                <td class="ps-4 text-secondary small fw-medium">@h.Date.ToString("dd MMM yyyy")</td>
+                                <td class="fw-bold text-dark text-heading-field">@h.Name</td>
                                 <td>
-                                    <span class="badge @(h.IsOptional ? "bg-warning" : "bg-success")">
+                                    <span class="status-indicator-pill @(h.IsOptional ? "pill-inactive" : "pill-active")">
                                         @(h.IsOptional ? "Optional" : "Mandatory")
                                     </span>
                                 </td>
-                                <td>
-                                    <div class="d-flex gap-2">
-                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => Edit(h)">
-                                            Edit
+                                <td class="text-end pe-4">
+                                    <div class="d-flex gap-2 justify-content-end">
+                                        <button class="btn btn-sm btn-action-edit" title="Edit Holiday" @onclick="() => Edit(h)">
+                                            <i class="bi bi-pencil-square"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(h.HolidayId)">
-                                            Delete
+                                        <button class="btn btn-sm btn-action-delete" title="Delete Holiday" @onclick="() => Delete(h.HolidayId)">
+                                            <i class="bi bi-trash3"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -72,77 +89,273 @@
                     }
                 </tbody>
             </table>
-
         </div>
     </div>
 
-    <!-- MODAL -->
     @if (showModal)
     {
-        <div class="modal fade show d-block">
-            <div class="modal-dialog">
-                <div class="modal-content">
+        <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);">
+            <div class="modal-dialog modal-dialog-centered modal-md">
+                <div class="modal-content border-0 shadow-lg rounded-3">
 
-                    <div class="modal-header">
-                        <h5 class="modal-title">Add Holiday</h5>
-                        <button class="btn-close" @onclick="Close"></button>
+                    <div class="modal-header border-bottom bg-light px-4 py-3">
+                        <h5 class="modal-title fw-bold text-dark tracking-tight">
+                            @(isEditing ? "✏️ Edit Holiday" : "✨ Add Holiday")
+                        </h5>
+                        <button class="btn-close shadow-none" @onclick="Close"></button>
                     </div>
 
-                    <div class="modal-body">
+                    <div class="modal-body p-4">
 
-                        <div class="mb-2">
-                            <label class="small fw-bold">Date</label>
-                            <InputDate class="form-control" @bind-Value="model.Date" />
+                        @if (!string.IsNullOrEmpty(modalError))
+                        {
+                            <div class="alert alert-premium-danger d-flex align-items-center mb-4 border-0" role="alert">
+                                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                                <div class="small fw-medium"><strong>Error:</strong> @modalError</div>
+                            </div>
+                        }
+
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">HOLIDAY DATE <span class="text-danger">*</span></label>
+                                <InputDate class="form-control premium-form-input-lg w-100" @bind-Value="model.Date" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">HOLIDAY NAME <span class="text-danger">*</span></label>
+                                <InputText class="form-control premium-form-input-lg w-100" placeholder="e.g., Diwali, New Year's Day" @bind-Value="model.Name" />
+                            </div>
+
+                            <div class="col-12 mt-4">
+                                <div class="form-check form-switch protocol-switch bg-light p-3 ps-5 rounded-3 border d-inline-block w-100 flex-row align-items-center">
+                                    <InputCheckbox class="form-check-input fs-5" id="isOptionalSwitch" @bind-Value="model.IsOptional" style="margin-left: -1.8em; mt-1" />
+                                    <label class="form-check-label fw-semibold text-dark pt-0.5 ms-2" for="isOptionalSwitch">Mark as Optional Holiday</label>
+                                </div>
+                                <div class="text-muted small mt-2 ps-1">
+                                    <i class="bi bi-info-circle me-1"></i> Optional holidays are NOT auto-excluded from leave calculation matrices.
+                                </div>
+                            </div>
                         </div>
-
-                        <div class="mb-2">
-                            <label class="small fw-bold">Holiday Name</label>
-                            <InputText class="form-control" @bind-Value="model.Name" />
-                        </div>
-
-                        <div class="form-check mt-2">
-                            <InputCheckbox class="form-check-input" @bind-Value="model.IsOptional" />
-                            <label class="form-check-label">
-                                Optional Holiday
-                            </label>
-                        </div>
-
-                        <div class="text-muted small mt-2">
-                            Optional holidays are NOT auto-excluded from leave calculation.
-                        </div>
-
                     </div>
 
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" @onclick="Close">Cancel</button>
-
-                        <button class="btn btn-success" @onclick="Save">
-                            Save
+                    <div class="modal-footer bg-light border-top px-4 py-3">
+                        <button type="button" class="btn btn-action-cancel" @onclick="Close">Cancel</button>
+                        <button type="button" class="btn btn-action-submit px-4 shadow-sm" @onclick="Save">
+                            @(isEditing ? "Update Holiday" : "Save & Publish")
                         </button>
                     </div>
 
                 </div>
             </div>
         </div>
-
-        <div class="modal-backdrop fade show"></div>
     }
-
-    @if (!string.IsNullOrEmpty(error))
-    {
-        <div class="alert alert-danger mt-3">@error</div>
-    }
-
 </div>
+
+<style>
+    /* System Native Tokens Integrated directly from Core Style Rules */
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .table-row-interactive {
+        transition: background-color 0.15s ease;
+    }
+
+        .table-row-interactive:hover {
+            background-color: #f8fafc;
+        }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .premium-form-input-lg {
+        font-size: 15px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background-color: #ffffff !important;
+        color: #1e293b;
+        transition: all 0.2s ease;
+    }
+
+        .premium-form-input-lg:focus {
+            border-color: #5c4ac7 !important;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12) !important;
+            outline: none;
+        }
+
+    .btn-add-holiday {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        transition: all 0.2s ease;
+    }
+
+        .btn-add-holiday:hover {
+            background-color: #4b3ba6 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    .btn-action-edit {
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        border-radius: 8px;
+        padding: 5px 10px;
+        transition: all 0.15s ease;
+    }
+
+        .btn-action-edit:hover {
+            background: rgba(92, 74, 199, 0.08);
+            border-color: rgba(92, 74, 199, 0.25);
+            color: #5c4ac7;
+        }
+
+    .btn-action-delete {
+        background: #fff5f5;
+        border: 1px solid #fee2e2;
+        color: #ef4444;
+        border-radius: 8px;
+        padding: 5px 10px;
+        transition: all 0.15s ease;
+    }
+
+        .btn-action-delete:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+    .btn-action-submit {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-action-submit:hover {
+            background-color: #4b3ba6 !important;
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .btn-action-cancel {
+        background-color: #ffffff;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-size: 13.5px;
+    }
+
+        .btn-action-cancel:hover {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+
+    .protocol-switch .form-check-input {
+        width: 2.3em;
+        height: 1.15em;
+        cursor: pointer;
+        background-color: #cbd5e1;
+        border-color: transparent;
+    }
+
+        .protocol-switch .form-check-input:checked {
+            background-color: #5c4ac7;
+        }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 85px;
+        text-align: center;
+    }
+
+    .pill-active {
+        background-color: #ecfdf5;
+        color: #065f46;
+        border: 1px solid rgba(16, 185, 129, 0.15);
+    }
+
+    .pill-inactive {
+        background-color: #fffbeb;
+        color: #92400e;
+        border: 1px solid rgba(245, 158, 11, 0.15);
+    }
+
+    .alert-premium-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+
+    .alert-premium-info {
+        background-color: #f0fdf4;
+        color: #166534;
+        border-left: 4px solid #10b981 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+</style>
 
 @code {
     private List<Holiday> holidays = new();
     private Holiday model = new();
     private bool showModal = false;
-    private string? error;
-
-    // Add this to track if we are editing
     private bool isEditing = false;
+
+    private string? pageMessage;
+    private string? modalError;
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -151,14 +364,13 @@
     private void Open()
     {
         model = new Holiday { Date = DateTime.Today };
-        isEditing = false; // Reset state
+        isEditing = false;
+        modalError = null;
         showModal = true;
-        error = null;
     }
 
     private void Edit(Holiday h)
     {
-        // Create a shallow copy so changes don't show in the table until Saved
         model = new Holiday
         {
             HolidayId = h.HolidayId,
@@ -168,8 +380,8 @@
             OrganizationId = h.OrganizationId
         };
         isEditing = true;
+        modalError = null;
         showModal = true;
-        error = null;
     }
 
     private void Close() => showModal = false;
@@ -178,13 +390,29 @@
     {
         try
         {
+            modalError = null;
+
+            // Strict Compulsory Form Validations
+            if (string.IsNullOrWhiteSpace(model.Name))
+            {
+                modalError = "Holiday Name description field is compulsory and cannot be left blank.";
+                return;
+            }
+            if (model.Date == default)
+            {
+                modalError = "A valid calendar target Date assignment is compulsory.";
+                return;
+            }
+
             if (isEditing)
             {
                 await HolidayService.UpdateAsync(model);
+                pageMessage = $"Holiday target data for '{model.Name}' successfully modified.";
             }
             else
             {
                 await HolidayService.CreateAsync(model);
+                pageMessage = $"New system holiday instance '{model.Name}' successfully configured and published.";
             }
 
             showModal = false;
@@ -192,13 +420,24 @@
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            modalError = ex.Message;
         }
     }
 
     private async Task Delete(Guid id)
     {
-        await HolidayService.DeleteAsync(id);
-        await Load();
+        try
+        {
+            await HolidayService.DeleteAsync(id);
+            pageMessage = "Holiday configuration profile has been successfully dropped from system arrays.";
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            pageMessage = $"Failed to execute deletion stream: {ex.Message}";
+        }
     }
+
+    private void ClearPageMessage() => pageMessage = null;
+    private void GoToDashboard() => Nav.NavigateTo("/org/dashboard");
 }

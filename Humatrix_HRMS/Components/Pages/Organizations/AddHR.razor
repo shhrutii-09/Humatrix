@@ -11,187 +11,327 @@
 @inject DesignationService DesignationService
 @inject ShiftService ShiftService
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>Add HR | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fw-normal">Add New HR Manager</h2>
-        @* <button class="btn btn-primary shadow-sm"
-                style="background-color: #5c4ac7; border: none;"
-                disabled="@isSubmitting"
-                @onclick='() => Nav.NavigateTo("/org/dashboard")'>
-            BACK TO DASHBOARD
-        </button> *@
-        <button class="btn btn-outline-secondary shadow-sm" @onclick='() => Nav.NavigateTo("/org/dashboard")'>
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Add New HR Manager</h2>
+            <p class="text-muted small mb-0">Onboard an administrative Human Resources manager and trigger an activation email.</p>
+        </div>
+        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo("/org/dashboard")'>
             DASHBOARD
         </button>
     </div>
 
-    <div class="card shadow-sm border-0">
+    <div class="card border-0 shadow-sm form-container-card w-100 mb-5">
         <div class="card-body p-4">
 
-            <!-- LOADING SKELETON -->
             @if (isLoading)
             {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary"></div>
-                    <p class="mt-3 text-muted">Loading data...</p>
+                <div class="text-center py-5 my-3">
+                    <div class="spinner-border text-primary" style="width: 2.5rem; height: 2.5rem;" role="status"></div>
+                    <p class="mt-3 text-muted small fw-medium">Assembling active corporate structure profiles...</p>
                 </div>
             }
             else
             {
                 <EditForm Model="model" OnValidSubmit="CreateHR">
-                    <DataAnnotationsValidator /> 
-                    <ValidationSummary class="text-danger" />
+                    <DataAnnotationsValidator />
 
                     <div class="row g-4">
 
-                        <!-- LEFT -->
-                        <div class="col-md-7">
-                            <h5 class="mb-3 text-muted border-bottom pb-2">Basic Information</h5>
+                        <div class="col-lg-7 col-md-12">
+                            <h6 class="text-primary small fw-bold tracking-wider text-uppercase mb-3 pb-2 border-bottom">
+                                <i class="bi bi-person-badge me-2"></i>Personal Profile Details
+                            </h6>
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">First Name</label>
+                                    <label class="form-label-custom">First Name</label>
                                     <InputText @bind-Value="model.FirstName"
-                                               class="form-control"
+                                               class="form-control premium-form-input"
+                                               placeholder="John"
                                                disabled="@isSubmitting" />
-                                    <ValidationMessage For="@(() => model.FirstName)" />
+                                    <ValidationMessage For="@(() => model.FirstName)" class="text-danger small mt-1 d-block fw-medium" />
                                 </div>
 
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">Last Name</label>
+                                    <label class="form-label-custom">Last Name</label>
                                     <InputText @bind-Value="model.LastName"
-                                               class="form-control"
+                                               class="form-control premium-form-input"
+                                               placeholder="Doe"
                                                disabled="@isSubmitting" />
-                                    <ValidationMessage For="@(() => model.LastName)" />
+                                    <ValidationMessage For="@(() => model.LastName)" class="text-danger small mt-1 d-block fw-medium" />
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label small fw-bold">Email</label>
+                                <label class="form-label-custom">Corporate Email Address</label>
                                 <InputText @bind-Value="model.Email"
                                            type="email"
-                                           class="form-control"
+                                           class="form-control premium-form-input"
+                                           placeholder="johndoe@company.com"
                                            disabled="@isSubmitting" />
-                                <ValidationMessage For="@(() => model.Email)" />
+                                <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1 d-block fw-medium" />
+                                <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                                    *HR will receive activation mail on Yopmail.
+                                </small>
                             </div>
 
-                            <!-- SHIFT -->
                             <div class="mb-3">
-                                <label class="form-label small fw-bold">Work Shift</label>
-                                <InputSelect @bind-Value="model.ShiftId"
-                                             class="form-select"
-                                             disabled="@isSubmitting">
-                                    <option value="">Select Shift</option>
-                                    @foreach (var s in shifts)
-                                    {
-                                        <option value="@s.ShiftId">@s.Name</option>
-                                    }
-                                </InputSelect>
-                                <ValidationMessage For="@(() => model.ShiftId)" />
+                                <label class="form-label-custom">Operational Shift Timeline</label>
+                                <div class="dropdown-box-wrapper">
+                                    <InputSelect @bind-Value="model.ShiftId"
+                                                 class="form-select premium-dropdown-select shadow-none"
+                                                 disabled="@isSubmitting">
+                                        <option value="" disabled selected>-- Select Operational Shift --</option>
+                                        @foreach (var s in shifts)
+                                        {
+                                            <option value="@s.ShiftId">@s.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <ValidationMessage For="@(() => model.ShiftId)" class="text-danger small mt-1 d-block fw-medium" />
                             </div>
                         </div>
 
-                        <!-- RIGHT -->
-                        <div class="col-md-5 border-start ps-4">
-                            <h5 class="mb-3 text-muted border-bottom pb-2">HR Assignment</h5>
+                        <div class="col-lg-5 col-md-12 structural-assignment-panel">
+                            <h6 class="text-primary small fw-bold tracking-wider text-uppercase mb-3 pb-2 border-bottom">
+                                <i class="bi bi-diagram-3 me-2"></i>Corporate Assignment
+                            </h6>
 
-                            <!-- Department -->
                             <div class="mb-3">
-                                <label class="form-label small fw-bold">Department</label>
-                                <InputSelect @bind-Value="model.DepartmentId"
-                                             @bind-Value:after="OnDepartmentChanged"
-                                             class="form-select"
-                                             disabled="@isSubmitting">
-                                    <option value="">Select Department</option>
-                                    @foreach (var d in departments)
-                                    {
-                                        <option value="@d.DepartmentId">@d.Name</option>
-                                    }
-                                </InputSelect>
-                                <ValidationMessage For="@(() => model.DepartmentId)" />
+                                <label class="form-label-custom">Department Alignment</label>
+                                <div class="dropdown-box-wrapper">
+                                    <InputSelect @bind-Value="model.DepartmentId"
+                                                 @bind-Value:after="OnDepartmentChanged"
+                                                 class="form-select premium-dropdown-select shadow-none"
+                                                 disabled="@isSubmitting">
+                                        <option value="" disabled selected>-- Select Corporate Department --</option>
+                                        @foreach (var d in departments)
+                                        {
+                                            <option value="@d.DepartmentId">@d.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <ValidationMessage For="@(() => model.DepartmentId)" class="text-danger small mt-1 d-block fw-medium" />
                             </div>
 
-                            <!-- Designation -->
                             <div class="mb-3">
-                                <label class="form-label small fw-bold">Designation</label>
-                                <InputSelect @bind-Value="model.DesignationId"
-                                             class="form-select"
-                                             disabled="@isSubmitting">
-                                    <option value="">Select Designation</option>
-                                    @foreach (var d in designations)
-                                    {
-                                        <option value="@d.DesignationId">@d.Name</option>
-                                    }
-                                </InputSelect>
-                                <ValidationMessage For="@(() => model.DesignationId)" />
+                                <label class="form-label-custom">Designation Profile Rank</label>
+                                <div class="dropdown-box-wrapper">
+                                    <InputSelect @bind-Value="model.DesignationId"
+                                                 class="form-select premium-dropdown-select shadow-none"
+                                                 disabled="@(isSubmitting || !model.DepartmentId.HasValue)">
+                                        <option value="" selected>-- Select Designation --</option>
+                                        @foreach (var d in designations)
+                                        {
+                                            <option value="@d.DesignationId">@d.Name</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small mt-1 d-block fw-medium" />
                             </div>
                         </div>
                     </div>
 
-                    <!-- SUBMIT -->
-                    <div class="mt-4 border-top pt-3 text-end">
+                    <div class="mt-4 border-top pt-4 text-end">
                         <button type="submit"
-                                class="btn btn-success px-4"
+                                class="btn btn-action-submit px-4 shadow-sm d-flex align-items-center gap-2 ms-auto"
                                 disabled="@isSubmitting">
-
                             @if (isSubmitting)
                             {
-                                <span class="spinner-border spinner-border-sm me-2"></span>
-                                <span>PROCESSING...</span>
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span>Provisioning HR System Node...</span>
                             }
                             else
                             {
-                                <span>CREATE HR & GENERATE INVITE</span>
+                                <i class="bi bi-shield-check"></i>
+                                <span>CREATE HR MANAGER</span>
                             }
                         </button>
                     </div>
                 </EditForm>
             }
 
-            <!-- SUCCESS -->
-            @if (!string.IsNullOrEmpty(link))
+            @if (isCreatedSuccessfully)
             {
-                <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3" style="background-color: #e6ffed;">
-                    <div class="d-flex w-100 justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
-                            <b class="text-success" style="font-size: 1.1rem;">Employee created successfully!</b>
+                <div class="alert alert-premium-success mt-4 border-0 shadow-sm p-4 animate__animated animate__fadeIn"
+                     style="background-color: #e6ffed;">
+                    <div class="d-flex align-items-start">
+                        <div class="success-icon-badge me-3">
+                            <i class="bi bi-check-circle-fill fs-3 text-success"></i>
                         </div>
-
-                        <div class="d-flex align-items-center">
-                            @if (showCopiedFeedback)
-                            {
-                                <span class="badge bg-success me-2 animate__animated animate__fadeIn">Copied!</span>
-                            }
-
-                            <button class="btn btn-link text-success border-0 fs-3 p-0"
-                                    title="Copy Invite Link"
-                                    @onclick="CopyLinkToClipboard">
-                                <i class="bi bi-files"></i>
-                            </button>
+                        <div>
+                            <h5 class="text-success fw-bold mb-2">HR Account Created Successfully!</h5>
+                            <p class="mb-1 text-dark">HR activation mail has been sent successfully.</p>
+                            <p class="mb-0 text-muted small">Please check the provided Yopmail inbox and activate the HR account.</p>
                         </div>
                     </div>
                 </div>
             }
 
-            <!-- ERROR -->
             @if (!string.IsNullOrEmpty(error))
             {
-                <div class="alert alert-danger mt-3 shadow-sm border-0">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    @error
+                <div class="alert alert-premium-danger mt-4 shadow-sm border-0 d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+                    <div>
+                        <h6 class="mb-0 fw-bold">System Registration Blocked</h6>
+                        <span class="small opacity-90">@error</span>
+                    </div>
                 </div>
             }
 
         </div>
     </div>
 </div>
+
+<style>
+    /* Framework Design Tokens */
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.05em;
+        font-size: 11px !important;
+    }
+
+    .form-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        width: 100%;
+    }
+
+    /* Column Boundary Rules */
+    @@media (min-width: 768px) {
+        .structural-assignment-panel {
+            border-left: 1px solid #e2e8f0 !important;
+            padding-left: 2rem !important;
+        }
+    }
+
+    /* Premium Form Architecture */
+    .form-label-custom {
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .premium-form-input, .premium-dropdown-select {
+        font-size: 14px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background-color: #f8fafc !important;
+        color: #1e293b;
+        transition: all 0.2s ease;
+    }
+
+        .premium-form-input:focus, .premium-dropdown-select:focus {
+            border-color: #5c4ac7 !important;
+            background-color: #ffffff !important;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12) !important;
+        }
+
+        .premium-form-input:disabled, .premium-dropdown-select:disabled {
+            background-color: #f1f5f9 !important;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+    .dropdown-box-wrapper {
+        position: relative;
+        display: flex;
+        width: 100%;
+    }
+
+    .premium-dropdown-select {
+        width: 100%;
+        appearance: none;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23475569' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+        background-repeat: no-repeat !important;
+        background-position: right 14px center !important;
+        background-size: 14px var(--bs-body-font-size) !important;
+        padding-right: 40px !important;
+    }
+
+    /* Top Right Navigation Controller Header Action Button */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    /* Save Profile Action Configuration */
+    .btn-action-submit {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 11px 24px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        transition: all 0.2s ease;
+    }
+
+        .btn-action-submit:hover:not(:disabled) {
+            background-color: #4b3ba6 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.25) !important;
+        }
+
+        .btn-action-submit:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+    /* Premium Dynamic Action Alerts Badges & Indicators */
+    .alert-premium-success {
+        border: 1px solid rgba(22, 163, 74, 0.15) !important;
+        border-radius: 12px;
+    }
+
+    .success-icon-badge {
+        color: #16a34a;
+        background: rgba(22, 163, 74, 0.1);
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .alert-premium-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 10px;
+        padding: 14px 18px;
+    }
+</style>
 
 @code {
     CreateEmployeeDto model = new();
@@ -200,11 +340,9 @@
     List<DesignationDto> designations = new();
     List<Shift> shifts = new();
 
-    string? link;
     string? error;
     bool isSubmitting = false;
-    bool showCopiedFeedback = false;
-
+    bool isCreatedSuccessfully = false;
     bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
@@ -212,9 +350,12 @@
         try
         {
             isLoading = true;
-
             departments = await DeptService.GetActiveAsync();
             shifts = await ShiftService.GetAllShiftsAsync();
+        }
+        catch (Exception ex)
+        {
+            error = "Failed to synchronize operational corporate metadata dependencies. " + ex.Message;
         }
         finally
         {
@@ -226,8 +367,7 @@
     {
         if (model.DepartmentId.HasValue)
         {
-            designations = await DesignationService
-                .GetByDepartmentAsync(model.DepartmentId.Value);
+            designations = await DesignationService.GetByDepartmentAsync(model.DepartmentId.Value);
         }
         else
         {
@@ -243,18 +383,20 @@
         {
             isSubmitting = true;
             error = null;
-            link = null;
+            isCreatedSuccessfully = false;
 
             model.Role = "HR";
 
-            link = await EmployeeService.CreateEmployeeAsync(model);
+            // Backend process triggers email sending internally like organization onboarding
+            await EmployeeService.CreateEmployeeAsync(model);
 
+            isCreatedSuccessfully = true;
             model = new CreateEmployeeDto();
             designations.Clear();
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            error = GetFriendlyMessage(ex.Message);
         }
         finally
         {
@@ -262,15 +404,14 @@
         }
     }
 
-    private async Task CopyLinkToClipboard()
+    private string GetFriendlyMessage(string message)
     {
-        if (!string.IsNullOrEmpty(link))
-        {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
-            showCopiedFeedback = true;
+        if (message.Contains("User with this email") || message.Contains("already registered"))
+            return "This HR email is already registered.";
 
-            await Task.Delay(2000);
-            showCopiedFeedback = false;
-        }
+        if (message.Contains("EmployeeCodeSequence"))
+            return "Database Error: 'EmployeeCodeSequence' object is missing. Please update your database migration.";
+
+        return "Something went wrong. Please try again. " + message;
     }
 }

@@ -5,7 +5,6 @@
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
-@* @using Humatrix_HRMS.Components.Shared *@
 @using Humatrix_HRMS.Components.Account.Shared
 @using Microsoft.AspNetCore.Authorization
 @using Humatrix_HRMS.DTOs.Dashboard
@@ -21,208 +20,409 @@
 
 <PageTitle>Admin Dashboard | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid px-4 mt-4">
+    <!-- Premium Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold text-dark mb-0">Organization Overview</h2>
-            <p class="text-muted mb-0">Welcome back, Admin. Here is what's happening today.</p>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Organization Overview</h2>
+            <p class="text-muted small mb-0">Welcome back, Admin. Here is what's happening today.</p>
         </div>
 
-     <div class="d-flex gap-3 align-items-center">
+        <!-- Sleek Unified Action Bar (Without Separator Line) -->
+        <div class="d-flex align-items-center gap-3 backend-action-bar">
 
-    @if (dashboardContext != null)
-    {
-        <NotificationBell />
-    }
+            <!-- Modern Hover-Reactive Notification Hub -->
+            @if (dashboardContext != null)
+            {
+                <div class="notification-interactive-wrapper d-flex align-items-center">
+                    <NotificationBell />
+                </div>
+            }
 
-    <span class="badge bg-danger p-2">
-        Org Admin Role
-    </span>
+            <!-- Profile Interactive Capsule (Perfect Baseline Setup) -->
+            <div class="profile-interactive-wrapper d-flex align-items-center">
+                <button class="btn btn-interactive-profile d-flex align-items-center gap-2"
+                        @onclick='() => Nav.NavigateTo("/org/profile")'>
+                    <div class="profile-avatar-box">
+                        <i class="bi bi-person-fill"></i>
+                    </div>
+                    <div class="profile-text-labels text-start d-none d-md-block">
+                        <span class="profile-title d-block">My Profile</span>
+                        <span class="profile-subtitle d-block text-muted">Account Settings</span>
+                    </div>
+                    <i class="bi bi-chevron-down ms-1 text-muted small arrow-toggle"></i>
+                </button>
+            </div>
 
-    <button class="btn btn-white border shadow-sm btn-sm py-2 px-3"
-            @onclick='() => Nav.NavigateTo("/org/profile")'>
-        My Profile
-    </button>
-
-</div>
+        </div>
     </div>
 
     @if (data == null)
     {
-        <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
-            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+        <div class="text-center py-5 my-5">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="mt-3 text-muted fw-medium">Loading dashboard...</p>
         </div>
     }
     else
     {
-        <div class="row g-4 mb-5">
+        <!-- Metrics Row -->
+        <div class="row g-4 mb-4">
             <div class="col-xl-3 col-md-6">
-                <div class="card border-0 shadow-sm h-100 overflow-hidden">
-                    <div class="card-body p-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0 bg-soft-primary p-3 rounded-3 me-3">
-                                <i class="bi bi-people-fill text-primary fs-4"></i>
-                            </div>
-                            <div>
-                                <h6 class="text-muted small fw-bold mb-1 uppercase-tracking">TOTAL WORKERS</h6>
-                                <h3 class="fw-bold mb-0">@data.TotalEmployees</h3>
-                            </div>
+                <div class="card h-100 border-0 shadow-sm p-4 metric-card">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-muted small fw-bold text-uppercase mb-2">Total Workers</h6>
+                            <h3 class="fw-bold mb-0 text-dark">@data.TotalEmployees</h3>
+                        </div>
+                        <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-3">
+                            <i class="bi bi-people-fill"></i>
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="col-xl-3 col-md-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body p-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0 bg-soft-success p-3 rounded-3 me-3">
-                                <i class="bi bi-person-check-fill text-success fs-4"></i>
-                            </div>
-                            <div>
-                                <h6 class="text-muted small fw-bold mb-1 uppercase-tracking">ACTIVE STAFF</h6>
-                                <h3 class="fw-bold mb-0">@data.ActiveEmployees</h3>
-                            </div>
+                <div class="card h-100 border-0 shadow-sm p-4 metric-card">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-muted small fw-bold text-uppercase mb-2">Active Staff</h6>
+                            <h3 class="fw-bold mb-0 text-success">@data.ActiveEmployees</h3>
+                        </div>
+                        <div class="icon-shape bg-success-subtle text-success rounded-circle fs-3">
+                            <i class="bi bi-person-check-fill"></i>
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="col-xl-3 col-md-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body p-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0 bg-soft-info p-3 rounded-3 me-3">
-                                <i class="bi bi-shield-lock-fill text-info fs-4"></i>
-                            </div>
-                            <div>
-                                <h6 class="text-muted small fw-bold mb-1 uppercase-tracking">HR MANAGERS</h6>
-                                <h3 class="fw-bold mb-0">@data.TotalHR</h3>
-                            </div>
+                <div class="card h-100 border-0 shadow-sm p-4 metric-card">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-muted small fw-bold text-uppercase mb-2">HR Managers</h6>
+                            <h3 class="fw-bold mb-0 text-info">@data.TotalHR</h3>
+                        </div>
+                        <div class="icon-shape bg-info-subtle text-info rounded-circle fs-3">
+                            <i class="bi bi-shield-lock-fill"></i>
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="col-xl-3 col-md-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-body p-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0 bg-soft-warning p-3 rounded-3 me-3">
-                                <i class="bi bi-building text-warning fs-4"></i>
-                            </div>
-                            <div>
-                                <h6 class="text-muted small fw-bold mb-1 uppercase-tracking">DEPARTMENTS</h6>
-                                <h3 class="fw-bold mb-0">@data.TotalDepartments</h3>
-                            </div>
+                <div class="card h-100 border-0 shadow-sm p-4 metric-card">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-muted small fw-bold text-uppercase mb-2">Departments</h6>
+                            <h3 class="fw-bold mb-0 text-warning">@data.TotalDepartments</h3>
+                        </div>
+                        <div class="icon-shape bg-warning-subtle text-warning rounded-circle fs-3">
+                            <i class="bi bi-building"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="row g-4">
-            <div class="col-lg-8">
-                <h6 class="fw-bold text-muted mb-3 uppercase-tracking ps-1">SYSTEM CONFIGURATION</h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="card h-100 border-0 shadow-sm hover-card" @onclick="GoDepartments">
-                            <div class="card-body p-4">
-                                <i class="bi bi-diagram-3 fs-3 text-primary mb-3"></i>
-                                <h5 class="fw-bold">Department Setup</h5>
-                                <p class="text-muted small">Structure your organization by creating and auditing business units.</p>
-                                <span class="text-primary small fw-bold">Open Management <i class="bi bi-arrow-right ms-1"></i></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card h-100 border-0 shadow-sm hover-card" @onclick="GoDesignations">
-                            <div class="card-body p-4">
-                                <i class="bi bi-briefcase fs-3 text-primary mb-3"></i>
-                                <h5 class="fw-bold">Job Roles</h5>
-                                <p class="text-muted small">Configure designations and job titles for staff.</p>
-                                <span class="text-primary small fw-bold">Open Management <i class="bi bi-arrow-right ms-1"></i></span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-12">
-                        <div class="card border-0 shadow-sm hover-card" @onclick="GoEmployees">
-                            <div class="card-body p-4 d-flex align-items-center">
-                                <div class="me-4">
-                                    <i class="bi bi-people fs-1 text-primary"></i>
-                                </div>
-                                <div>
-                                    <h5 class="fw-bold mb-1">Employee Directory</h5>
-                                    <p class="text-muted small mb-0">View centralized records and profile management for all personnel.</p>
-                                </div>
-                                <div class="ms-auto text-primary">
-                                    <i class="bi bi-chevron-right fs-4"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <!-- Management & Configuration Controls Grid -->
+        <div class="mb-4">
+            <h5 class="fw-bold text-dark mb-3">System Management</h5>
+            <div class="row g-4">
 
-            <div class="col-lg-4">
-                <h6 class="fw-bold text-muted mb-3 uppercase-tracking ps-1">QUICK ACTIONS</h6>
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-3">
-                        <button class="btn btn-light w-100 text-start py-3 mb-2 border-0 ps-3" @onclick='() => Nav.NavigateTo("/org/add-hr")'>
-                            <i class="bi bi-person-plus me-3 text-primary"></i> Onboard HR Manager
-                        </button>
-                        <button class="btn btn-light w-100 text-start py-3 mb-2 border-0 ps-3" @onclick='() => Nav.NavigateTo("/org/create-department")'>
-                            <i class="bi bi-plus-square me-3 text-primary"></i> New Department
-                        </button>
-                        <button class="btn btn-light w-100 text-start py-3 border-0 ps-3" @onclick='() => Nav.NavigateTo("/org/add-employee")'>
-                            <i class="bi bi-person-badge me-3 text-primary"></i> Add Employee
-                        </button>
+                <!-- Department Setup -->
+                <div class="col-xl-4 col-md-6">
+                    <div class="card border-0 shadow-sm p-4 action-card h-100" @onclick="GoDepartments">
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="icon-shape bg-primary text-white rounded-3 fs-4 shadow-sm p-3 d-flex align-items-center justify-content-center" style="width:54px; height:54px;">
+                                <i class="bi bi-diagram-3"></i>
+                            </div>
+                            <div class="w-100">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <h5 class="fw-bold mb-1 text-dark">Department Setup</h5>
+                                    <i class="bi bi-arrow-right-short text-muted fs-4 arrow-icon"></i>
+                                </div>
+                                <p class="text-muted small mb-0">Structure your organization by creating and auditing internal business units.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Designations -->
+                <div class="col-xl-4 col-md-6">
+                    <div class="card border-0 shadow-sm p-4 action-card h-100" @onclick="GoDesignations">
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="icon-shape bg-primary text-white rounded-3 fs-4 shadow-sm p-3 d-flex align-items-center justify-content-center" style="width:54px; height:54px;">
+                                <i class="bi bi-briefcase"></i>
+                            </div>
+                            <div class="w-100">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <h5 class="fw-bold mb-1 text-dark">Designations</h5>
+                                    <i class="bi bi-arrow-right-short text-muted fs-4 arrow-icon"></i>
+                                </div>
+                                <p class="text-muted small mb-0">Configure professional roles, ranks, and operational titles for staff members.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add HR Manager -->
+                <div class="col-xl-4 col-md-6">
+                    <div class="card border-0 shadow-sm p-4 action-card h-100" @onclick='() => Nav.NavigateTo("/org/add-hr")'>
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="icon-shape bg-primary text-white rounded-3 fs-4 shadow-sm p-3 d-flex align-items-center justify-content-center" style="width:54px; height:54px;">
+                                <i class="bi bi-person-plus"></i>
+                            </div>
+                            <div class="w-100">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <h5 class="fw-bold mb-1 text-dark">Add HR Manager</h5>
+                                    <i class="bi bi-arrow-right-short text-muted fs-4 arrow-icon"></i>
+                                </div>
+                                <p class="text-muted small mb-0">Appoint new Human Resource administrators to handle standard staff operations.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Employee -->
+                <div class="col-xl-4 col-md-6">
+                    <div class="card border-0 shadow-sm p-4 action-card h-100" @onclick='() => Nav.NavigateTo("/org/add-employee")'>
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="icon-shape bg-primary text-white rounded-3 fs-4 shadow-sm p-3 d-flex align-items-center justify-content-center" style="width:54px; height:54px;">
+                                <i class="bi bi-person-badge"></i>
+                            </div>
+                            <div class="w-100">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <h5 class="fw-bold mb-1 text-dark">Add Employee</h5>
+                                    <i class="bi bi-arrow-right-short text-muted fs-4 arrow-icon"></i>
+                                </div>
+                                <p class="text-muted small mb-0">Onboard new workforce members into the corporate database structure.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Employee Directory -->
+                <div class="col-xl-8 col-md-12">
+                    <div class="card border-0 shadow-sm p-4 action-card h-100" @onclick="GoEmployees">
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="icon-shape bg-blue-subtle text-blue rounded-3 fs-4 shadow-sm p-3 d-flex align-items-center justify-content-center" style="width:54px; height:54px;">
+                                <i class="bi bi-people"></i>
+                            </div>
+                            <div class="w-100">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <h5 class="fw-bold mb-1 text-dark">Employee Directory</h5>
+                                    <i class="bi bi-arrow-right-short text-muted fs-4 arrow-icon"></i>
+                                </div>
+                                <p class="text-muted small mb-0">Access full workforce directories, centralized active metrics, and comprehensive profiling sheets.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     }
 </div>
 
 <style>
-    .bg-soft-primary {
+    /* Global Base Configurations */
+    .card {
+        border-radius: 14px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .metric-card {
+        background-color: #ffffff;
+    }
+
+    /* Core Action Grid Panels */
+    .action-card {
+        cursor: pointer;
+        background-color: #ffffff;
+        border: 1px solid transparent !important;
+    }
+
+        .action-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.08) !important;
+            border-color: rgba(92, 74, 199, 0.15) !important;
+        }
+
+            .action-card:hover .arrow-icon {
+                color: #5c4ac7 !important;
+                transform: translateX(3px);
+            }
+
+    .arrow-icon {
+        transition: all 0.2s ease;
+    }
+
+    .icon-shape {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* Soft Color Context Rules */
+    .bg-primary-subtle {
         background-color: rgba(92, 74, 199, 0.1);
     }
 
-    .bg-soft-success {
+    .bg-success-subtle {
         background-color: rgba(25, 135, 84, 0.1);
     }
 
-    .bg-soft-info {
+    .bg-info-subtle {
         background-color: rgba(13, 202, 240, 0.1);
     }
 
-    .bg-soft-warning {
+    .bg-warning-subtle {
         background-color: rgba(255, 193, 7, 0.1);
     }
 
-    .uppercase-tracking {
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-size: 0.75rem;
+    .bg-blue-subtle {
+        background-color: #e0f2fe;
     }
 
-    .hover-card {
-        cursor: pointer;
-        transition: all 0.2s ease-in-out;
-    }
-
-        .hover-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 1rem 3rem rgba(0,0,0,.1) !important;
-        }
-
-    .btn-white {
-        background: white;
-        color: #333;
+    .text-blue {
+        color: #0369a1;
     }
 
     .text-primary {
         color: #5c4ac7 !important;
     }
 
+    .bg-primary {
+        background-color: #5c4ac7 !important;
+    }
+
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    /* ==========================================================================
+           PREMIUM TOP ACTION BAR & ALIGNED INTERACTIVE STATES (REFINED)
+           ========================================================================== */
+
+    .backend-action-bar {
+        display: flex;
+        align-items: center;
+    }
+
+    /* Transition Triggers for Notification Components */
+    .notification-interactive-wrapper .btn-header-icon,
+    .notification-interactive-wrapper button,
+    .notification-interactive-wrapper .dropdown-toggle,
+    .notification-interactive-wrapper i.bi-bell {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* Unified Height Node for Bell Icon Base */
+    .notification-interactive-wrapper button,
+    .notification-interactive-wrapper .btn-header-icon {
+        width: 42px !important;
+        height: 42px !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: relative;
+    }
+
+        /* Hover Interaction Logic */
+        .notification-interactive-wrapper:hover button,
+        .notification-interactive-wrapper button:hover,
+        .notification-interactive-wrapper:hover .btn-header-icon {
+            background-color: rgba(92, 74, 199, 0.08) !important;
+            border-color: rgba(92, 74, 199, 0.25) !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+            .notification-interactive-wrapper:hover button i,
+            .notification-interactive-wrapper button:hover i,
+            .notification-interactive-wrapper:hover .btn-header-icon i,
+            .notification-interactive-wrapper:hover i.bi-bell {
+                color: #5c4ac7 !important;
+            }
+
+    /* Advanced Interactive Profile Capsule Button */
+    .btn-interactive-profile {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        padding: 5px 14px 5px 6px !important;
+        height: 42px; /* Fixed height matching the notification bell wrapper */
+        border-radius: 12px !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+        /* Hover State Rules for Profile Element */
+        .btn-interactive-profile:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px -2px rgba(92, 74, 199, 0.08) !important;
+        }
+
+            .btn-interactive-profile:hover .profile-avatar-box {
+                background-color: #5c4ac7 !important;
+                color: #ffffff !important;
+            }
+
+            .btn-interactive-profile:hover .profile-title {
+                color: #5c4ac7 !important;
+            }
+
+            .btn-interactive-profile:hover .arrow-toggle {
+                color: #5c4ac7 !important;
+                transform: translateY(1px);
+            }
+
+    /* Avatar Box Inside Profile Element */
+    .profile-avatar-box {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background-color: #f1f5f9;
+        color: #4b5563;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+
+    /* Micro Typography Grid Elements */
+    .profile-text-labels {
+        line-height: 1.15;
+    }
+
+    .profile-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+        transition: color 0.15s ease;
+    }
+
+    .profile-subtitle {
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+    }
+
+    .arrow-toggle {
+        transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    /* Notification Panel Dropdowns Layout Fallbacks */
     .notification-dropdown {
         width: 360px;
         z-index: 999;
@@ -270,9 +470,6 @@
 
 @code {
     private OrgDashboardDto? data;
-    // private List<NotificationDto> notifications = new();
-    // private int unreadCount;
-    // private bool showNotifications;
     private OrgDashboardContextDto? dashboardContext;
     private HubConnection? _dashHub;
 
@@ -280,7 +477,6 @@
     {
         dashboardContext = await CurrentUserService.GetOrgDashboardContextAsync();
         data = await DashboardService.GetDashboardDataAsync();
-        // await LoadNotificationsAsync();
     }
 
     void GoDepartments() => Nav.NavigateTo("/org/departments");
@@ -296,17 +492,14 @@
             .WithAutomaticReconnect()
             .Build();
 
-        // Dashboard refresh
         _dashHub.On<object>(
             "DashboardRefresh",
             async _ =>
             {
                 data = await DashboardService.GetDashboardDataAsync();
-
                 await InvokeAsync(StateHasChanged);
             });
 
-        // RECEIVE NOTIFICATION (FOR SOUND + LIVE UPDATE)
         _dashHub.On<NotificationPushDto>(
             "ReceiveNotification",
             async payload =>
@@ -314,11 +507,7 @@
                 try
                 {
                     Console.WriteLine($"Notification received: {payload.Title}");
-
-                    // Play notification sound
                     await JS.InvokeVoidAsync("playNotificationSound");
-
-                    // Show browser/in-app toast
                     await JS.InvokeVoidAsync(
                         "showToastNotification",
                         payload.Title,
@@ -326,7 +515,6 @@
                         payload.RedirectUrl,
                         payload.Priority
                     );
-
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (Exception ex)
@@ -335,7 +523,6 @@
                 }
             });
 
-        // Connection lifecycle logs
         _dashHub.Reconnecting += error =>
         {
             Console.WriteLine("SignalR reconnecting...");
@@ -349,20 +536,12 @@
         };
 
         await _dashHub.StartAsync();
-
         Console.WriteLine("Org Dashboard SignalR Connected");
 
         if (dashboardContext != null)
         {
-            // IMPORTANT
-            await _dashHub.SendAsync(
-                "JoinOrgDashboardGroup",
-                dashboardContext.OrganizationId.ToString());
-
-            await _dashHub.SendAsync(
-                "JoinUserGroup",
-                dashboardContext.UserId);
-
+            await _dashHub.SendAsync("JoinOrgDashboardGroup", dashboardContext.OrganizationId.ToString());
+            await _dashHub.SendAsync("JoinUserGroup", dashboardContext.UserId);
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -374,6 +553,4 @@
             await _dashHub.DisposeAsync();
         }
     }
-
-   
 }
