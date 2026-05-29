@@ -4,11 +4,16 @@
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 
 @using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Services.Assets
 @using Humatrix_HRMS.Infrastructure.Constants
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
 
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
 @inject AssetService AssetService
 @inject CurrentUserService CurrentUserService
 
@@ -184,10 +189,14 @@
     private Guid currentEmployeeId;
     private string currentUserId = "";
     private string currentUserRole = "HR";
-
+    private Guid? selectedReplacementAssetId;
+    private List<AssetListDto> availableReplacementAssets = new();
     private List<AssetRequestDto> allRequests = new();
     private List<AssetRequestDto> requestsList = new();
     private AssetRequestDto? selectedRequest;
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -199,30 +208,45 @@
         try
         {
             loading = true;
-            var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
-            if (context != null)
+
+            // Check role directly from AuthenticationState (like your Employee page)
+            if (AuthState != null)
             {
-                currentOrgId = context.OrganizationId;
-                currentDeptId = context.DepartmentId;
-                currentEmployeeId = context.EmployeeId;
-                currentUserId = context.UserId;
-                currentUserRole = context.Role;
+                var authState = await AuthState;
+                var user = authState.User;
+                isOrgAdmin = user.IsInRole("OrgAdmin") || user.IsInRole("OrganizationAdmin");
 
-                Console.WriteLine($"USER ID = {currentUserId}");
-                Console.WriteLine($"ROLE = {currentUserRole}");
-                Console.WriteLine($"ORG ID = {currentOrgId}"); ;
+                if (isOrgAdmin)
+                {
+                    currentUserRole = "OrgAdmin";
+                    currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
-                // Explicitly check role parameters
-                // isOrgAdmin = currentUserRole.Equals("OrgAdmin", StringComparison.OrdinalIgnoreCase);
-    //             isOrgAdmin =
-    // currentUserRole.Contains("OrgAdmin", StringComparison.OrdinalIgnoreCase) ||
-    // currentUserRole.Contains("OrganizationAdmin", StringComparison.OrdinalIgnoreCase);
-                isOrgAdmin = currentUserRole.Contains("OrgAdmin", StringComparison.OrdinalIgnoreCase);
-    //better
-    // isOrgAdmin = string.Equals(currentUserRole, Roles.OrgAdmin, StringComparison.OrdinalIgnoreCase);
+                    // For OrgAdmin, get the organization from the user's claims or first organization
+                    using var db = await DbContextFactory.CreateDbContextAsync();
+                    var orgs = await db.Organizations.ToListAsync();
+                    currentOrgId = orgs.FirstOrDefault()?.OrganizationId ?? Guid.Empty;
 
-                await LoadDataGridAsync();
+                    Console.WriteLine($"OrgAdmin Login - OrgId: {currentOrgId}, UserId: {currentUserId}");
+                }
+                else
+                {
+                    // HR flow - get employee context
+                    var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
+                    if (context != null)
+                    {
+                        currentOrgId = context.OrganizationId;
+                        currentDeptId = context.DepartmentId;
+                        currentEmployeeId = context.EmployeeId;
+                        currentUserId = context.UserId;
+                        currentUserRole = context.Role;
+                        isOrgAdmin = false;
+
+                        Console.WriteLine($"HR Login - OrgId: {currentOrgId}, DeptId: {currentDeptId}, EmployeeId: {currentEmployeeId}");
+                    }
+                }
             }
+
+            await LoadDataGridAsync();
         }
         catch (Exception ex)
         {
@@ -236,18 +260,51 @@
 
     private async Task LoadDataGridAsync()
     {
+        Console.WriteLine($"LoadDataGridAsync - isOrgAdmin: {isOrgAdmin}, OrgId: {currentOrgId}");
+
         if (isOrgAdmin)
         {
-            // 1. OrgAdmins see EVERYTHING across the organization bounds completely (Bypasses Department Rules)
-            allRequests = await AssetService.GetAllAssetRequestsAsync(currentOrgId);
+            if (currentOrgId == Guid.Empty)
+            {
+                Console.WriteLine("ERROR: Organization ID is empty for OrgAdmin!");
+                allRequests = new List<AssetRequestDto>();
+            }
+            else
+            {
+                // allRequests = await AssetService.GetAllAssetRequestsAsync(currentOrgId);
+                allRequests = await AssetService.GetAssetRequestsAsync(
+    organizationId: currentOrgId,
+    status: null,
+    employeeId: null,
+    callerRole: currentUserRole,
+    callerDepartmentId: isOrgAdmin ? null : currentDeptId
+);
+                Console.WriteLine($"OrgAdmin - Found {allRequests.Count} requests");
+            }
         }
         else
         {
-            allRequests = await AssetService.GetAssetRequestsByDepartmentAsync(
-      currentOrgId,
-      currentDeptId,
-      currentEmployeeId
-  );
+            if (currentDeptId == Guid.Empty || currentEmployeeId == Guid.Empty)
+            {
+                Console.WriteLine("ERROR: Department or Employee ID is empty for HR!");
+                allRequests = new List<AssetRequestDto>();
+            }
+            else
+            {
+                // allRequests = await AssetService.GetAssetRequestsByDepartmentAsync(
+                //     currentOrgId,
+                //     currentDeptId,
+                //     currentEmployeeId
+                // );
+                allRequests = await AssetService.GetAssetRequestsAsync(
+    organizationId: currentOrgId,
+    status: null,
+    employeeId: null,
+    callerRole: "HR",
+    callerDepartmentId: currentDeptId
+);
+                Console.WriteLine($"HR - Found {allRequests.Count} requests");
+            }
         }
 
         ApplyInlineFilters();
@@ -284,6 +341,36 @@
         selectedRequest = null;
     }
 
+    // private async Task ActionReviewSubmit(bool approve)
+    // {
+    //     if (selectedRequest == null) return;
+
+    //     try
+    //     {
+    //         loading = true;
+    //         showReviewModal = false;
+
+    //         await AssetService.ReviewAssetRequestAsync(
+    //             currentOrgId,
+    //             selectedRequest.AssetRequestId,
+    //             currentUserId,
+    //             currentUserRole,
+    //             approve,
+    //             reviewNotes
+    //         );
+
+    //         await LoadDataGridAsync();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"Review execution error: {ex.Message}");
+    //     }
+    //     finally
+    //     {
+    //         loading = false;
+    //     }
+    // }
+
     private async Task ActionReviewSubmit(bool approve)
     {
         if (selectedRequest == null) return;
@@ -293,13 +380,29 @@
             loading = true;
             showReviewModal = false;
 
+            // Create the DTO as expected by the new ReviewAssetRequestAsync method
+            var reviewDto = new ReviewAssetRequestDto
+            {
+                AssetRequestId = selectedRequest.AssetRequestId,
+                Approve = approve,
+                Notes = reviewNotes
+            };
+
+            // For Replacement requests, you might need to select a replacement asset
+            if (selectedRequest.RequestType == AssetRequestType.Replacement && approve)
+            {
+                // You'll need to add UI to select a replacement asset
+                // For now, this will fail if no replacement asset is selected
+                reviewDto.ReplacementAssetId = selectedReplacementAssetId; // You'll need to add this
+            }
+
             await AssetService.ReviewAssetRequestAsync(
-                currentOrgId,
-                selectedRequest.AssetRequestId,
-                currentUserId,
-                currentUserRole,
-                approve,
-                reviewNotes
+                organizationId: currentOrgId,
+                reviewerEmployeeId: currentEmployeeId,  // This should be the reviewer's EmployeeId
+                dto: reviewDto,
+                actorUserId: currentUserId,
+                actorRole: currentUserRole,
+                callerDepartmentId: isOrgAdmin ? null : currentDeptId  // Pass department ID for HR scope
             );
 
             await LoadDataGridAsync();
@@ -338,4 +441,21 @@
         AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
         _ => "bg-light text-dark border"
     };
+
+    private async Task LoadReplacementAssets(Guid requestId)
+    {
+        try
+        {
+            availableReplacementAssets = await AssetService.GetAvailableReplacementAssetsAsync(
+                organizationId: currentOrgId,
+                assetRequestId: requestId,
+                callerRole: currentUserRole,
+                callerDepartmentId: isOrgAdmin ? null : currentDeptId
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading replacement assets: {ex.Message}");
+        }
+    }
 }

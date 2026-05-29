@@ -130,19 +130,15 @@
     .animate-pulse {
         animation: pulseOpacity 2s infinite ease-in-out;
     }
-    @("@keyframes pulseOpacity")
 
-    {
-        0%, 100%
+    @@keyframes pulseOpacity {
+        0%, 100% {
+            opacity: 0.6;
+        }
 
-    {
-        opacity: 0.6;
-    }
-
-    50% {
-        opacity: 1;
-    }
-
+        50% {
+            opacity: 1;
+        }
     }
 </style>
 
@@ -163,8 +159,15 @@
             var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
             if (context != null)
             {
-                // Pulls all lifecycle entries from the organization assigned explicitly to this single EmployeeId
-                var allOrgRequests = await AssetService.GetAllAssetRequestsAsync(context.OrganizationId);
+                // Use GetAssetRequestsAsync instead of GetAllAssetRequestsAsync
+                // For Employee view, we don't need callerRole since we're filtering by employeeId
+                var allOrgRequests = await AssetService.GetAssetRequestsAsync(
+                    organizationId: context.OrganizationId,
+                    status: null,
+                    employeeId: null,
+                    callerRole: null,  // No role filtering needed
+                    callerDepartmentId: null
+                );
 
                 myRequests = allOrgRequests
                     .Where(r => r.RequestedByEmployeeId == context.EmployeeId)

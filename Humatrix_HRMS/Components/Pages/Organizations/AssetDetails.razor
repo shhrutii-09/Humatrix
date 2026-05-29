@@ -200,19 +200,22 @@
         try
         {
             loading = true;
-            // FIXED: Using your exact context gather signature for Org Dashboard configurations
+
+            // Get OrgAdmin context
             var adminContext = await CurrentUserService.GetOrgDashboardContextAsync();
             var orgId = adminContext?.OrganizationId ?? Guid.Empty;
 
-            asset = await AssetService.GetAssetDetailsByIdAsync(AssetId, orgId);
+            // FIXED: Use GetAssetByIdAsync instead of GetAssetDetailsByIdAsync
+            // For OrgAdmin, we don't need to pass department scope (pass null)
+            asset = await AssetService.GetAssetByIdAsync(AssetId, orgId, callerRole: "OrgAdmin", callerDepartmentId: null);
 
             if (asset != null)
             {
+                // FIXED: GetAssetAssignmentHistoryAsync exists in the service
                 historyLogs = await AssetService.GetAssetAssignmentHistoryAsync(AssetId, orgId);
 
                 if (asset.DepartmentId.HasValue)
                 {
-                    // FIXED: Using your actual database fetch routine GetAllAsync()
                     var depts = await DepartmentService.GetAllAsync();
                     departmentName = depts.FirstOrDefault(d => d.DepartmentId == asset.DepartmentId.Value)?.Name;
                 }

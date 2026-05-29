@@ -2209,8 +2209,15 @@
         StateHasChanged();
         try
         {
-            reqAll = await AssetService.GetAssetRequestsByDepartmentAsync(
-                orgId, hrDeptId, string.IsNullOrEmpty(reqStatusFilter) ? null : reqStatusFilter);
+      //       reqAll = await AssetService.GetAssetRequestsByDepartmentAsync(
+      // orgId, hrDeptId, hrEmpId, string.IsNullOrEmpty(reqStatusFilter) ? null : reqStatusFilter);
+            reqAll = await AssetService.GetAssetRequestsAsync(
+          organizationId: orgId,
+          status: string.IsNullOrEmpty(reqStatusFilter) ? null : reqStatusFilter,
+          employeeId: null,
+          callerRole: "HR",
+          callerDepartmentId: hrDeptId
+      );
 
             kpiPendingRequests = reqAll.Count(r => r.Status == AssetRequestStatus.Pending);
             ApplyReqFilters();
@@ -2238,7 +2245,14 @@
         StateHasChanged();
         try
         {
-            procurements = await AssetService.GetProcurementRequestsAsync(orgId, null, hrDeptId);
+            // procurements = await AssetService.GetProcurementRequestsAsync(orgId, null, hrDeptId);
+            procurements = await AssetService.GetProcurementRequestsAsync(
+    organizationId: orgId,
+    status: null,
+    departmentId: hrDeptId,
+    callerRole: "HR",
+    callerDepartmentId: hrDeptId
+);
         }
         catch (Exception ex) { Toast($"Error loading procurement: {ex.Message}", false); }
         finally { procLoading = false; }
@@ -2260,8 +2274,14 @@
         try
         {
             // Uses the new HR-specific method: excludes HR + OrgAdmin roles
-            assignableEmps = await AssetService.GetAssignableEmployeesForHRAsync(
-                orgId, asset.AssetId, UserManager);
+            // assignableEmps = await AssetService.GetAssignableEmployeesForHRAsync(
+            //     orgId, asset.AssetId, UserManager);
+            assignableEmps = await AssetService.GetAssignableEmployeesAsync(
+    organizationId: orgId,
+    assetId: asset.AssetId,
+    callerRole: "HR",
+    callerDepartmentId: hrDeptId
+);
         }
         catch (Exception ex) { assignableEmps = new(); modalError = ex.Message; }
         finally { empLoading = false; }
@@ -2277,14 +2297,26 @@
         submitting = true; modalError = "";
         try
         {
-            await AssetService.AssignAssetAsync(orgId,
-                new AssignAssetDto
-                {
-                    AssetId = modalAsset!.AssetId,
-                    EmployeeId = empId,
-                    Notes = assignNotes
-                },
-                hrUserId, "HR");
+            // await AssetService.AssignAssetAsync(orgId,
+            //     new AssignAssetDto
+            //     {
+            //         AssetId = modalAsset!.AssetId,
+            //         EmployeeId = empId,
+            //         Notes = assignNotes
+            //     },
+            //     hrUserId, "HR");
+            await AssetService.AssignAssetAsync(
+    organizationId: orgId,
+    dto: new AssignAssetDto
+    {
+        AssetId = modalAsset!.AssetId,
+        EmployeeId = empId,
+        Notes = assignNotes
+    },
+    actorUserId: hrUserId,
+    actorRole: "HR",
+    callerDepartmentId: hrDeptId
+);
             var assetName = modalAsset!.Name;
 
             CloseAll();
@@ -2317,14 +2349,16 @@
             var assetName = modalAsset!.Name;
 
             await AssetService.ReturnAssetAsync(
-                orgId,
-                new ReturnAssetDto
-                {
-                    AssetId = modalAsset.AssetId,
-                    Notes = returnNotes
-                },
-                hrUserId,
-                "HR");
+     organizationId: orgId,
+     dto: new ReturnAssetDto
+     {
+         AssetId = modalAsset.AssetId,
+         Notes = returnNotes
+     },
+     actorUserId: hrUserId,
+     actorRole: "HR",
+     callerDepartmentId: hrDeptId
+ );
 
             CloseAll();
 
@@ -2360,15 +2394,26 @@
         try
         {
             // HR raises on behalf of the department — uses the new HR-aware method
-            await AssetService.CreateAssetRequestByHRAsync(
-                orgId, hrDeptId, hrEmpId,
-                new CreateAssetRequestDto
+            // await AssetService.CreateAssetRequestByHRAsync(
+            //     orgId, hrDeptId, hrEmpId,
+            //     new CreateAssetRequestDto
+            //     {
+            //         AssetId = modalAsset!.AssetId,
+            //         RequestType = requestType,
+            //         Reason = requestReason
+            //     });
+            await AssetService.CreateAssetRequestAsync(
+                organizationId: orgId,
+                requestedByEmployeeId: hrEmpId,
+                requestorRole: "HR",
+                dto: new CreateAssetRequestDto
                 {
                     AssetId = modalAsset!.AssetId,
                     RequestType = requestType,
                     Reason = requestReason
-                });
-
+                },
+                callerDepartmentId: hrDeptId
+                );
             var assetName = modalAsset!.Name;
 
             CloseAll();
@@ -2399,8 +2444,16 @@
         submitting = true; modalError = "";
         try
         {
+            // await AssetService.CreateProcurementRequestAsync(
+            //     orgId, hrDeptId, hrEmpId, procDto, hrUserId);
             await AssetService.CreateProcurementRequestAsync(
-                orgId, hrDeptId, hrEmpId, procDto, hrUserId);
+    organizationId: orgId,
+    departmentId: hrDeptId,
+    requestedByEmployeeId: hrEmpId,
+    dto: procDto,
+    actorUserId: hrUserId,
+    callerDepartmentId: hrDeptId
+);
 
             CloseAll();
             procurements.Clear();

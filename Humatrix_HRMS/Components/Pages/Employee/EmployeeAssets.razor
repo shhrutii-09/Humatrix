@@ -255,8 +255,38 @@
                 currentOrganizationId = empContext.OrganizationId;
                 currentUserId = empContext.UserId;
 
-                myAssets = await AssetService.GetAssetsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
-                myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+                // FIXED: Use GetEmployeeAssetsAsync instead of GetAssetsByEmployeeIdAsync
+                var assignments = await AssetService.GetEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
+
+                // Convert assignments to AssetDto list
+                myAssets = new List<AssetDto>();
+                foreach (var assignment in assignments)
+                {
+                    // Get full asset details for each assigned asset
+                    var asset = await AssetService.GetAssetByIdAsync(
+                        assignment.AssetId,
+                        currentOrganizationId,
+                        callerRole: "Employee",
+                        callerDepartmentId: null
+                    );
+                    if (asset != null)
+                    {
+                        myAssets.Add(asset);
+                    }
+                }
+
+                // FIXED: Use GetAssetRequestsAsync instead of GetAssetRequestsByEmployeeIdAsync
+                var allRequests = await AssetService.GetAssetRequestsAsync(
+                    organizationId: currentOrganizationId,
+                    status: null,
+                    employeeId: currentEmployeeId,
+                    callerRole: "Employee",
+                    callerDepartmentId: null
+                );
+
+                myRequests = allRequests
+                    .OrderByDescending(r => r.RequestedAt)
+                    .ToList();
             }
         }
         catch (Exception ex)
@@ -304,18 +334,30 @@
             submitting = true;
             errorMessage = "";
 
-            // Fixed method mapping to match existing service definition contract
+            // Use CreateAssetRequestAsync with Employee role
             await AssetService.CreateAssetRequestAsync(
-                currentOrganizationId,
-                currentEmployeeId,
-                AssetRequestorRole.Employee,
-                createRequestModel
+                organizationId: currentOrganizationId,
+                requestedByEmployeeId: currentEmployeeId,
+                requestorRole: AssetRequestorRole.Employee,
+                dto: createRequestModel,
+                callerDepartmentId: null  // Employees don't have department restriction
             );
 
             showRequestModal = false;
 
             // Re-fetch tracking table values
-            myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+            var allRequests = await AssetService.GetAssetRequestsAsync(
+                organizationId: currentOrganizationId,
+                status: null,
+                employeeId: currentEmployeeId,
+                callerRole: "Employee",
+                callerDepartmentId: null
+            );
+
+            myRequests = allRequests
+                .OrderByDescending(r => r.RequestedAt)
+                .ToList();
+
             activeTab = "my-requests";
         }
         catch (Exception ex)

@@ -14,8 +14,9 @@ namespace Humatrix_HRMS.Services.Assets
     ///   Assigned   → Available (on return)
     ///   Assigned   → InRepair  (when repair request approved)
     ///   Assigned   → Retired   (admin action)
-    ///   InRepair   → Available (repair completed)
-    ///   InRepair   → Retired
+    ///   InRepair   → Assigned  (repair completed - asset returns to employee)
+    ///   InRepair   → Available (repair completed - asset goes to pool)
+    ///   InRepair   → Retired   (beyond repair)
     ///   Lost       → Available (if found)
     ///   Retired    → (terminal — no further transitions)
     /// </summary>
@@ -25,7 +26,7 @@ namespace Humatrix_HRMS.Services.Assets
         {
             [AssetStatus.Available] = new() { AssetStatus.Assigned, AssetStatus.Retired, AssetStatus.Lost },
             [AssetStatus.Assigned] = new() { AssetStatus.Available, AssetStatus.InRepair, AssetStatus.Retired },
-            [AssetStatus.InRepair] = new() { AssetStatus.Available, AssetStatus.Retired },
+            [AssetStatus.InRepair] = new() { AssetStatus.Assigned, AssetStatus.Available, AssetStatus.Retired },  // ← Added Assigned here
             [AssetStatus.Lost] = new() { AssetStatus.Available },
             [AssetStatus.Retired] = new HashSet<string>()  // terminal
         };
