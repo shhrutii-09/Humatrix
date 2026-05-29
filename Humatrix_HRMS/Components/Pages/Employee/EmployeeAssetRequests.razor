@@ -1,0 +1,214 @@
+﻿@page "/employee/asset-requests"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Employee,HR,OrgAdmin")]
+
+@using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Assets
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Microsoft.AspNetCore.Authorization
+
+@inject AssetService AssetService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+
+<PageTitle>My Asset Requests | Humatrix HRMS</PageTitle>
+
+<div class="emp-wrapper" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
+
+    <div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom: 1px solid #e2e8f0;">
+        <div class="d-flex align-items-center gap-3">
+            <div class="bg-primary text-white d-flex align-items-center justify-content-center rounded" style="width: 44px; height: 44px; font-size: 1.4rem; background-color: #4f46e5 !important;">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div>
+                <h1 class="m-0" style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">My Asset Requests</h1>
+                <p class="text-muted small m-0">Track lifecycle ticket states, repairs, and return submissions</p>
+            </div>
+        </div>
+
+        <div>
+            <button class="btn btn-outline-secondary btn-sm px-3 shadow-sm d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; height: 38px;" @onclick="NavigateToInventory">
+                <i class="bi bi-laptop"></i> View My Handover Assets
+            </button>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status" style="color: #4f46e5 !important;"></div>
+            <p class="text-muted small mt-2 fw-medium">Loading request history timeline...</p>
+        </div>
+    }
+    else if (!myRequests.Any())
+    {
+        <div class="text-center py-5 bg-white rounded border" style="border-style: dashed !important; border-color: #cbd5e1 !important; border-width: 2px !important;">
+            <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                <i class="bi bi-journal-x text-muted" style="font-size: 1.8rem;"></i>
+            </div>
+            <h5 class="fw-bold text-dark mb-1">No Operational Requests Filed</h5>
+            <p class="text-muted small max-w-md mx-auto mb-3" style="max-width: 400px;">You haven't requested any actions or filed structural issue updates for physical hardware components yet.</p>
+            <button class="btn btn-primary btn-sm px-3" style="background-color: #4f46e5; border: none; border-radius: 6px;" @onclick="NavigateToInventory">
+                <i class="bi bi-plus-lg me-1"></i> File New Request
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border" style="border-radius: 12px; overflow: hidden; background: #fff; border-color: #e2e8f0;">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                    <thead class="table-light text-secondary" style="background: #f8fafc; font-weight: 600;">
+                        <tr>
+                            <th class="ps-4 py-3">Asset Item</th>
+                            <th class="py-3">Request Category</th>
+                            <th class="py-3">Date Submitted</th>
+                            <th class="py-3">My Reasoning</th>
+                            <th class="py-3">Current Status</th>
+                            <th class="pe-4 py-3">Review Notes / Logs</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var request in myRequests)
+                        {
+                            <tr>
+                                <td class="ps-4 py-3">
+                                    <div class="fw-bold text-dark">@request.AssetName</div>
+                                    <div class="text-muted font-monospace small" style="font-size: 0.75rem; letter-spacing: 0.5px;">@request.AssetCode</div>
+                                </td>
+                                <td class="py-3">
+                                    <span class="@GetRequestTypeClass(request.RequestType)" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; font-weight: 600; display: inline-block;">
+                                        <i class="@GetRequestTypeIcon(request.RequestType) me-1"></i> @request.RequestType
+                                    </span>
+                                </td>
+                                <td class="py-3 text-muted small">
+                                    @request.RequestedAt.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
+                                </td>
+                                <td class="py-3 text-secondary text-truncate" style="max-width: 240px;" title="@request.Reason">
+                                    @request.Reason
+                                </td>
+                                <td class="py-3">
+                                    <span class="@GetStatusClass(request.Status)" style="font-size: 0.75rem; padding: 0.3rem 0.65rem; border-radius: 50px; font-weight: 600; display: inline-block;">
+                                        @request.Status
+                                    </span>
+                                </td>
+                                <td class="pe-4 py-3">
+                                    @if (!string.IsNullOrWhiteSpace(request.ReviewNotes))
+                                    {
+                                        <div class="text-dark small fw-medium" style="max-width: 300px; line-height: 1.3;">
+                                            <i class="bi bi-chat-left-quote text-muted me-1"></i> @request.ReviewNotes
+                                        </div>
+                                        @if (request.ReviewedAt.HasValue)
+                                        {
+                                            <div class="text-muted" style="font-size: 0.7rem; margin-top: 2px;">
+                                                Processed on @request.ReviewedAt.Value.ToLocalTime().ToString("d")
+                                            </div>
+                                        }
+                                    }
+                                    else if (request.Status == AssetRequestStatus.Pending)
+                                    {
+                                        <span class="text-muted small fst-italic text-opacity-75">
+                                            <i class="bi bi-hourglass-split me-1 animate-pulse"></i> Awaiting review
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .animate-pulse {
+        animation: pulseOpacity 2s infinite ease-in-out;
+    }
+    @("@keyframes pulseOpacity")
+
+    {
+        0%, 100%
+
+    {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    }
+</style>
+
+@code {
+    private bool loading = true;
+    private List<AssetRequestDto> myRequests = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMyRequestHistoryAsync();
+    }
+
+    private async Task LoadMyRequestHistoryAsync()
+    {
+        try
+        {
+            loading = true;
+            var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
+            if (context != null)
+            {
+                // Pulls all lifecycle entries from the organization assigned explicitly to this single EmployeeId
+                var allOrgRequests = await AssetService.GetAllAssetRequestsAsync(context.OrganizationId);
+
+                myRequests = allOrgRequests
+                    .Where(r => r.RequestedByEmployeeId == context.EmployeeId)
+                    .OrderByDescending(r => r.RequestedAt)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error mapping asset requests timeline array: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void NavigateToInventory()
+    {
+        Nav.NavigateTo("/employee/assets");
+    }
+
+    private string GetRequestTypeClass(string type) => type switch
+    {
+        AssetRequestType.Repair => "bg-warning-subtle text-warning border border-warning-subtle",
+        AssetRequestType.Replacement => "bg-primary-subtle text-primary border border-primary-subtle",
+        AssetRequestType.Return => "bg-info-subtle text-info border border-info-subtle",
+        _ => "bg-light text-dark border"
+    };
+
+    private string GetRequestTypeIcon(string type) => type switch
+    {
+        AssetRequestType.Repair => "bi bi-tools",
+        AssetRequestType.Replacement => "bi bi-arrow-repeat",
+        AssetRequestType.Return => "bi bi-arrow-return-left",
+        _ => "bi bi-question-circle"
+    };
+
+    private string GetStatusClass(string status) => status switch
+    {
+        AssetRequestStatus.Pending => "bg-warning-subtle text-warning border border-warning",
+        AssetRequestStatus.Approved => "bg-success-subtle text-success border border-success",
+        AssetRequestStatus.Rejected => "bg-danger-subtle text-danger border border-danger",
+        AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
+        _ => "bg-light text-dark border"
+    };
+}

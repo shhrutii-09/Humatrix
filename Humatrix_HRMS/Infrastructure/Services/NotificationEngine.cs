@@ -553,5 +553,20 @@ namespace Humatrix_HRMS.Infrastructure.Services
                     ? $"Your request for {quantity}× {assetCategory} has been approved."
                     : $"Your request for {quantity}× {assetCategory} was not approved.",
                 "/hr/procurement");
+
+        public Task SendProcurementFulfilledAsync(
+    string hrUserId,
+    string assetCategory,
+    int quantityCreated,
+    Guid procurementRequestId,
+    Guid organizationId,
+    string actorUserId)
+    => SendToUserAsync(
+        hrUserId, organizationId, actorUserId,
+        AssetNotificationTypes.ProcurementFulfilled,
+        "ProcurementRequest", procurementRequestId,
+        "Assets Now Available 🎉",
+        $"{quantityCreated}× {assetCategory} have been added to your department inventory and are ready to assign.",
+        "/hr/assets");
     }
 }

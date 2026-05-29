@@ -1148,16 +1148,6 @@ bool restrictToDepartment = false)
                     DepartmentId = e.DepartmentId
                 })
                 .ToListAsync();
-
-
-                //.Select(e => new EmployeeDropdownDto
-                //{
-                //    EmployeeId = e.EmployeeId,
-                //    FullName = (e.FirstName ?? "") + " " + (e.LastName ?? ""),
-                //    DepartmentId = e.DepartmentId
-                //})
-                //.ToListAsync();
-
             return employees;
         }
 
@@ -1315,9 +1305,10 @@ bool restrictToDepartment = false)
         }
 
         public async Task<List<AssetRequestDto>> GetAssetRequestsByDepartmentAsync(
-    Guid organizationId,
-    Guid departmentId,
-    string? status = null)
+      Guid organizationId,
+      Guid departmentId,
+      Guid currentEmployeeId,
+      string? status = null)
         {
             var q = _db.AssetRequests
                 .Include(r => r.Asset)
@@ -1325,7 +1316,23 @@ bool restrictToDepartment = false)
                 .Include(r => r.ReviewedByEmployee)
                 .Where(r =>
                     r.OrganizationId == organizationId &&
-                    (r.Asset.DepartmentId == departmentId || r.Asset.DepartmentId == null));
+
+                    (r.Asset.DepartmentId == departmentId || r.Asset.DepartmentId == null) &&
+
+                    // Prevent self approval
+                    r.RequestedByEmployeeId != currentEmployeeId &&
+
+                    // Exclude HR requests
+                    !(r.RequestorRole ?? "")
+                        .Contains("HR", StringComparison.OrdinalIgnoreCase) &&
+
+                    // Exclude OrgAdmin requests
+                    !(r.RequestorRole ?? "")
+                        .Contains("OrgAdmin", StringComparison.OrdinalIgnoreCase) &&
+
+                    !(r.RequestorRole ?? "")
+                        .Contains("OrganizationAdmin", StringComparison.OrdinalIgnoreCase)
+                );
 
             if (!string.IsNullOrWhiteSpace(status))
                 q = q.Where(r => r.Status == status);
@@ -1409,5 +1416,108 @@ bool restrictToDepartment = false)
                 .ToListAsync();
         }
 
+
+        // ── ADD THESE METHODS INSIDE YOUR EXISTING AssetService.cs ────────────────
+
+        public async Task<List<AssetRequestDto>> GetAllAssetRequestsAsync(Guid organizationId, string? status = null)
+        {
+            var q = _db.AssetRequests
+                .Include(r => r.Asset)
+                .Include(r => r.RequestedByEmployee)
+                .Include(r => r.ReviewedByEmployee)
+                .Where(r => r.OrganizationId == organizationId);
+
+            if (!string.IsNullOrWhiteSpace(status))
+                q = q.Where(r => r.Status == status);
+
+            return await q
+                .OrderByDescending(r => r.RequestedAt)
+                .Select(r => MapAssetRequestDto(r))
+                .ToListAsync();
+        }
+
+        public async Task ReviewAssetRequestAsync(
+            Guid organizationId,
+            Guid requestId,
+            string reviewerUserId,
+            string reviewerRole,
+            bool approve,
+            string? reviewNotes)
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var request = await _db.AssetRequests
+                    .Include(r => r.Asset)
+                    .FirstOrDefaultAsync(r => r.AssetRequestId == requestId && r.OrganizationId == organizationId);
+
+                if (request == null)
+                    throw new KeyNotFoundException("Asset lifecycle request record not found.");
+
+                if (request.Status != AssetRequestStatus.Pending)
+                    throw new InvalidOperationException("This asset query request has already been processed.");
+
+                // Identify the reviewer employee profile
+                var reviewerEmp = await _db.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.UserId == reviewerUserId && e.OrganizationId == organizationId);
+
+                // Update Request State
+                request.Status = approve ? AssetRequestStatus.Approved : AssetRequestStatus.Rejected;
+                request.ReviewedByEmployeeId = reviewerEmp?.EmployeeId;
+                request.ReviewedAt = DateTime.UtcNow;
+                request.ReviewNotes = reviewNotes?.Trim();
+
+                // Inventory Stock Control Rules
+                if (approve && request.Asset != null)
+                {
+                    if (request.RequestType == AssetRequestType.Return)
+                    {
+                        // Return item safely back to general company storage
+                        request.Asset.Status = AssetStatus.Available;
+                        request.Asset.CurrentEmployeeId = null;
+                    }
+                    else if (request.RequestType == AssetRequestType.Repair)
+                    {
+                        // Flag physical tracking tag into repair mode state
+                        request.Asset.Status = AssetStatus.InRepair;
+                    }
+
+                    // Mark complete since the system immediately updates inventory parameters
+                    request.Status = AssetRequestStatus.Completed;
+                }
+
+                await _db.SaveChangesAsync();
+
+                // Register Audit Trail Logs
+                _ = _activityLog.LogAsync(
+                    organizationId, AssetModuleName.AssetRequest, approve ? "Approved" : "Rejected",
+                    "AssetRequest", request.AssetRequestId,
+                    reviewerUserId, reviewerRole,
+                    newValues: new { request.Asset?.AssetCode, request.RequestType, Note = reviewNotes });
+
+                // Dispatch Real-time Confirmation Alert back to Requesting Employee
+                var requestorUserId = await GetUserIdForEmployeeAsync(request.RequestedByEmployeeId);
+                if (!string.IsNullOrEmpty(requestorUserId))
+                {
+                    await _notifications.SendAssetRequestReviewedAsync(
+                        requestorUserId,
+                        request.Asset?.Name ?? "Asset Item",
+                        request.RequestType,
+                        approve,
+                        request.AssetRequestId,
+                        organizationId,
+                        reviewerUserId
+                    );
+                }
+
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
     }
 }

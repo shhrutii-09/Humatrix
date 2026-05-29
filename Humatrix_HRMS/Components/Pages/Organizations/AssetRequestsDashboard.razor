@@ -1,0 +1,341 @@
+﻿@page "/hr/asset-requests"
+@page "/org/asset-requests"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Assets
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Microsoft.AspNetCore.Authorization
+
+@inject AssetService AssetService
+@inject CurrentUserService CurrentUserService
+
+<PageTitle>Asset Request Management | Humatrix HRMS</PageTitle>
+
+<div class="hr-wrapper" style="padding: 1.5rem; max-width: 1400px; margin: 0 auto;">
+
+    <div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom: 1px solid #e2e8f0;">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="bg-dark text-white d-flex align-items-center justify-content-center rounded" style="width: 40px; height: 40px; font-size: 1.3rem; background-color: #0f172a !important;">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div>
+                    <h1 class="m-0" style="font-size: 1.65rem; font-weight: 700; color: #0f172a;">Asset Lifecycle Command</h1>
+                    <span class="badge mt-1 @(isOrgAdmin ? "bg-danger" : "bg-primary")" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">
+                        <i class="bi bi-person-badge me-1"></i> Management View: @(isOrgAdmin ? "Global OrgAdmin Dashboard" : "Department HR Dashboard")
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width: 180px; border-radius: 8px; height: 38px;" @onchange="FilterStatusChanged">
+                <option value="">All Statuses</option>
+                <option value="@AssetRequestStatus.Pending">⏳ Pending Review</option>
+                <option value="@AssetRequestStatus.Approved">👍 Approved</option>
+                <option value="@AssetRequestStatus.Completed">✅ Completed / Fulfilled</option>
+                <option value="@AssetRequestStatus.Rejected">❌ Rejected</option>
+            </select>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status" style="color: #4f46e5 !important;"></div>
+            <p class="text-muted small mt-2 fw-medium">Assembling synchronized lifecycle streams...</p>
+        </div>
+    }
+    else
+    {
+        @if (!requestsList.Any())
+        {
+            <div class="text-center py-5 bg-white rounded border" style="border-style: dashed !important; border-color: #cbd5e1 !important; border-width: 2px !important;">
+                <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <i class="bi bi-inbox text-muted" style="font-size: 1.8rem;"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-1">No Action Items Found</h5>
+                <p class="text-muted small max-w-md mx-auto m-0" style="max-width: 420px;">There are no operational lifecycle requests matching your active separation criteria rules.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card shadow-sm border" style="border-radius: 12px; overflow: hidden; background: #fff; border-color: #e2e8f0;">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                        <thead class="table-light text-secondary" style="background: #f8fafc; font-weight: 600;">
+                            <tr>
+                                <th class="ps-4 py-3">Requester</th>
+                                <th class="py-3">Asset Items</th>
+                                <th class="py-3">Category Type</th>
+                                <th class="py-3">Date Submitted</th>
+                                <th class="py-3">Reasoning Statement</th>
+                                <th class="py-3">Current Status</th>
+                                <th class="pe-4 py-3 text-end">Workflow Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var request in requestsList)
+                            {
+                                <tr>
+                                    <td class="ps-4 py-3">
+                                        <div class="fw-bold text-dark">@request.RequestedByEmployeeName</div>
+                                        <div class="text-muted small" style="font-size: 0.75rem;">
+                                            <span class="badge bg-light text-secondary border">@request.RequestorRole</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-3">
+                                        <div class="fw-semibold text-dark">@request.AssetName</div>
+                                        <div class="text-muted font-monospace small" style="font-size: 0.75rem; letter-spacing: 0.3px;">@request.AssetCode</div>
+                                    </td>
+                                    <td class="py-3">
+                                        <span class="@GetRequestTypeClass(request.RequestType)" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; font-weight: 600;">
+                                            <i class="@GetRequestTypeIcon(request.RequestType) me-1"></i> @request.RequestType
+                                        </span>
+                                    </td>
+                                    <td class="py-3 text-muted small">
+                                        @request.RequestedAt.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
+                                    </td>
+                                    <td class="py-3 text-secondary text-truncate" style="max-width: 220px;" title="@request.Reason">
+                                        @request.Reason
+                                    </td>
+                                    <td class="py-3">
+                                        <span class="@GetStatusClass(request.Status)" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 50px; font-weight: 600;">
+                                            @request.Status
+                                        </span>
+                                    </td>
+                                    <td class="pe-4 py-3 text-end">
+                                        @if (request.Status == AssetRequestStatus.Pending)
+                                        {
+                                            <button class="btn btn-sm btn-outline-dark px-3 fw-medium" style="border-radius: 6px; font-size: 0.8rem;" @onclick="() => OpenReviewModal(request)">
+                                                <i class="bi bi-pencil-square me-1"></i>Process Review
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted small d-flex flex-column align-items-end justify-content-center">
+                                                <span class="fw-medium text-success" style="font-size: 0.8rem;"><i class="bi bi-check2-all"></i> Evaluated</span>
+                                                @if (!string.IsNullOrEmpty(request.ReviewNotes))
+                                                {
+                                                    <span class="text-truncate text-muted font-italic" style="max-width: 150px; font-size: 0.7rem;" title="@request.ReviewNotes">"@request.ReviewNotes"</span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (showReviewModal && selectedRequest != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+                <div class="modal-header bg-light border-bottom p-3">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-shield-check text-primary me-2" style="color: #4f46e5 !important;"></i>Evaluate Request</h5>
+                    <button type="button" class="btn-close" @onclick="CloseReviewModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3 p-3 bg-light rounded border small" style="border-color: #e2e8f0 !important;">
+                        <div class="mb-1"><span class="text-muted">Employee:</span> <strong class="text-dark">@selectedRequest.RequestedByEmployeeName</strong></div>
+                        <div class="mb-1"><span class="text-muted">Item Model:</span> <strong class="text-dark">@selectedRequest.AssetName (@selectedRequest.AssetCode)</strong></div>
+                        <div><span class="text-muted">Stated Reason:</span> <span class="text-secondary font-italic">"@selectedRequest.Reason"</span></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-secondary small">Reviewer Processing Notes / Context</label>
+                        <textarea class="form-control" rows="3" @bind="reviewNotes" placeholder="Provide textual rationale for validation or rejection outcome details..." style="border-radius: 8px; font-size: 0.9rem;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top p-3 d-flex justify-content-between">
+                    <button type="button" class="btn btn-secondary px-3 py-2 btn-sm fw-medium" style="border-radius: 8px;" @onclick="CloseReviewModal">Dismiss</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-danger px-3 py-2 btn-sm fw-medium" style="border-radius: 8px;" @onclick="() => ActionReviewSubmit(false)">
+                            <i class="bi bi-x-circle me-1"></i> Decline Request
+                        </button>
+                        <button type="button" class="btn btn-success px-3 py-2 btn-sm fw-medium" style="border-radius: 8px;" @onclick="() => ActionReviewSubmit(true)">
+                            <i class="bi bi-check-circle me-1"></i> Approve & Process
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private bool isOrgAdmin = false;
+    private bool showReviewModal = false;
+    private string reviewNotes = "";
+    private string selectedFilterStatus = "";
+
+    private Guid currentOrgId;
+    private Guid currentDeptId;
+    private Guid currentEmployeeId;
+    private string currentUserId = "";
+    private string currentUserRole = "HR";
+
+    private List<AssetRequestDto> allRequests = new();
+    private List<AssetRequestDto> requestsList = new();
+    private AssetRequestDto? selectedRequest;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardContextAsync();
+    }
+
+    private async Task LoadDashboardContextAsync()
+    {
+        try
+        {
+            loading = true;
+            var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
+            if (context != null)
+            {
+                currentOrgId = context.OrganizationId;
+                currentDeptId = context.DepartmentId;
+                currentEmployeeId = context.EmployeeId;
+                currentUserId = context.UserId;
+                currentUserRole = context.Role;
+
+                Console.WriteLine($"USER ID = {currentUserId}");
+                Console.WriteLine($"ROLE = {currentUserRole}");
+                Console.WriteLine($"ORG ID = {currentOrgId}"); ;
+
+                // Explicitly check role parameters
+                // isOrgAdmin = currentUserRole.Equals("OrgAdmin", StringComparison.OrdinalIgnoreCase);
+    //             isOrgAdmin =
+    // currentUserRole.Contains("OrgAdmin", StringComparison.OrdinalIgnoreCase) ||
+    // currentUserRole.Contains("OrganizationAdmin", StringComparison.OrdinalIgnoreCase);
+                isOrgAdmin = currentUserRole.Contains("OrgAdmin", StringComparison.OrdinalIgnoreCase);
+    //better
+    // isOrgAdmin = string.Equals(currentUserRole, Roles.OrgAdmin, StringComparison.OrdinalIgnoreCase);
+
+                await LoadDataGridAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading management stream context: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadDataGridAsync()
+    {
+        if (isOrgAdmin)
+        {
+            // 1. OrgAdmins see EVERYTHING across the organization bounds completely (Bypasses Department Rules)
+            allRequests = await AssetService.GetAllAssetRequestsAsync(currentOrgId);
+        }
+        else
+        {
+            allRequests = await AssetService.GetAssetRequestsByDepartmentAsync(
+      currentOrgId,
+      currentDeptId,
+      currentEmployeeId
+  );
+        }
+
+        ApplyInlineFilters();
+    }
+
+    private void ApplyInlineFilters()
+    {
+        if (string.IsNullOrWhiteSpace(selectedFilterStatus))
+        {
+            requestsList = allRequests;
+        }
+        else
+        {
+            requestsList = allRequests.Where(r => r.Status == selectedFilterStatus).ToList();
+        }
+    }
+
+    private void FilterStatusChanged(ChangeEventArgs e)
+    {
+        selectedFilterStatus = e.Value?.ToString() ?? "";
+        ApplyInlineFilters();
+    }
+
+    private void OpenReviewModal(AssetRequestDto req)
+    {
+        selectedRequest = req;
+        reviewNotes = "";
+        showReviewModal = true;
+    }
+
+    private void CloseReviewModal()
+    {
+        showReviewModal = false;
+        selectedRequest = null;
+    }
+
+    private async Task ActionReviewSubmit(bool approve)
+    {
+        if (selectedRequest == null) return;
+
+        try
+        {
+            loading = true;
+            showReviewModal = false;
+
+            await AssetService.ReviewAssetRequestAsync(
+                currentOrgId,
+                selectedRequest.AssetRequestId,
+                currentUserId,
+                currentUserRole,
+                approve,
+                reviewNotes
+            );
+
+            await LoadDataGridAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Review execution error: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private string GetRequestTypeClass(string type) => type switch
+    {
+        AssetRequestType.Repair => "bg-warning-subtle text-warning border border-warning-subtle",
+        AssetRequestType.Replacement => "bg-primary-subtle text-primary border border-primary-subtle",
+        AssetRequestType.Return => "bg-info-subtle text-info border border-info-subtle",
+        _ => "bg-light text-dark border"
+    };
+
+    private string GetRequestTypeIcon(string type) => type switch
+    {
+        AssetRequestType.Repair => "bi bi-tools",
+        AssetRequestType.Replacement => "bi bi-arrow-repeat",
+        AssetRequestType.Return => "bi bi-arrow-return-left",
+        _ => "bi bi-question-circle"
+    };
+
+    private string GetStatusClass(string status) => status switch
+    {
+        AssetRequestStatus.Pending => "bg-warning-subtle text-warning border border-warning",
+        AssetRequestStatus.Approved => "bg-success-subtle text-success border border-success",
+        AssetRequestStatus.Rejected => "bg-danger-subtle text-danger border border-danger",
+        AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
+        _ => "bg-light text-dark border"
+    };
+}
