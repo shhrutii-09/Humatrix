@@ -361,10 +361,13 @@
         }
     }
 
-    // FIX: All time display now uses orgTimeZone — not UTC default.
     private string FormatTime(DateTime? utcTime)
-        => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
+    {
+        if (utcTime == null)
+            return "--";
 
+        return utcTime.Value.ToLocalTime().ToString("hh:mm tt");
+    }
     private string GetStatusClass(string? status)
     {
         if (string.IsNullOrEmpty(status)) return "bg-secondary";

@@ -270,11 +270,63 @@ namespace Humatrix_HRMS.Services.Assets
         /// Employee or HR raises a request against their assigned asset.
         /// Validates that the requestor actually holds the asset.
         /// </summary>
+        //public async Task<AssetRequestDto> CreateAssetRequestAsync(
+        //    Guid organizationId,
+        //    Guid requestedByEmployeeId,
+        //    string requestorRole,
+        //    CreateAssetRequestDto dto)
+        //{
+        //    if (!AssetRequestType_IsValid(dto.RequestType))
+        //        throw new ArgumentException($"Invalid request type '{dto.RequestType}'.");
+
+        //    var asset = await GetAssetOrThrowAsync(dto.AssetId, organizationId);
+
+        //    // Requestor must currently hold the asset
+        //    if (asset.CurrentEmployeeId != requestedByEmployeeId)
+        //        throw new InvalidOperationException("You can only raise a request for an asset assigned to you.");
+
+        //    // No duplicate pending request of the same type for the same asset
+        //    var duplicate = await _db.AssetRequests.AnyAsync(r =>
+        //        r.AssetId == dto.AssetId &&
+        //        r.RequestType == dto.RequestType &&
+        //        r.Status == AssetRequestStatus.Pending);
+
+        //    if (duplicate)
+        //        throw new InvalidOperationException(
+        //            $"A pending '{dto.RequestType}' request already exists for this asset.");
+
+        //    var request = new AssetRequest
+        //    {
+        //        AssetId = asset.AssetId,
+        //        OrganizationId = organizationId,
+        //        RequestedByEmployeeId = requestedByEmployeeId,
+        //        RequestorRole = requestorRole,
+        //        RequestType = dto.RequestType,
+        //        Reason = dto.Reason.Trim(),
+        //        Status = AssetRequestStatus.Pending,
+        //        RequestedAt = DateTime.UtcNow
+        //    };
+
+        //    _db.AssetRequests.Add(request);
+        //    await _db.SaveChangesAsync();
+
+        //    _ = _activityLog.LogAsync(
+        //        organizationId, AssetModuleName.AssetRequest, "Raised",
+        //        "AssetRequest", request.AssetRequestId,
+        //        (await GetUserIdForEmployeeAsync(requestedByEmployeeId)),
+        //        requestorRole,
+        //        newValues: new { asset.AssetCode, dto.RequestType });
+
+        //    _ = NotifyAssetRequestRaisedAsync(request, asset, organizationId, requestorRole);
+
+        //    return await GetAssetRequestDtoAsync(request.AssetRequestId);
+        //}
+
         public async Task<AssetRequestDto> CreateAssetRequestAsync(
-            Guid organizationId,
-            Guid requestedByEmployeeId,
-            string requestorRole,
-            CreateAssetRequestDto dto)
+    Guid organizationId,
+    Guid requestedByEmployeeId,
+    string requestorRole,
+    CreateAssetRequestDto dto)
         {
             if (!AssetRequestType_IsValid(dto.RequestType))
                 throw new ArgumentException($"Invalid request type '{dto.RequestType}'.");
@@ -310,14 +362,45 @@ namespace Humatrix_HRMS.Services.Assets
             _db.AssetRequests.Add(request);
             await _db.SaveChangesAsync();
 
+            var actorUserId = await GetUserIdForEmployeeAsync(requestedByEmployeeId);
+
             _ = _activityLog.LogAsync(
                 organizationId, AssetModuleName.AssetRequest, "Raised",
                 "AssetRequest", request.AssetRequestId,
-                (await GetUserIdForEmployeeAsync(requestedByEmployeeId)),
+                actorUserId,
                 requestorRole,
                 newValues: new { asset.AssetCode, dto.RequestType });
 
-            _ = NotifyAssetRequestRaisedAsync(request, asset, organizationId, requestorRole);
+            // ── UPDATED FOR DEPARTMENT HR ROUTING ───────────────────────────────────
+            try
+            {
+                // 1. Fetch the requesting employee's profile to discover their true Department assignment
+                var employee = await _db.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.EmployeeId == requestedByEmployeeId && e.OrganizationId == organizationId);
+
+                // 2. Extract department fallback safeguards
+                Guid targetsDepartmentId = employee?.DepartmentId ?? asset.DepartmentId ?? Guid.Empty;
+
+                // 3. Fire the updated method signature down to your engine
+                await _notifications.SendAssetRequestRaisedAsync(
+                    assetName: asset.Name,
+                    assetCode: asset.AssetCode,
+                    requestType: dto.RequestType,
+                    requestedByEmployeeId: requestedByEmployeeId,
+                    assetRequestId: request.AssetRequestId,
+                    organizationId: organizationId,
+                    departmentId: targetsDepartmentId, // <-- Added target dependency tracking
+                    requestorRole: requestorRole,
+                    actorUserId: actorUserId ?? ""
+                );
+            }
+            catch (Exception ex)
+            {
+                // Fail-safe container: prevents background email/push notification issues 
+                // from reverting the database save transaction.
+                Console.WriteLine($"[Notification Error] Asset Request Routing Warning: {ex.Message}");
+            }
 
             return await GetAssetRequestDtoAsync(request.AssetRequestId);
         }
@@ -851,17 +934,35 @@ bool restrictToDepartment = false)
 
         // ── Notification fire-and-forget wrappers ─────────────────────────────
 
+        //private Task NotifyAssetRequestRaisedAsync(
+        //    AssetRequest request, Asset asset,
+        //    Guid organizationId, string requestorRole)
+        //{
+        //    return _notifications.SendAssetRequestRaisedAsync(
+        //        asset.Name, asset.AssetCode, request.RequestType,
+        //        request.RequestedByEmployeeId,
+        //        request.AssetRequestId, organizationId,
+        //        requestorRole, request.RequestedByEmployee?.UserId ?? string.Empty);
+        //}
         private Task NotifyAssetRequestRaisedAsync(
             AssetRequest request, Asset asset,
             Guid organizationId, string requestorRole)
         {
-            return _notifications.SendAssetRequestRaisedAsync(
-                asset.Name, asset.AssetCode, request.RequestType,
-                request.RequestedByEmployeeId,
-                request.AssetRequestId, organizationId,
-                requestorRole, request.RequestedByEmployee?.UserId ?? string.Empty);
-        }
+            // Extract the department identifier from the asset or fallback cleanly
+            Guid departmentId = asset.DepartmentId ?? Guid.Empty;
 
+            return _notifications.SendAssetRequestRaisedAsync(
+                asset.Name,
+                asset.AssetCode,
+                request.RequestType,
+                request.RequestedByEmployeeId,
+                request.AssetRequestId,
+                organizationId,
+                departmentId, // <-- ADDED THIS ARGUMENT TO MATCH THE NEW SIGNATURE
+                requestorRole,
+                request.RequestedByEmployee?.UserId ?? string.Empty
+            );
+        }
         private Task NotifyAssetRequestReviewedAsync(
             AssetRequest request, Guid organizationId, string actorUserId)
         {
@@ -1230,6 +1331,79 @@ bool restrictToDepartment = false)
                 q = q.Where(r => r.Status == status);
 
             return await q
+                .OrderByDescending(r => r.RequestedAt)
+                .Select(r => MapAssetRequestDto(r))
+                .ToListAsync();
+        }
+
+
+        // Add this method inside your AssetService class
+        // Add these inside your AssetService class body
+        public async Task<AssetDto?> GetAssetDetailsByIdAsync(Guid assetId, Guid organizationId)
+        {
+            var asset = await _db.Assets
+                .Include(a => a.Department)
+                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId);
+
+            if (asset == null) return null;
+
+            // Check if there's an assigned employee name to supply
+            string? currentEmployeeName = null;
+            if (asset.CurrentEmployeeId.HasValue)
+            {
+                var emp = await _db.Employees.FindAsync(asset.CurrentEmployeeId.Value);
+                if (emp != null)
+                {
+                    currentEmployeeName = $"{emp.FirstName} {emp.LastName}".Trim();
+                }
+            }
+
+            return MapAssetDto(asset, currentEmployeeName);
+        }
+
+        public async Task<List<AssetAssignmentHistoryDto>> GetAssetAssignmentHistoryAsync(Guid assetId, Guid organizationId)
+        {
+            return await _db.AssetAssignments
+                .Where(a => a.AssetId == assetId && a.OrganizationId == organizationId)
+                .OrderByDescending(a => a.AssignedAt)
+                .Select(a => new AssetAssignmentHistoryDto
+                {
+                    AssignmentId = a.AssetAssignmentId,
+                    EmployeeName = _db.Employees.Where(e => e.EmployeeId == a.EmployeeId).Select(e => e.FirstName + " " + e.LastName).FirstOrDefault() ?? "Unknown Employee",
+                    AssignedAt = a.AssignedAt,
+                    ReturnedAt = a.ReturnedAt,
+                    AssignmentNotes = a.AssignmentNotes,
+                    ReturnNotes = a.ReturnNotes
+                })
+                .ToListAsync();
+        }
+
+        // Add this helpful method to pull assignment history for the specific asset
+        // Add these methods inside your AssetService class
+        public async Task<List<AssetDto>> GetAssetsByEmployeeIdAsync(Guid employeeId, Guid organizationId)
+        {
+            var assets = await _db.Assets
+                .Include(a => a.Department)
+                .Where(a => a.CurrentEmployeeId == employeeId && a.OrganizationId == organizationId)
+                .ToListAsync();
+
+            var dtos = new List<AssetDto>();
+            foreach (var asset in assets)
+            {
+                // For the employee's own assets, the employee name can be simplified or skipped, 
+                // but we preserve your mapping contract pattern.
+                dtos.Add(MapAssetDto(asset, null));
+            }
+            return dtos;
+        }
+
+        public async Task<List<AssetRequestDto>> GetAssetRequestsByEmployeeIdAsync(Guid employeeId, Guid organizationId)
+        {
+            return await _db.AssetRequests
+                .Include(r => r.Asset)
+                .Include(r => r.RequestedByEmployee)
+                .Include(r => r.ReviewedByEmployee)
+                .Where(r => r.RequestedByEmployeeId == employeeId && r.OrganizationId == organizationId)
                 .OrderByDescending(r => r.RequestedAt)
                 .Select(r => MapAssetRequestDto(r))
                 .ToListAsync();
