@@ -1175,22 +1175,6 @@
         }
     }
 
-    // private async Task SubmitAssignAsync()
-    // {
-    //     if (!Guid.TryParse(assignEmployeeId, out var empId)) { errorMessage = "Please select an employee."; return; }
-    //     submitting = true; errorMessage = "";
-    //     try
-    //     {
-    //         await AssetService.AssignAssetAsync(orgId,
-    //             new AssignAssetDto { AssetId = selectedAsset!.AssetId, EmployeeId = empId, Notes = assignNotes },
-    //             userId, userRole);
-    //         CloseModals();
-    //         await LoadAsync();
-    //         ShowSuccess("Asset assigned successfully.");
-    //     }
-    //     catch (Exception ex) { errorMessage = ex.Message; }
-    //     finally { submitting = false; }
-    // }
     private async Task SubmitAssignAsync()
     {
         if (!Guid.TryParse(assignEmployeeId, out var empId)) { errorMessage = "Please select an employee."; return; }
