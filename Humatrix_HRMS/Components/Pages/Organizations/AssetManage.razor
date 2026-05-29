@@ -663,9 +663,6 @@
     </div>
 }
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODAL: RETIRE CONFIRM
-════════════════════════════════════════════════════════════════════════════ -->
 @if (showRetireConfirm && selectedAsset != null)
 {
     <div class="am-overlay" @onclick="CloseModals"></div>
@@ -1085,8 +1082,11 @@
     private async Task GoToPage(int p) { filter.Page = p; await LoadAsync(); }
     private async Task PrevPage() { if (filter.Page > 1) { filter.Page--; await LoadAsync(); } }
     private async Task NextPage() { if (filter.Page < totalPages) { filter.Page++; await LoadAsync(); } }
-    private void ViewAsset(Guid id) => Nav.NavigateTo($"/org/assets/{id}");
 
+    private void ViewAsset(Guid assetId)
+    {
+        Nav.NavigateTo($"/org/assets/details/{assetId}");
+    }
     // ── CREATE ────────────────────────────────────────────────────────────────
     private void OpenCreateModal() { createDto = new CreateAssetDto(); errorMessage = ""; showCreateModal = true; }
 
@@ -1296,4 +1296,6 @@
     private bool IsWarrantyExpired(AssetListDto asset) => false;
 
     private string GetBrandModel(AssetListDto asset) => ""; // AssetListDto doesn't have Brand/Model — see note
+
+
 }

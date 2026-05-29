@@ -467,29 +467,25 @@ namespace Humatrix_HRMS.Infrastructure.Services
         /// that a new asset request has been raised.
         /// </summary>
         public Task SendAssetRequestRaisedAsync(
-            string assetName,
-            string assetCode,
-            string requestType,
-            Guid requestedByEmployeeId,
-            Guid assetRequestId,
-            Guid organizationId,
-            string requestorRole,
-            string actorUserId)
-            => SendToApproversAsync(
-                organizationId,
-                // departmentId — resolved inside SendToApproversAsync via resolver
-                // For employee requests, target is department HR.
-                // For HR requests, target is OrgAdmin.
-                // We pass Guid.Empty; the NotificationRecipientResolver must handle
-                // AssetRequest routing (see note below).
-                Guid.Empty,
-                requestorRole,
-                actorUserId,
-                AssetNotificationTypes.AssetRequestRaised,
-                "AssetRequest", assetRequestId,
-                $"New {requestType} Request",
-                $"{assetName} ({assetCode}): {requestType} requested.",
-                "/hr/asset-requests");
+     string assetName,
+     string assetCode,
+     string requestType,
+     Guid requestedByEmployeeId,
+     Guid assetRequestId,
+     Guid organizationId,
+     Guid departmentId, // <-- ADDED THIS ARGUMENT HERE
+     string requestorRole,
+     string actorUserId)
+     => SendToApproversAsync(
+         organizationId,
+         departmentId, // <-- CHANGED from Guid.Empty to use the employee's departmentId
+         requestorRole,
+         actorUserId,
+         AssetNotificationTypes.AssetRequestRaised,
+         "AssetRequest", assetRequestId,
+         $"New {requestType} Request",
+         $"{assetName} ({assetCode}): {requestType} requested.",
+         "/hr/asset-requests");
 
         // ── Asset request reviewed ────────────────────────────────────────────
 

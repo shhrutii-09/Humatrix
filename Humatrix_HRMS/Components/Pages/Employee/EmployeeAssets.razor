@@ -1,0 +1,354 @@
+﻿@page "/employee/assets"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Employee,HR")]
+
+@using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Assets
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Microsoft.AspNetCore.Authorization
+
+@inject AssetService AssetService
+@inject CurrentUserService CurrentUserService
+
+<PageTitle>My Workspace Assets | Humatrix HRMS</PageTitle>
+
+<div class="am-wrapper" style="padding: 1.5rem; max-width: 1400px; margin: 0 auto;">
+
+    <div class="am-header mb-4 d-flex align-items-center justify-content-between" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="bg-primary text-white d-flex align-items-center justify-content-center rounded" style="width: 40px; height: 40px; font-size: 1.3rem;">
+                    <i class="bi bi-laptop"></i>
+                </div>
+                <h1 class="m-0" style="font-size: 1.75rem; font-weight: 700; color: #0f172a;">My Workplace Assets</h1>
+            </div>
+            <p class="text-muted m-0 mt-1" style="font-size: 0.95rem;">Track physical hardware, inventory configurations, and active technical requests assigned to you.</p>
+        </div>
+    </div>
+
+    <div class="d-flex border-bottom mb-4 gap-2" style="border-color: #e2e8f0 !important;">
+        <button class="btn pb-2 px-3 m-0 rounded-0 @(activeTab == "my-items" ? "border-bottom border-3 border-primary fw-bold text-primary" : "text-secondary")"
+                style="background: transparent; box-shadow: none;" @onclick='() => ChangeTab("my-items")'>
+            <i class="bi bi-box-seam me-2"></i>My Possessed Items (@myAssets.Count)
+        </button>
+        <button class="btn pb-2 px-3 m-0 rounded-0 @(activeTab == "my-requests" ? "border-bottom border-3 border-primary fw-bold text-primary" : "text-secondary")"
+                style="background: transparent; box-shadow: none;" @onclick='() => ChangeTab("my-requests")'>
+            <i class="bi bi-chat-square-text me-2"></i>Request Tracking Logs (@myRequests.Count)
+        </button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2 small">Synchronizing inventory registries...</p>
+        </div>
+    }
+    else
+    {
+        @if (activeTab == "my-items")
+        {
+            @if (!myAssets.Any())
+            {
+                <div class="text-center py-5 bg-white rounded border dotted" style="border-style: dashed !important; border-color: #cbd5e1 !important;">
+                    <i class="bi bi-patch-check text-muted display-4 mb-2 d-block"></i>
+                    <h5 class="fw-bold text-dark">No Assets Assigned</h5>
+                    <p class="text-muted small mx-auto" style="max-width: 400px;">There are currently no physical organizational items mapped under your custody account profile.</p>
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var item in myAssets)
+                    {
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card h-100 shadow-sm border" style="border-radius: 12px; background: #fff; border-color: #e2e8f0;">
+                                <div class="card-body p-4 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex align-items-start justify-content-between mb-2">
+                                            <span class="badge bg-secondary-subtle text-secondary small">@item.Category</span>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.75rem;">In Custody</span>
+                                        </div>
+                                        <h5 class="card-title fw-bold text-dark mb-1" style="font-size: 1.15rem;">@item.Name</h5>
+                                        <div class="text-muted small font-monospace mb-3 bg-light p-1 px-2 rounded d-inline-block">@item.AssetCode</div>
+
+                                        <div class="border-top pt-2 mt-2" style="font-size: 0.85rem;">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="text-muted">Brand / Model:</span>
+                                                <span class="text-dark fw-semibold">@(string.IsNullOrEmpty(item.Brand) ? "—" : $"{item.Brand} {item.Model}".Trim())</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="text-muted">Serial No:</span>
+                                                <span class="text-dark font-monospace text-truncate ms-2" style="max-width: 180px;">@(string.IsNullOrEmpty(item.SerialNumber) ? "—" : item.SerialNumber)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 pt-3 border-top d-flex gap-2">
+                                        <button class="btn btn-outline-warning btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
+                                                @onclick='() => OpenRequestModal(item, AssetRequestType.Repair)'>
+                                            <i class="bi bi-tools"></i> Report Issue
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
+                                                @onclick='() => OpenRequestModal(item, AssetRequestType.Return)'>
+                                            <i class="bi bi-arrow-left-right"></i> Return Item
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        @if (activeTab == "my-requests")
+        {
+            @if (!myRequests.Any())
+            {
+                <div class="text-center py-5 bg-white rounded border dotted" style="border-style: dashed !important; border-color: #cbd5e1 !important;">
+                    <i class="bi bi-chat-square-text text-muted display-4 mb-2 d-block"></i>
+                    <h5 class="fw-bold text-dark">No History Found</h5>
+                    <p class="text-muted small" style="max-width: 400px; margin: 0 auto;">You have not initiated or logged any technical asset requests yet.</p>
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm border-0" style="border-radius: 12px; overflow: hidden; background: #fff;">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                            <thead class="table-light" style="background: #f8fafc; font-weight: 600;">
+                                <tr>
+                                    <th class="ps-4 py-3" style="color: #64748b;">Asset / Code</th>
+                                    <th class="py-3" style="color: #64748b;">Request Category</th>
+                                    <th class="py-3" style="color: #64748b;">Submitted Date</th>
+                                    <th class="py-3" style="color: #64748b;">Status</th>
+                                    <th class="py-3" style="color: #64748b;">Reason Notes</th>
+                                    <th class="pe-4 py-3 text-end" style="color: #64748b;">Review Feed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var req in myRequests)
+                                {
+                                    <tr>
+                                        <td class="ps-4 py-3">
+                                            <div class="fw-bold text-dark">@req.AssetName</div>
+                                            <div class="text-muted font-monospace small">@req.AssetCode</div>
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="@GetRequestTypeClass(req.RequestType)" style="font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 6px; font-weight: 600;">
+                                                @req.RequestType
+                                            </span>
+                                        </td>
+                                        <td class="py-3 text-secondary" style="font-size: 0.85rem;">
+                                            @req.RequestedAt.ToLocalTime().ToString("g")
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="@GetStatusClass(req.Status)" style="font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 50px; font-weight: 600;">
+                                                @req.Status
+                                            </span>
+                                        </td>
+                                        <td class="py-3 text-secondary text-truncate" style="max-width: 240px;" title="@req.Reason">
+                                            @req.Reason
+                                        </td>
+                                        <td class="pe-4 py-3 text-end text-muted small user-select-none">
+                                            @(string.IsNullOrEmpty(req.ReviewNotes) ? "Pending corporate response." : $"\"{req.ReviewNotes}\"")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+    }
+</div>
+
+@if (showRequestModal && selectedAsset != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+                <div class="modal-header bg-light border-bottom p-3">
+                    <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
+                        <i class="bi bi-file-earmark-plus text-primary"></i>
+                        Submit Asset @targetRequestType
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseRequestModal" aria-label="Close"></button>
+                </div>
+                <EditForm Model="createRequestModel" OnValidSubmit="HandleSubmitRequest">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body p-4">
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger p-2 small mb-3">@errorMessage</div>
+                        }
+
+                        <div class="mb-3 p-3 bg-light rounded border">
+                            <span class="text-muted small d-block uppercase fw-semibold" style="letter-spacing: 0.5px; font-size: 0.75rem;">TARGET INVENTORY ITEM</span>
+                            <div class="fw-bold text-dark mt-1">@selectedAsset.Name</div>
+                            <div class="text-muted font-monospace small">@selectedAsset.AssetCode</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-secondary small">Reason / Justification Notes *</label>
+                            <InputTextArea @bind-Value="createRequestModel.Reason"
+                                           class="form-control small"
+                                           rows="4"
+                                           placeholder="@GetPlaceholderText()"
+                                           style="border-radius: 8px; font-size: 0.9rem;" />
+                            <ValidationMessage For="() => createRequestModel.Reason" class="text-danger small mt-1" />
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light border-top p-3 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary px-3 py-2 small" style="border-radius: 8px;" @onclick="CloseRequestModal">Cancel</button>
+                        <button type="submit" class="btn btn-primary px-4 py-2 small" style="border-radius: 8px;" disabled="@submitting">
+                            @if (submitting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Confirm Submission
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string activeTab = "my-items";
+    private bool loading = true;
+    private bool submitting = false;
+    private bool showRequestModal = false;
+    private string errorMessage = "";
+
+    private Guid currentEmployeeId;
+    private Guid currentOrganizationId;
+    private string currentUserId = "";
+
+    private List<AssetDto> myAssets = new();
+    private List<AssetRequestDto> myRequests = new();
+
+    private AssetDto? selectedAsset;
+    private string targetRequestType = "";
+    private CreateAssetRequestDto createRequestModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContextAndDataAsync();
+    }
+
+    private async Task LoadContextAndDataAsync()
+    {
+        try
+        {
+            loading = true;
+            errorMessage = "";
+
+            var empContext = await CurrentUserService.GetEmployeeDashboardContextAsync();
+            if (empContext != null)
+            {
+                currentEmployeeId = empContext.EmployeeId;
+                currentOrganizationId = empContext.OrganizationId;
+                currentUserId = empContext.UserId;
+
+                myAssets = await AssetService.GetAssetsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+                myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error mapping context values: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void ChangeTab(string tabKey)
+    {
+        activeTab = tabKey;
+    }
+
+    private void OpenRequestModal(AssetDto asset, string requestType)
+    {
+        selectedAsset = asset;
+        targetRequestType = requestType;
+        createRequestModel = new CreateAssetRequestDto
+        {
+            AssetId = asset.AssetId,
+            RequestType = requestType,
+            Reason = ""
+        };
+        errorMessage = "";
+        showRequestModal = true;
+    }
+
+    private void CloseRequestModal()
+    {
+        showRequestModal = false;
+        selectedAsset = null;
+        errorMessage = "";
+    }
+
+    private async Task HandleSubmitRequest()
+    {
+        if (submitting || selectedAsset == null) return;
+
+        try
+        {
+            submitting = true;
+            errorMessage = "";
+
+            // Fixed method mapping to match existing service definition contract
+            await AssetService.CreateAssetRequestAsync(
+                currentOrganizationId,
+                currentEmployeeId,
+                AssetRequestorRole.Employee,
+                createRequestModel
+            );
+
+            showRequestModal = false;
+
+            // Re-fetch tracking table values
+            myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+            activeTab = "my-requests";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+
+    private string GetPlaceholderText() => targetRequestType switch
+    {
+        AssetRequestType.Repair => "Please clarify details regarding the malfunction (e.g. damaged display screen, OS crash errors)...",
+        AssetRequestType.Return => "Provide reasoning context for returning this physical item back into company storage collections...",
+        _ => "Please detail your request justification notes cleanly here..."
+    };
+
+    private string GetRequestTypeClass(string type) => type switch
+    {
+        AssetRequestType.Repair => "bg-warning-subtle text-warning border border-warning-subtle",
+        AssetRequestType.Replacement => "bg-primary-subtle text-primary border border-primary-subtle",
+        AssetRequestType.Return => "bg-info-subtle text-info border border-info-subtle",
+        _ => "bg-light text-dark border"
+    };
+
+    private string GetStatusClass(string status) => status switch
+    {
+        AssetRequestStatus.Pending => "bg-warning-subtle text-warning border border-warning",
+        AssetRequestStatus.Approved => "bg-success-subtle text-success border border-success",
+        AssetRequestStatus.Rejected => "bg-danger-subtle text-danger border border-danger",
+        AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
+        _ => "bg-light text-dark border"
+    };
+}

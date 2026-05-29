@@ -1,0 +1,248 @@
+﻿@page "/org/assets/details/{AssetId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Assets
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Microsoft.AspNetCore.Authorization
+
+@inject AssetService AssetService
+@inject DepartmentService DepartmentService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+
+<PageTitle>Asset Details | Humatrix HRMS</PageTitle>
+
+<div class="am-wrapper" style="padding: 1.5rem;">
+    <div class="am-header mb-4 d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center">
+            <button class="am-btn am-btn-ghost me-3" @onclick="BackToList" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
+                <i class="bi bi-arrow-left"></i> Back
+            </button>
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h2 class="am-title m-0" style="font-weight: 700; color: #1e293b;">@asset?.Name</h2>
+                    @if (asset != null)
+                    {
+                        <span class="@GetStatusClass(asset.Status)" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; border-radius: 50px; font-weight: 600;">@GetStatusLabel(asset.Status)</span>
+                    }
+                </div>
+                <p class="am-subtitle text-muted m-0" style="font-size: 0.9rem;">System Code: <code class="am-code" style="background: #f1f5f9; padding: 0.1rem 0.4rem; border-radius: 4px; color: #0f172a;">@asset?.AssetCode</code></p>
+            </div>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2">Loading asset profile details...</p>
+        </div>
+    }
+    else if (asset == null)
+    {
+        <div class="text-center py-5" style="background: #fff; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <div class="text-danger display-4 mb-2"><i class="bi bi-exclamation-triangle"></i></div>
+            <h4 class="fw-bold text-dark">Asset Profile Missing</h4>
+            <p class="text-muted">The asset profile does not exist or access rights are missing.</p>
+            <button class="am-btn am-btn-primary mt-2" @onclick="BackToList">Return to Inventory</button>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card p-4 mb-4 shadow-sm" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h5 class="mb-3 pb-2 border-bottom text-dark fw-bold">
+                        <i class="bi bi-info-circle text-primary me-2"></i>Technical Specifications
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label class="text-muted small d-block fw-semibold">Category</label>
+                            <span class="badge bg-secondary-subtle text-secondary mt-1" style="font-size: 0.85rem; padding: 0.35rem 0.6rem;">@asset.Category</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="text-muted small d-block fw-semibold">Department Boundary</label>
+                            <span class="fw-semibold text-dark d-block mt-1">@(departmentName ?? "Org-Wide (Unrestricted)")</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="text-muted small d-block fw-semibold">Brand / Manufacturer</label>
+                            <span class="text-dark d-block mt-1">@(string.IsNullOrEmpty(asset.Brand) ? "—" : asset.Brand)</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="text-muted small d-block fw-semibold">Model Reference</label>
+                            <span class="text-dark d-block mt-1">@(string.IsNullOrEmpty(asset.Model) ? "—" : asset.Model)</span>
+                        </div>
+                        <div class="col-sm-12">
+                            <label class="text-muted small d-block fw-semibold">Serial Number (S/N)</label>
+                            <span class="text-dark font-monospace d-block mt-1 bg-light p-2 rounded" style="letter-spacing: 0.5px;">@(string.IsNullOrEmpty(asset.SerialNumber) ? "—" : asset.SerialNumber)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-4 shadow-sm" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h5 class="mb-3 pb-2 border-bottom text-dark fw-bold">
+                        <i class="bi bi-currency-dollar text-success me-2"></i>Lifecycle & Procurement Tracking
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-sm-4">
+                            <label class="text-muted small d-block fw-semibold">Purchase Value</label>
+                            <span class="fw-bold text-dark d-block mt-1" style="font-size: 1.05rem;">@(asset.PurchasePrice.HasValue ? $"₹{asset.PurchasePrice.Value:N2}" : "—")</span>
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="text-muted small d-block fw-semibold">Acquisition Date</label>
+                            <span class="text-dark d-block mt-1">@(asset.PurchaseDate.HasValue? asset.PurchaseDate.Value.ToShortDateString() : "—")</span>
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="text-muted small d-block fw-semibold">Warranty Expiry</label>
+                            <span class="text-dark d-block mt-1">
+                                @(asset.WarrantyExpiryDate.HasValue? asset.WarrantyExpiryDate.Value.ToShortDateString() : "—")
+                                @if (asset.WarrantyExpiryDate.HasValue && asset.WarrantyExpiryDate.Value < DateTime.UtcNow)
+                                {
+                                    <span class="badge bg-danger-subtle text-danger ms-1" style="font-size:0.75rem;">Expired</span>
+                                }
+                            </span>
+                        </div>
+                        <div class="col-sm-12">
+                            <label class="text-muted small d-block fw-semibold">Management / Inventory Notes</label>
+                            <p class="text-secondary bg-light p-3 rounded mt-1 small mb-0" style="white-space: pre-wrap; min-height: 60px; line-height: 1.5;">
+                                @(string.IsNullOrEmpty(asset.Notes) ? "No detailed tracking notes supplied for this asset entry." : asset.Notes)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card p-4 mb-4 shadow-sm" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h5 class="mb-3 pb-2 border-bottom text-dark fw-bold">
+                        <i class="bi bi-person text-info me-2"></i>Current Handheld Custody
+                    </h5>
+                    @if (!string.IsNullOrEmpty(asset.CurrentEmployeeName))
+                    {
+                        <div class="d-flex align-items-center p-3 bg-white rounded border shadow-sm">
+                            <div class="me-3 bg-primary text-white d-flex align-items-center justify-content-center rounded-circle fw-bold" style="width: 44px; height: 44px; font-size: 1.1rem; min-width: 44px;">
+                                @asset.CurrentEmployeeName[0]
+                            </div>
+                            <div>
+                                <h6 class="m-0 fw-bold text-dark" style="font-size: 1rem;">@asset.CurrentEmployeeName</h6>
+                                <p class="text-muted small mb-0">Active Custodian Employee</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center p-4 bg-white rounded border border-dashed" style="border-style: dashed !important;">
+                            <i class="bi bi-box-seam text-muted display-6 mb-2 d-block"></i>
+                            <span class="text-muted small d-block">This tracking asset is safely sitting unassigned in corporate storage.</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="card p-4 shadow-sm" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h5 class="mb-3 pb-2 border-bottom text-dark fw-bold">
+                        <i class="bi bi-clock-history text-warning me-2"></i>Custody Assignment Logs
+                    </h5>
+                    <div style="max-height: 360px; overflow-y: auto; padding-right: 4px;">
+                        @if (historyLogs == null || !historyLogs.Any())
+                        {
+                            <p class="text-muted small text-center my-4">No historical asset assignments logged in the system.</p>
+                        }
+                        else
+                        {
+                            @foreach (var log in historyLogs)
+                            {
+                                <div class="ps-3 pb-3 border-start border-2 position-relative mb-2" style="border-color: #cbd5e1 !important;">
+                                    <div class="position-absolute bg-primary rounded-circle" style="width: 10px; height: 10px; left: -6px; top: 6px;"></div>
+                                    <div class="small fw-bold text-dark">@log.EmployeeName</div>
+                                    <div class="text-muted small" style="font-size: 0.78rem;">
+                                        <i class="bi bi-calendar-check me-1"></i> Out: @log.AssignedAt.ToLocalTime().ToString("g")
+                                    </div>
+                                    @if (log.ReturnedAt.HasValue)
+                                    {
+                                        <div class="text-success small" style="font-size: 0.78rem;">
+                                            <i class="bi bi-calendar-x me-1"></i> In: @log.ReturnedAt.Value.ToLocalTime().ToString("g")
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success-subtle text-success mt-1" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">Possession</span>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(log.AssignmentNotes))
+                                    {
+                                        <div class="text-muted bg-light p-2 rounded small mt-1" style="font-size: 0.75rem; border-left: 3px solid #dee2e6;">
+                                            <em>"Note: @log.AssignmentNotes"</em>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid AssetId { get; set; }
+
+    private AssetDto? asset;
+    private List<AssetAssignmentHistoryDto> historyLogs = new();
+    private string? departmentName = null;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            loading = true;
+            // FIXED: Using your exact context gather signature for Org Dashboard configurations
+            var adminContext = await CurrentUserService.GetOrgDashboardContextAsync();
+            var orgId = adminContext?.OrganizationId ?? Guid.Empty;
+
+            asset = await AssetService.GetAssetDetailsByIdAsync(AssetId, orgId);
+
+            if (asset != null)
+            {
+                historyLogs = await AssetService.GetAssetAssignmentHistoryAsync(AssetId, orgId);
+
+                if (asset.DepartmentId.HasValue)
+                {
+                    // FIXED: Using your actual database fetch routine GetAllAsync()
+                    var depts = await DepartmentService.GetAllAsync();
+                    departmentName = depts.FirstOrDefault(d => d.DepartmentId == asset.DepartmentId.Value)?.Name;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error retrieving tracking elements: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void BackToList() => Nav.NavigateTo("/org/assets");
+
+    private string GetStatusClass(string status) => status switch
+    {
+        AssetStatus.Available => "badge bg-success-subtle text-success border border-success",
+        AssetStatus.Assigned => "badge bg-primary-subtle text-primary border border-primary",
+        AssetStatus.InRepair => "badge bg-warning-subtle text-warning border border-warning",
+        AssetStatus.Retired => "badge bg-secondary-subtle text-secondary border border-secondary",
+        AssetStatus.Lost => "badge bg-danger-subtle text-danger border border-danger",
+        _ => "badge bg-light text-dark border"
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        AssetStatus.InRepair => "In Repair",
+        _ => status
+    };
+}

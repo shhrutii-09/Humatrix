@@ -231,4 +231,14 @@ namespace Humatrix_HRMS.DTOs.Assets
         public int PageSize { get; set; }
         public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
     }
+
+    public class AssetAssignmentHistoryDto
+    {
+        public Guid AssignmentId { get; set; }
+        public string EmployeeName { get; set; } = default!;
+        public DateTime AssignedAt { get; set; }
+        public DateTime? ReturnedAt { get; set; }
+        public string? AssignmentNotes { get; set; }
+        public string? ReturnNotes { get; set; }
+    }
 }
