@@ -4,13 +4,16 @@
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 
 @attribute [Authorize(Roles = "SuperAdmin")]
 
 @inject OrganizationService OrgService
 @inject EmployeeService EmpService
 @inject NavigationManager Nav
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Departments - @orgName</PageTitle>
 
@@ -36,7 +39,6 @@
     }
     else
     {
-        <!-- Search and Filter Bar -->
         <div class="row g-3 mb-4 align-items-center">
             <div class="col-md-6">
                 <div class="input-group shadow-sm">
@@ -153,7 +155,6 @@
     private string orgName = "Loading...";
     private string _searchQuery = string.Empty;
 
-    // Local explicit model representation for grouping metadata metrics cleanly
     public class DepartmentSummaryDto
     {
         public string DepartmentName { get; set; } = string.Empty;
@@ -178,19 +179,34 @@
 
             orgName = result.Organization.Name;
 
+            // 1. Workforce se saare employees nikal kar unka ek dictionary map banao (for staff count)
             var rawEmployees = await EmpService.GetEmployeesByOrganizationIdAsync(id);
 
-            // Dynamically calculate and group raw department entities right out of workforce database lists
-            _departments = rawEmployees
-                .Where(x => !string.IsNullOrWhiteSpace(x.Department) && x.Department != "N/A")
-                .GroupBy(x => x.Department!.Trim())
-                .Select(g => new DepartmentSummaryDto
+            var employeeCountMap = rawEmployees
+                .Where(x => x != null && !string.IsNullOrWhiteSpace(x.Department) && x.Department != "N/A")
+                .GroupBy(x => x.Department!.Trim().ToLower())
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            // 2. Sirf ISI Organization ke SAARE structural departments ko database se load karo (LIFO order me)
+            using var context = await DbFactory.CreateDbContextAsync();
+
+            var structuralDepartments = await context.Departments
+                .Where(x => x.OrganizationId == id)
+                .OrderByDescending(x => x.CreatedAt) // Department.cs model ki CreatedAt property use ho rahi hai (LIFO)
+                .ToListAsync();
+
+            // 3. Structural master list ke upar map karo taaki 0 employees wale departments bhi properly display ho sakein
+            _departments = structuralDepartments
+                .Where(d => d != null && !string.IsNullOrWhiteSpace(d.Name))
+                .Select(d =>
                 {
-                    DepartmentName = g.Key,
-                    TotalStaff = g.Count()
-                })
-                .OrderBy(x => x.DepartmentName)
-                .ToList();
+                    var cleanName = d.Name.Trim();
+                    return new DepartmentSummaryDto
+                    {
+                        DepartmentName = cleanName,
+                        TotalStaff = employeeCountMap.TryGetValue(cleanName.ToLower(), out var count) ? count : 0
+                    };
+                }).ToList();
         }
         catch (Exception)
         {
@@ -198,7 +214,6 @@
         }
     }
 
-    // Handles live matching filtration rules dynamically in memory against structural metadata text
     private IEnumerable<DepartmentSummaryDto> GetFilteredDepartments()
     {
         if (_departments == null) return Enumerable.Empty<DepartmentSummaryDto>();
