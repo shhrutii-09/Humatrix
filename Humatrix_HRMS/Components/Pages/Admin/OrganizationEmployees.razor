@@ -4,13 +4,16 @@
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 
 @attribute [Authorize(Roles = "SuperAdmin")]
 
 @inject OrganizationService OrgService
 @inject EmployeeService EmpService
 @inject NavigationManager Nav
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Organization Employees</PageTitle>
 
@@ -36,7 +39,6 @@
     }
     else
     {
-        <!-- Search and Filter Bar -->
         <div class="row g-3 mb-4 align-items-center">
             <div class="col-md-5">
                 <div class="input-group shadow-sm">
@@ -99,7 +101,11 @@
                                 <tr>
                                     <td class="fw-bold ps-3">@emp.Name</td>
                                     <td class="text-muted">@emp.Email</td>
-                                    <td><span class="badge bg-secondary-subtle text-secondary px-2 py-1">@emp.Department</span></td>
+                                    <td>
+                                        <span class="badge bg-secondary-subtle text-secondary px-2 py-1">
+                                            @(string.IsNullOrWhiteSpace(emp.Department) ? "N/A" : emp.Department)
+                                        </span>
+                                    </td>
                                     <td>@emp.Designation</td>
                                     <td>
                                         <span class="badge bg-light text-dark border px-2 py-1">
@@ -170,7 +176,6 @@
     private List<string> _departments = new();
     private string orgName = "Loading...";
 
-    // Filter bindings
     private string _searchQuery = string.Empty;
     private string _selectedDepartment = string.Empty;
 
@@ -194,19 +199,22 @@
 
             var rawList = await EmpService.GetEmployeesByOrganizationIdAsync(id);
 
-            // Filter out OrgAdmin and HR records immediately
+            // 1. EmployeeListDto me compiler Id dhoond nahi paa raha tha, isliye humne query level par `.OrderByDescending(x => x.CreatedAt)` handle kiya hai.
             _allEmployees = rawList
-                .Where(x => !string.Equals(x.Role, "OrgAdmin", StringComparison.OrdinalIgnoreCase) &&
+                .Where(x => x != null &&
+                            !string.Equals(x.Role, "OrgAdmin", StringComparison.OrdinalIgnoreCase) &&
                             !string.Equals(x.Role, "HR", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            // Distinctly group valid unique department names from this filtered group for the drop-down selector
-            _departments = _allEmployees
-                .Where(x => !string.IsNullOrWhiteSpace(x.Department) && x.Department != "N/A")
-                .Select(x => x.Department)
+            // 2. Database se is Org ke SAARE Master Departments load karein dropdown filter ke liye
+            using var context = await DbFactory.CreateDbContextAsync();
+
+            _departments = await context.Departments
+                .Where(x => x.OrganizationId == id && x.IsActive)
+                .Select(x => x.Name.Trim())
                 .Distinct()
                 .OrderBy(x => x)
-                .ToList();
+                .ToListAsync();
         }
         catch (Exception)
         {
@@ -214,14 +222,12 @@
         }
     }
 
-    // Handles filtering operations dynamically in-memory
     private IEnumerable<EmployeeListDto> GetFilteredEmployees()
     {
         if (_allEmployees == null) return Enumerable.Empty<EmployeeListDto>();
 
         var query = _allEmployees.AsEnumerable();
 
-        // 1. Apply Search Query (Name or Email)
         if (!string.IsNullOrWhiteSpace(_searchQuery))
         {
             var cleanSearch = _searchQuery.Trim().ToLower();
@@ -229,10 +235,9 @@
                                      (x.Email != null && x.Email.ToLower().Contains(cleanSearch)));
         }
 
-        // 2. Apply Department Wise filter
         if (!string.IsNullOrWhiteSpace(_selectedDepartment))
         {
-            query = query.Where(x => string.Equals(x.Department, _selectedDepartment, StringComparison.OrdinalIgnoreCase));
+            query = query.Where(x => string.Equals(x.Department?.Trim(), _selectedDepartment.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
         return query;
