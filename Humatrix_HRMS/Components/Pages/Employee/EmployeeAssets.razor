@@ -90,6 +90,10 @@
                                                 @onclick='() => OpenRequestModal(item, AssetRequestType.Repair)'>
                                             <i class="bi bi-tools"></i> Report Issue
                                         </button>
+                                        <button class="btn btn-outline-info btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
+                                                @onclick='() => OpenRequestModal(item, AssetRequestType.Replacement)'>
+                                            <i class="bi bi-arrow-repeat"></i> Request Replacement
+                                        </button>
                                         <button class="btn btn-outline-primary btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
                                                 @onclick='() => OpenRequestModal(item, AssetRequestType.Return)'>
                                             <i class="bi bi-arrow-left-right"></i> Return Item
@@ -201,6 +205,14 @@
                                            style="border-radius: 8px; font-size: 0.9rem;" />
                             <ValidationMessage For="() => createRequestModel.Reason" class="text-danger small mt-1" />
                         </div>
+
+                        @if (targetRequestType == AssetRequestType.Replacement)
+                        {
+                            <div class="alert alert-info small mt-2">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Replacement requests will be reviewed by HR/OrgAdmin. Upon approval, you'll receive a different asset of the same category.
+                            </div>
+                        }
                     </div>
                     <div class="modal-footer bg-light border-top p-3 d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-secondary px-3 py-2 small" style="border-radius: 8px;" @onclick="CloseRequestModal">Cancel</button>
@@ -217,6 +229,16 @@
         </div>
     </div>
 }
+
+<style>
+    .animate-pulse {
+        animation: pulseOpacity 2s infinite;
+    }
+    @@keyframes pulseOpacity {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+    }
+</style>
 
 @code {
     private string activeTab = "my-items";
@@ -255,18 +277,17 @@
                 currentOrganizationId = empContext.OrganizationId;
                 currentUserId = empContext.UserId;
 
-                // FIXED: Use GetEmployeeAssetsAsync instead of GetAssetsByEmployeeIdAsync
+                // Get active assignments
                 var assignments = await AssetService.GetEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
-
+                
                 // Convert assignments to AssetDto list
                 myAssets = new List<AssetDto>();
                 foreach (var assignment in assignments)
                 {
-                    // Get full asset details for each assigned asset
                     var asset = await AssetService.GetAssetByIdAsync(
-                        assignment.AssetId,
-                        currentOrganizationId,
-                        callerRole: "Employee",
+                        assignment.AssetId, 
+                        currentOrganizationId, 
+                        callerRole: "Employee", 
                         callerDepartmentId: null
                     );
                     if (asset != null)
@@ -275,23 +296,14 @@
                     }
                 }
 
-                // FIXED: Use GetAssetRequestsAsync instead of GetAssetRequestsByEmployeeIdAsync
-                var allRequests = await AssetService.GetAssetRequestsAsync(
-                    organizationId: currentOrganizationId,
-                    status: null,
-                    employeeId: currentEmployeeId,
-                    callerRole: "Employee",
-                    callerDepartmentId: null
-                );
-
-                myRequests = allRequests
-                    .OrderByDescending(r => r.RequestedAt)
-                    .ToList();
+                // Get employee's requests
+                myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error mapping context values: {ex.Message}");
+            errorMessage = ex.Message;
         }
         finally
         {
@@ -334,35 +346,25 @@
             submitting = true;
             errorMessage = "";
 
-            // Use CreateAssetRequestAsync with Employee role
+            // Call the existing CreateAssetRequestAsync method
             await AssetService.CreateAssetRequestAsync(
                 organizationId: currentOrganizationId,
                 requestedByEmployeeId: currentEmployeeId,
                 requestorRole: AssetRequestorRole.Employee,
                 dto: createRequestModel,
-                callerDepartmentId: null  // Employees don't have department restriction
+                callerDepartmentId: null
             );
 
             showRequestModal = false;
 
-            // Re-fetch tracking table values
-            var allRequests = await AssetService.GetAssetRequestsAsync(
-                organizationId: currentOrganizationId,
-                status: null,
-                employeeId: currentEmployeeId,
-                callerRole: "Employee",
-                callerDepartmentId: null
-            );
-
-            myRequests = allRequests
-                .OrderByDescending(r => r.RequestedAt)
-                .ToList();
-
+            // Refresh the requests list
+            myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
             activeTab = "my-requests";
         }
         catch (Exception ex)
         {
             errorMessage = ex.Message;
+            Console.WriteLine($"Error submitting request: {ex.Message}");
         }
         finally
         {
@@ -372,8 +374,9 @@
 
     private string GetPlaceholderText() => targetRequestType switch
     {
-        AssetRequestType.Repair => "Please clarify details regarding the malfunction (e.g. damaged display screen, OS crash errors)...",
-        AssetRequestType.Return => "Provide reasoning context for returning this physical item back into company storage collections...",
+        AssetRequestType.Repair => "Please describe the issue with this asset (e.g., screen cracked, battery not charging, keyboard malfunction)...",
+        AssetRequestType.Replacement => "Please explain why you need a replacement (e.g., asset is too slow, physically damaged beyond repair, outdated specifications)...",
+        AssetRequestType.Return => "Please provide the reason for returning this asset (e.g., leaving company, no longer needed, received new asset)...",
         _ => "Please detail your request justification notes cleanly here..."
     };
 

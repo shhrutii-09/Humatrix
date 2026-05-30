@@ -1,0 +1,844 @@
+﻿@page "/org/procurement"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@using Humatrix_HRMS.DTOs.Assets
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Assets
+@using Humatrix_HRMS.Infrastructure.Constants
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Humatrix_HRMS.DTOs
+@inject AssetService AssetService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject DepartmentService DepartmentService
+
+<PageTitle>Procurement Management | Humatrix HRMS</PageTitle>
+
+<div class="proc-wrapper" style="padding: 1.5rem; max-width: 1400px; margin: 0 auto;">
+
+    <!-- ── Page Header ──────────────────────────────────────────────────────── -->
+    <div class="proc-header">
+        <div class="proc-header-left">
+            <div class="proc-header-icon">
+                <i class="bi bi-clipboard-data-fill"></i>
+            </div>
+            <div>
+                <h1 class="proc-title">Procurement Management</h1>
+                <p class="proc-subtitle">Review, approve and fulfil asset procurement requests from HR departments</p>
+            </div>
+        </div>
+        <div class="proc-header-actions">
+            <button class="proc-btn proc-btn-ghost" @onclick="RefreshAsync" disabled="@loading">
+                <i class="bi bi-arrow-clockwise @(loading ? "spin" : "")"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- ── KPI Strip ────────────────────────────────────────────────────────── -->
+    <div class="proc-kpi-row">
+        <div class="proc-kpi proc-kpi-pending">
+            <div class="proc-kpi-icon"><i class="bi bi-hourglass-split"></i></div>
+            <div>
+                <div class="proc-kpi-label">Pending</div>
+                <div class="proc-kpi-val">@pendingCount</div>
+            </div>
+        </div>
+        <div class="proc-kpi proc-kpi-approved">
+            <div class="proc-kpi-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div>
+                <div class="proc-kpi-label">Approved</div>
+                <div class="proc-kpi-val">@approvedCount</div>
+            </div>
+        </div>
+        <div class="proc-kpi proc-kpi-fulfilled">
+            <div class="proc-kpi-icon"><i class="bi bi-truck"></i></div>
+            <div>
+                <div class="proc-kpi-label">Fulfilled</div>
+                <div class="proc-kpi-val">@fulfilledCount</div>
+            </div>
+        </div>
+        <div class="proc-kpi proc-kpi-rejected">
+            <div class="proc-kpi-icon"><i class="bi bi-x-circle-fill"></i></div>
+            <div>
+                <div class="proc-kpi-label">Rejected</div>
+                <div class="proc-kpi-val">@rejectedCount</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Filter Bar ───────────────────────────────────────────────────────── -->
+    <div class="proc-filter-bar">
+        <div class="proc-filter-group">
+            <label class="proc-filter-label">Status</label>
+            @* <select class="proc-select" @bind="selectedStatus" @bind:event="onchange" @onchange="FilterRequests"> *@
+            <select class="proc-select" @bind="selectedStatus" @bind:event="onchange">
+                <option value="">All Statuses</option>
+                <option value="@ProcurementStatus.Pending">Pending</option>
+                <option value="@ProcurementStatus.Approved">Approved</option>
+                <option value="@ProcurementStatus.Rejected">Rejected</option>
+                <option value="@ProcurementStatus.Fulfilled">Fulfilled</option>
+            </select>
+        </div>
+        <div class="proc-filter-group">
+            <label class="proc-filter-label">Department</label>
+            @* <select class="proc-select" @bind="selectedDepartmentId" @bind:event="onchange" @onchange="FilterRequests"> *@
+            <select class="proc-select" @bind="selectedDepartmentId" @bind:event="onchange">
+                <option value="">All Departments</option>
+                @foreach (var dept in departments)
+                {
+                    <option value="@dept.DepartmentId">@dept.Name</option>
+                }
+            </select>
+        </div>
+        <div class="proc-filter-group proc-filter-end">
+            <button class="proc-btn proc-btn-sm proc-btn-outline" @onclick="ClearFilters">
+                <i class="bi bi-x-circle"></i> Clear Filters
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Procurement Table ─────────────────────────────────────────────────── -->
+    @if (loading)
+    {
+        <div class="proc-state-center">
+            <div class="proc-spinner"></div>
+            <p class="proc-state-text">Loading procurement requests...</p>
+        </div>
+    }
+    else if (!filteredRequests.Any())
+    {
+        <div class="proc-state-center">
+            <div class="proc-empty-icon"><i class="bi bi-clipboard-x"></i></div>
+            <h5 class="proc-state-title">No Procurement Requests Found</h5>
+            <p class="proc-state-sub">No procurement requests match your current filters.</p>
+        </div>
+    }
+    else
+    {
+        <div class="proc-card">
+            <div class="table-responsive">
+                <table class="proc-table">
+                    <thead>
+                        <tr>
+                            <th>Department</th>
+                            <th>Category</th>
+                            <th>Asset Name</th>
+                            <th>Quantity</th>
+                            <th>Fulfilled</th>
+                            <th>Requested By</th>
+                            <th>Justification</th>
+                            <th>Status</th>
+                            <th>Requested On</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var request in filteredRequests)
+                        {
+                            <tr class="proc-row">
+                                <td>
+                                    <span class="proc-dept-badge">@request.DepartmentName</span>
+                                </td>
+                                <td><span class="proc-category-badge">@request.AssetCategory</span></td>
+                                <td>
+                                    <div class="proc-asset-name">@(request.AssetName ?? "—")</div>
+                                </td>
+                                <td><span class="fw-semibold">@request.QuantityRequested</span></td>
+                                <td>
+                                    @if (request.QuantityFulfilled > 0)
+                                    {
+                                        <span class="proc-badge proc-badge-success">@request.QuantityFulfilled / @request.QuantityRequested</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">0 / @request.QuantityRequested</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="proc-requester">
+                                        <div class="proc-avatar">@(request.RequestedByEmployeeName.Length > 0 ? request.RequestedByEmployeeName[0] : '?')</div>
+                                        <span class="small">@request.RequestedByEmployeeName</span>
+                                    </div>
+                                </td>
+                                <td class="proc-justification-cell" title="@request.Justification">@request.Justification</td>
+                                <td>
+                                    <span class="@GetStatusClass(request.Status)">@request.Status</span>
+                                </td>
+                                <td class="proc-date">@request.RequestedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
+                                <td class="text-end">
+                                    <div class="proc-actions">
+                                        @if (request.Status == ProcurementStatus.Pending)
+                                        {
+                                            <button class="proc-action-btn proc-action-review"
+                                                    @onclick="() => OpenReviewModal(request)"
+                                                    title="Review Request">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                        }
+                                        @if (request.Status == ProcurementStatus.Approved)
+                                        {
+                                            <button class="proc-action-btn proc-action-fulfill"
+                                                    @onclick="() => OpenFulfillModal(request)"
+                                                    title="Fulfill Request">
+                                                <i class="bi bi-truck"></i>
+                                            </button>
+                                        }
+                                        @if (request.Status == ProcurementStatus.Fulfilled)
+                                        {
+                                            <span class="text-success small">
+                                                <i class="bi bi-check-circle-fill"></i> Completed
+                                            </span>
+                                        }
+                                        @if (request.Status == ProcurementStatus.Rejected)
+                                        {
+                                            <span class="text-danger small">
+                                                <i class="bi bi-x-circle-fill"></i> Rejected
+                                            </span>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     MODAL: REVIEW PROCUREMENT REQUEST (Approve/Reject)
+════════════════════════════════════════════════════════════════════════════ -->
+@if (showReviewModal && selectedRequest != null)
+{
+    <div class="proc-overlay" @onclick="CloseModals"></div>
+    <div class="proc-modal proc-modal-md">
+        <div class="proc-modal-header">
+            <div class="proc-modal-title-group">
+                <div class="proc-modal-icon proc-modal-icon-warning">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <div>
+                    <h5 class="proc-modal-title">Review Procurement Request</h5>
+                    <p class="proc-modal-sub">Approve or reject this asset request</p>
+                </div>
+            </div>
+            <button class="proc-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="proc-modal-body">
+            <div class="proc-info-card">
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Department:</span>
+                    <span class="proc-info-value fw-bold">@selectedRequest.DepartmentName</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Requested By:</span>
+                    <span class="proc-info-value">@selectedRequest.RequestedByEmployeeName</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Asset Category:</span>
+                    <span class="proc-info-value">@selectedRequest.AssetCategory</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Asset Name:</span>
+                    <span class="proc-info-value">@(selectedRequest.AssetName ?? "Not specified")</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Quantity:</span>
+                    <span class="proc-info-value fw-bold">@selectedRequest.QuantityRequested</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Justification:</span>
+                    <span class="proc-info-value">@selectedRequest.Justification</span>
+                </div>
+            </div>
+
+            <div class="proc-form-group">
+                <label class="proc-label">Review Notes</label>
+                <textarea class="proc-textarea" @bind="reviewNotes" rows="3"
+                          placeholder="Add notes about your decision..."></textarea>
+            </div>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="proc-alert proc-alert-danger">
+                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                </div>
+            }
+
+            <div class="proc-modal-footer">
+                <button class="proc-btn proc-btn-ghost" @onclick="CloseModals">Cancel</button>
+                <button class="proc-btn proc-btn-danger" @onclick="() => SubmitReview(false)" disabled="@submitting">
+                    @if (submitting && !approveDecision) { <span class="proc-spinner-sm"></span> }
+                    Reject
+                </button>
+                <button class="proc-btn proc-btn-success" @onclick="() => SubmitReview(true)" disabled="@submitting">
+                    @if (submitting && approveDecision) { <span class="proc-spinner-sm"></span> }
+                    Approve
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ════════════════════════════════════════════════════════════════════════════
+     MODAL: FULFILL PROCUREMENT REQUEST (Create Assets)
+════════════════════════════════════════════════════════════════════════════ -->
+@if (showFulfillModal && selectedRequest != null)
+{
+    <div class="proc-overlay" @onclick="CloseModals"></div>
+    <div class="proc-modal proc-modal-lg">
+        <div class="proc-modal-header">
+            <div class="proc-modal-title-group">
+                <div class="proc-modal-icon proc-modal-icon-success">
+                    <i class="bi bi-truck"></i>
+                </div>
+                <div>
+                    <h5 class="proc-modal-title">Fulfill Procurement Request</h5>
+                    <p class="proc-modal-sub">Create assets to fulfill this request</p>
+                </div>
+            </div>
+            <button class="proc-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="proc-modal-body">
+            <div class="proc-info-card">
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Department:</span>
+                    <span class="proc-info-value fw-bold">@selectedRequest.DepartmentName</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Category:</span>
+                    <span class="proc-info-value">@selectedRequest.AssetCategory</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Requested:</span>
+                    <span class="proc-info-value">@selectedRequest.QuantityRequested units</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Already Fulfilled:</span>
+                    <span class="proc-info-value">@selectedRequest.QuantityFulfilled units</span>
+                </div>
+                <div class="proc-info-row">
+                    <span class="proc-info-label">Remaining:</span>
+                    <span class="proc-info-value fw-bold text-primary">@remainingQuantity units</span>
+                </div>
+            </div>
+
+            <EditForm Model="fulfillDto" OnValidSubmit="SubmitFulfillAsync">
+                <DataAnnotationsValidator />
+
+                <div class="proc-form-group">
+                    <label class="proc-label">Asset Name <span class="proc-required">*</span></label>
+                    <InputText class="proc-input" @bind-Value="fulfillDto.AssetName"
+                               placeholder="e.g. Dell Latitude 5540, HP ProBook" />
+                    <ValidationMessage For="() => fulfillDto.AssetName" class="proc-error" />
+                </div>
+
+                <div class="proc-form-row">
+                    <div class="proc-form-col">
+                        <label class="proc-label">Quantity to Create <span class="proc-required">*</span></label>
+                        <InputNumber class="proc-input" @bind-Value="fulfillDto.QuantityToCreate" 
+                                     min="1" max="@remainingQuantity" />
+                        <ValidationMessage For="() => fulfillDto.QuantityToCreate" class="proc-error" />
+                        <small class="proc-hint">Max: @remainingQuantity</small>
+                    </div>
+                    <div class="proc-form-col">
+                        <label class="proc-label">Purchase Price (₹)</label>
+                        <InputNumber class="proc-input" @bind-Value="fulfillDto.PurchasePrice" min="0" step="0.01" />
+                    </div>
+                </div>
+
+                <div class="proc-form-row">
+                    <div class="proc-form-col">
+                        <label class="proc-label">Brand</label>
+                        <InputText class="proc-input" @bind-Value="fulfillDto.Brand" placeholder="e.g. Dell, HP" />
+                    </div>
+                    <div class="proc-form-col">
+                        <label class="proc-label">Model</label>
+                        <InputText class="proc-input" @bind-Value="fulfillDto.Model" placeholder="e.g. Latitude 5540" />
+                    </div>
+                </div>
+
+                <div class="proc-form-row">
+                    <div class="proc-form-col">
+                        <label class="proc-label">Purchase Date</label>
+                        <InputDate class="proc-input" @bind-Value="fulfillDto.PurchaseDate" />
+                    </div>
+                    <div class="proc-form-col">
+                        <label class="proc-label">Warranty Expiry</label>
+                        <InputDate class="proc-input" @bind-Value="fulfillDto.WarrantyExpiryDate" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="proc-alert proc-alert-danger">
+                        <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                    </div>
+                }
+
+                <div class="proc-modal-footer">
+                    <button type="button" class="proc-btn proc-btn-ghost" @onclick="CloseModals">Cancel</button>
+                    <button type="submit" class="proc-btn proc-btn-primary" disabled="@submitting">
+                        @if (submitting) { <span class="proc-spinner-sm"></span> }
+                        Create Assets & Fulfill
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- ── Toast Notification ─────────────────────────────────────────────────── -->
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="proc-toast proc-toast-success">
+        <i class="bi bi-check-circle-fill me-2"></i>@successMessage
+    </div>
+}
+
+<style>
+    /* ── Design Tokens ────────────────────────────────────────────────────── */
+    .proc-wrapper { padding: 1.5rem; max-width: 1400px; margin: 0 auto; background: #f8f9fc; min-height: 100vh; }
+    
+    /* Header */
+    .proc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+    .proc-header-left { display: flex; align-items: center; gap: 1rem; }
+    .proc-header-icon { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.3rem; }
+    .proc-title { font-size: 1.5rem; font-weight: 800; color: #111827; margin: 0; }
+    .proc-subtitle { font-size: 0.85rem; color: #6b7280; margin: 0; }
+    .proc-header-actions { display: flex; gap: 0.625rem; }
+    
+    /* KPI Cards */
+    .proc-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .proc-kpi { background: #fff; border-radius: 12px; padding: 1rem; display: flex; align-items: center; gap: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .proc-kpi-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+    .proc-kpi-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #6b7280; }
+    .proc-kpi-val { font-size: 1.6rem; font-weight: 800; color: #111827; line-height: 1.2; }
+    .proc-kpi-pending .proc-kpi-icon { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .proc-kpi-approved .proc-kpi-icon { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .proc-kpi-fulfilled .proc-kpi-icon { background: rgba(79, 70, 229, 0.1); color: #4f46e5; }
+    .proc-kpi-rejected .proc-kpi-icon { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+    
+    /* Filter Bar */
+    .proc-filter-bar { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+    .proc-filter-group { display: flex; flex-direction: column; gap: 0.3rem; min-width: 160px; }
+    .proc-filter-end { margin-left: auto; justify-content: flex-end; }
+    .proc-filter-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #6b7280; }
+    .proc-select, .proc-input { height: 38px; padding: 0 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.85rem; background: #fff; }
+    .proc-select:focus, .proc-input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    .proc-textarea { padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.85rem; width: 100%; resize: vertical; }
+    .proc-textarea:focus { outline: none; border-color: #4f46e5; }
+    
+    /* Table Card */
+    .proc-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    .proc-table { width: 100%; border-collapse: collapse; }
+    .proc-table th { background: #f9fafb; padding: 0.75rem 1rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+    .proc-table td { padding: 0.75rem 1rem; font-size: 0.85rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+    .proc-row:hover td { background: #fafafa; }
+    .proc-justification-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .proc-date { color: #6b7280; font-size: 0.8rem; }
+    
+    /* Badges */
+    .proc-dept-badge { background: rgba(79,70,229,0.08); color: #4f46e5; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .proc-category-badge { background: #f3f4f6; color: #374151; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .proc-badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+    .proc-badge-success { background: rgba(16,185,129,0.1); color: #10b981; }
+    
+    /* Status Classes */
+    .proc-status-pending { background: rgba(245,158,11,0.1); color: #f59e0b; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .proc-status-approved { background: rgba(16,185,129,0.1); color: #10b981; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .proc-status-fulfilled { background: rgba(79,70,229,0.1); color: #4f46e5; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    .proc-status-rejected { background: rgba(239,68,68,0.1); color: #ef4444; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
+    
+    /* Actions */
+    .proc-actions { display: flex; gap: 0.3rem; justify-content: flex-end; }
+    .proc-action-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; color: #6b7280; }
+    .proc-action-btn:hover { border-color: currentColor; }
+    .proc-action-review:hover { color: #4f46e5; background: rgba(79,70,229,0.06); }
+    .proc-action-fulfill:hover { color: #10b981; background: rgba(16,185,129,0.06); }
+    
+    /* Requester Avatar */
+    .proc-requester { display: flex; align-items: center; gap: 0.5rem; }
+    .proc-avatar { width: 28px; height: 28px; border-radius: 50%; background: #4f46e5; color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; text-transform: uppercase; }
+    
+    /* State Screens */
+    .proc-state-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; text-align: center; background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; }
+    .proc-empty-icon { font-size: 3rem; color: #d1d5db; margin-bottom: 1rem; }
+    .proc-state-title { font-size: 1rem; font-weight: 600; color: #111827; margin: 0; }
+    .proc-state-sub { font-size: 0.85rem; color: #6b7280; margin: 0.25rem 0 0; }
+    .proc-state-text { color: #6b7280; font-size: 0.85rem; margin-top: 0.75rem; }
+    .proc-spinner { width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .proc-spinner-sm { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 0.35rem; vertical-align: middle; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.7s linear infinite; }
+    
+    /* Buttons */
+    .proc-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+    .proc-btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+    .proc-btn-primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    .proc-btn-primary:hover:not(:disabled) { background: #4338ca; }
+    .proc-btn-success { background: #10b981; color: #fff; border-color: #10b981; }
+    .proc-btn-success:hover:not(:disabled) { background: #059669; }
+    .proc-btn-danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+    .proc-btn-danger:hover:not(:disabled) { background: #dc2626; }
+    .proc-btn-ghost { background: #fff; color: #374151; border-color: #e5e7eb; }
+    .proc-btn-ghost:hover:not(:disabled) { background: #f3f4f6; }
+    .proc-btn-outline { background: transparent; color: #4f46e5; border-color: #4f46e5; }
+    .proc-btn-outline:hover:not(:disabled) { background: rgba(79,70,229,0.06); }
+    .proc-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    
+    /* Modal */
+    .proc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1040; backdrop-filter: blur(3px); }
+    .proc-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); z-index: 1050; display: flex; flex-direction: column; max-height: 92vh; }
+    .proc-modal-sm { width: 450px; max-width: 95vw; }
+    .proc-modal-md { width: 550px; max-width: 95vw; }
+    .proc-modal-lg { width: 700px; max-width: 95vw; }
+    .proc-modal-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 1.25rem 1.5rem; border-bottom: 1px solid #e5e7eb; }
+    .proc-modal-title-group { display: flex; align-items: center; gap: 0.875rem; }
+    .proc-modal-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .proc-modal-icon-warning { background: rgba(245,158,11,0.1); color: #f59e0b; }
+    .proc-modal-icon-success { background: rgba(16,185,129,0.1); color: #10b981; }
+    .proc-modal-title { font-size: 1rem; font-weight: 700; color: #111827; margin: 0; }
+    .proc-modal-sub { font-size: 0.78rem; color: #6b7280; margin: 0.1rem 0 0; }
+    .proc-modal-body { padding: 1.5rem; overflow-y: auto; }
+    .proc-modal-footer { display: flex; justify-content: flex-end; gap: 0.625rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #f3f4f6; }
+    .proc-close-btn { background: none; border: none; color: #6b7280; cursor: pointer; padding: 0.25rem; font-size: 1rem; border-radius: 6px; }
+    .proc-close-btn:hover { background: #f3f4f6; }
+    
+    /* Info Card */
+    .proc-info-card { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem; }
+    .proc-info-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb; }
+    .proc-info-row:last-child { border-bottom: none; }
+    .proc-info-label { font-size: 0.8rem; color: #6b7280; }
+    .proc-info-value { font-size: 0.85rem; color: #111827; }
+    
+    /* Form */
+    .proc-form-group { margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .proc-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .proc-form-col { display: flex; flex-direction: column; gap: 0.35rem; }
+    .proc-label { font-size: 0.78rem; font-weight: 600; color: #374151; }
+    .proc-required { color: #ef4444; }
+    .proc-hint { font-size: 0.7rem; color: #6b7280; margin-top: 0.2rem; }
+    .proc-error { font-size: 0.7rem; color: #ef4444; margin-top: 0.2rem; }
+    
+    /* Alert */
+    .proc-alert { display: flex; align-items: center; padding: 0.75rem; border-radius: 8px; font-size: 0.8rem; margin-bottom: 1rem; }
+    .proc-alert-danger { background: rgba(239,68,68,0.08); color: #dc2626; border: 1px solid rgba(239,68,68,0.2); }
+    
+    /* Toast */
+    .proc-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.875rem 1.25rem; border-radius: 10px; font-size: 0.85rem; font-weight: 500; z-index: 9999; box-shadow: 0 10px 40px rgba(0,0,0,0.12); animation: slideUp 0.3s ease; display: flex; align-items: center; }
+    .proc-toast-success { background: #064e3b; color: #fff; border: 1px solid #065f46; }
+    @@keyframes slideUp { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    
+    
+    @@media (max-width: 768px) {
+        .proc-form-row {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+        }
+
+        .proc-kpi-row {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+</style>
+
+@code {
+    private bool loading = true;
+    private bool submitting = false;
+    private bool showReviewModal = false;
+    private bool showFulfillModal = false;
+    private bool approveDecision = false;
+    private string reviewNotes = "";
+    private string errorMessage = "";
+    private string successMessage = "";
+
+    private Guid orgId;
+    private string userId = "";
+
+    private List<ProcurementRequestDto> allRequests = new();
+    private List<ProcurementRequestDto> filteredRequests = new();
+    private List<DepartmentDto> departments = new();
+    private ProcurementRequestDto? selectedRequest;
+    private FulfilProcurementDto fulfillDto = new();
+
+    private int pendingCount, approvedCount, fulfilledCount, rejectedCount;
+    private int remainingQuantity => selectedRequest != null
+        ? selectedRequest.QuantityRequested - selectedRequest.QuantityFulfilled
+        : 0;
+
+    // Properties with setters that trigger filter
+    private string _selectedStatus = "";
+    private string selectedStatus
+    {
+        get => _selectedStatus;
+        set
+        {
+            _selectedStatus = value;
+            FilterRequests();
+            StateHasChanged();
+        }
+    }
+
+    private string _selectedDepartmentId = "";
+    private string selectedDepartmentId
+    {
+        get => _selectedDepartmentId;
+        set
+        {
+            _selectedDepartmentId = value;
+            FilterRequests();
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
+        orgId = ctx.OrganizationId;
+        userId = ctx.UserId;
+
+        await LoadDepartmentsAsync();
+        await LoadProcurementRequestsAsync();
+    }
+
+    private async Task LoadDepartmentsAsync()
+    {
+        departments = await DepartmentService.GetDepartmentsByOrganizationAsync(orgId);
+    }
+
+    private async Task LoadProcurementRequestsAsync()
+    {
+        loading = true;
+        StateHasChanged();
+
+        try
+        {
+            allRequests = await AssetService.GetProcurementRequestsAsync(
+                organizationId: orgId,
+                status: null,
+                departmentId: null,
+                callerRole: "OrgAdmin",
+                callerDepartmentId: null
+            );
+
+            // Update counts
+            pendingCount = allRequests.Count(r => r.Status == ProcurementStatus.Pending);
+            approvedCount = allRequests.Count(r => r.Status == ProcurementStatus.Approved);
+            fulfilledCount = allRequests.Count(r => r.Status == ProcurementStatus.Fulfilled);
+            rejectedCount = allRequests.Count(r => r.Status == ProcurementStatus.Rejected);
+
+            FilterRequests();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading procurement requests: {ex.Message}");
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void FilterRequests()
+    {
+        var query = allRequests.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(selectedStatus))
+        {
+            query = query.Where(r => r.Status == selectedStatus);
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedDepartmentId) && Guid.TryParse(selectedDepartmentId, out var deptId))
+        {
+            query = query.Where(r => r.DepartmentId == deptId);
+        }
+
+        filteredRequests = query.OrderByDescending(r => r.RequestedAt).ToList();
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadProcurementRequestsAsync();
+        ShowSuccess("Refreshed successfully");
+    }
+
+    private void ClearFilters()
+    {
+        selectedStatus = "";
+        selectedDepartmentId = "";
+        FilterRequests();
+        StateHasChanged();
+    }
+
+    private void OpenReviewModal(ProcurementRequestDto request)
+    {
+        selectedRequest = request;
+        reviewNotes = "";
+        errorMessage = "";
+        showReviewModal = true;
+        StateHasChanged();
+    }
+
+    private void OpenFulfillModal(ProcurementRequestDto request)
+    {
+        Console.WriteLine($"Opening fulfill modal - Request Status: {request.Status}");
+
+        if (request.Status != ProcurementStatus.Approved)
+        {
+            errorMessage = $"Cannot fulfill request with status '{request.Status}'. Only Approved requests can be fulfilled.";
+            StateHasChanged();
+            return;
+        }
+
+        selectedRequest = request;
+        errorMessage = "";
+        fulfillDto = new FulfilProcurementDto
+        {
+            ProcurementRequestId = request.ProcurementRequestId,
+            AssetName = request.AssetName ?? "",
+            QuantityToCreate = remainingQuantity,
+            Brand = "",
+            Model = "",
+            PurchasePrice = null,
+            PurchaseDate = null,
+            WarrantyExpiryDate = null
+        };
+        showFulfillModal = true;
+        StateHasChanged();
+    }
+
+    private async Task SubmitReview(bool approve)
+    {
+        if (selectedRequest == null) return;
+
+        submitting = true;
+        approveDecision = approve;
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine($"=== SUBMITTING REVIEW ===");
+            Console.WriteLine($"Request ID: {selectedRequest.ProcurementRequestId}");
+            Console.WriteLine($"Approve: {approve}");
+
+            var reviewDto = new ReviewProcurementDto
+            {
+                ProcurementRequestId = selectedRequest.ProcurementRequestId,
+                Approve = approve,
+                Notes = reviewNotes
+            };
+
+            await AssetService.ReviewProcurementAsync(orgId, reviewDto, userId);
+
+            Console.WriteLine($"Review completed. Reloading data...");
+
+            CloseModals();
+            await LoadProcurementRequestsAsync();
+
+            ShowSuccess(approve ? "Request approved successfully" : "Request rejected");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine($"Error reviewing procurement: {ex.Message}");
+            StateHasChanged();
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+
+    private async Task SubmitFulfillAsync()
+    {
+        if (selectedRequest == null) return;
+
+        submitting = true;
+        errorMessage = "";
+
+        try
+        {
+            if (fulfillDto.QuantityToCreate < 1 || fulfillDto.QuantityToCreate > remainingQuantity)
+            {
+                errorMessage = $"Quantity must be between 1 and {remainingQuantity}";
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(fulfillDto.AssetName))
+            {
+                errorMessage = "Asset Name is required";
+                StateHasChanged();
+                return;
+            }
+
+            fulfillDto.ProcurementRequestId = selectedRequest.ProcurementRequestId;
+
+            Console.WriteLine($"=== FULFILL PROCUREMENT ===");
+            Console.WriteLine($"OrganizationId: {orgId}");
+            Console.WriteLine($"Category: {selectedRequest.AssetCategory}");
+            Console.WriteLine($"Quantity to create: {fulfillDto.QuantityToCreate}");
+            Console.WriteLine($"Asset Name: {fulfillDto.AssetName}");
+
+            var createdAssets = await AssetService.FulfilProcurementAsync(orgId, fulfillDto, userId);
+
+            Console.WriteLine($"Successfully created {createdAssets.Count} assets");
+
+            CloseModals();
+            await LoadProcurementRequestsAsync();
+            ShowSuccess($"Successfully created {fulfillDto.QuantityToCreate} asset(s)");
+        }
+        catch (DbUpdateException ex)
+        {
+            var innerMessage = ex.InnerException?.Message ?? ex.Message;
+            errorMessage = $"Database error: {innerMessage}";
+            Console.WriteLine($"DbUpdateException: {innerMessage}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            Console.WriteLine($"Error fulfilling procurement: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            StateHasChanged();
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+
+    private void CloseModals()
+    {
+        showReviewModal = false;
+        showFulfillModal = false;
+        selectedRequest = null;
+        errorMessage = "";
+    }
+
+    private async void ShowSuccess(string msg)
+    {
+        successMessage = msg;
+        StateHasChanged();
+        await Task.Delay(3000);
+        successMessage = "";
+        StateHasChanged();
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        ProcurementStatus.Pending => "proc-status-pending",
+        ProcurementStatus.Approved => "proc-status-approved",
+        ProcurementStatus.Fulfilled => "proc-status-fulfilled",
+        ProcurementStatus.Rejected => "proc-status-rejected",
+        _ => "proc-status-pending"
+    };
+}

@@ -508,23 +508,6 @@ namespace Humatrix_HRMS.Services.Assets
                 .FirstOrDefaultAsync(e => e.UserId == userId && e.OrganizationId == organizationId);
             return employee?.EmployeeId;
         }
-        // =====================================================================
-        // ASSET REQUESTS  (Repair / Replacement / Return)
-        // =====================================================================
-
-        /// <summary>
-        /// Employee or HR raises an asset request.
-        ///
-        /// Validation rules:
-        ///   1. RequestType must be valid.
-        ///   2. Asset must be assigned to the requestor.
-        ///   3. No duplicate pending request of the same type on the same asset.
-        ///   4. Return blocked if there is an active (Pending/Approved) Repair request.
-        ///      (Cannot return an asset that is being repaired or pending repair approval.)
-        ///   5. Repair blocked if asset is already InRepair.
-        ///   6. Replacement blocked if asset is InRepair.
-        ///   7. HR requestor may only raise requests for employees in their own department.
-        /// </summary>
         public async Task<AssetRequestDto> CreateAssetRequestAsync(
             Guid organizationId,
             Guid requestedByEmployeeId,
@@ -651,12 +634,12 @@ namespace Humatrix_HRMS.Services.Assets
         ///   - OrgAdmin can review all requests in the org.
         /// </summary>
         public async Task<AssetRequestDto> ReviewAssetRequestAsync(
-            Guid organizationId,
-            Guid reviewerEmployeeId,
-            ReviewAssetRequestDto dto,
-            string actorUserId,
-            string actorRole,
-            Guid? callerDepartmentId = null)
+     Guid organizationId,
+     Guid? reviewerEmployeeId,  // Made nullable
+     ReviewAssetRequestDto dto,
+     string actorUserId,
+     string actorRole,
+     Guid? callerDepartmentId = null)
         {
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -668,6 +651,12 @@ namespace Humatrix_HRMS.Services.Assets
                         r.AssetRequestId == dto.AssetRequestId &&
                         r.OrganizationId == organizationId)
                     ?? throw new KeyNotFoundException("Asset request not found.");
+
+                Console.WriteLine($"=== REVIEW START ===");
+                Console.WriteLine($"Request ID: {request.AssetRequestId}");
+                Console.WriteLine($"Request Type: {request.RequestType}");
+                Console.WriteLine($"Current Status: {request.Status}");
+                Console.WriteLine($"Approve: {dto.Approve}");
 
                 if (request.Status != AssetRequestStatus.Pending)
                     throw new InvalidOperationException(
@@ -691,6 +680,7 @@ namespace Humatrix_HRMS.Services.Assets
                 if (!dto.Approve)
                 {
                     request.Status = AssetRequestStatus.Rejected;
+                    Console.WriteLine($"Request Rejected - Status: {request.Status}");
                 }
                 else
                 {
@@ -698,14 +688,16 @@ namespace Humatrix_HRMS.Services.Assets
                     {
                         // ── RETURN ──────────────────────────────────────────────────────────
                         case AssetRequestType.Return:
+                            Console.WriteLine("Processing RETURN approval...");
                             await ApplyReturnInternalAsync(request.Asset, actorUserId,
                                 returnNotes: $"Approved via return request by {actorRole}.");
                             request.Status = AssetRequestStatus.Completed;
+                            Console.WriteLine($"Return completed - Status: {request.Status}");
                             break;
 
                         // ── REPAIR ──────────────────────────────────────────────────────────
                         case AssetRequestType.Repair:
-                            // Re-validate: ensure the asset is still Assigned (not returned in the meantime)
+                            Console.WriteLine("Processing REPAIR approval...");
                             if (request.Asset.Status != AssetStatus.Assigned)
                                 throw new InvalidOperationException(
                                     $"Cannot approve Repair: asset is currently '{request.Asset.Status}', not Assigned.");
@@ -715,15 +707,16 @@ namespace Humatrix_HRMS.Services.Assets
                             request.Asset.Status = AssetStatus.InRepair;
                             request.Asset.UpdatedAt = DateTime.UtcNow;
                             request.Asset.UpdatedByUserId = actorUserId;
-                            // NOTE: CurrentEmployeeId is intentionally KEPT set so CompleteRepairAsync
-                            // knows who to re-assign the asset to after repair.
-                            // The assignment record stays open (ReturnedAt = null) as well.
                             request.Status = AssetRequestStatus.Approved;
-                            // Status will move to Completed when CompleteRepairAsync() is called.
+                            Console.WriteLine($"Repair approved - Asset Status: {request.Asset.Status}, Request Status: {request.Status}");
                             break;
 
                         // ── REPLACEMENT ─────────────────────────────────────────────────────
                         case AssetRequestType.Replacement:
+                            Console.WriteLine($"=== REPLACEMENT APPROVAL START ===");
+                            Console.WriteLine($"Request ID: {request.AssetRequestId}");
+                            Console.WriteLine($"Replacement Asset ID: {dto.ReplacementAssetId}");
+
                             if (!dto.ReplacementAssetId.HasValue)
                                 throw new ArgumentException(
                                     "ReplacementAssetId is required when approving a Replacement request.");
@@ -734,6 +727,8 @@ namespace Humatrix_HRMS.Services.Assets
                                     a.OrganizationId == organizationId)
                                 ?? throw new KeyNotFoundException(
                                     "Replacement asset not found in this organisation.");
+
+                            Console.WriteLine($"Replacement Asset Found: {replacementAsset.AssetCode}, Current Status: {replacementAsset.Status}");
 
                             if (replacementAsset.Status != AssetStatus.Available)
                                 throw new InvalidOperationException(
@@ -751,10 +746,12 @@ namespace Humatrix_HRMS.Services.Assets
                                 EnsureHRCanAccessAsset(replacementAsset, callerDepartmentId);
 
                             // 1. Return old asset
+                            Console.WriteLine("Returning old asset...");
                             await ApplyReturnInternalAsync(request.Asset, actorUserId,
                                 returnNotes: $"Returned as part of replacement approval. Request: {request.AssetRequestId}");
 
                             // 2. Assign replacement asset to the same employee
+                            Console.WriteLine("Assigning replacement asset...");
                             var newAssignment = new AssetAssignment
                             {
                                 AssetId = replacementAsset.AssetId,
@@ -774,6 +771,10 @@ namespace Humatrix_HRMS.Services.Assets
                             request.ReplacementAssetId = replacementAsset.AssetId;
                             request.Status = AssetRequestStatus.Completed;
 
+                            Console.WriteLine($"Request Status set to: {request.Status}");
+                            Console.WriteLine($"Request ReplacementAssetId set to: {request.ReplacementAssetId}");
+                            Console.WriteLine($"Replacement Asset New Status: {replacementAsset.Status}");
+
                             // Notify the employee about their new asset
                             var empUserId = request.RequestedByEmployee.UserId;
                             if (!string.IsNullOrEmpty(empUserId))
@@ -790,8 +791,12 @@ namespace Humatrix_HRMS.Services.Assets
                     }
                 }
 
-                await _db.SaveChangesAsync();
+                Console.WriteLine($"About to save changes. Request Status: {request.Status}");
+                var saveResult = await _db.SaveChangesAsync();
+                Console.WriteLine($"SaveChangesAsync returned: {saveResult} entities modified");
+
                 await tx.CommitAsync();
+                Console.WriteLine($"Transaction committed successfully");
 
                 _ = _activityLog.LogAsync(
                     organizationId, AssetModuleName.AssetRequest,
@@ -811,13 +816,18 @@ namespace Humatrix_HRMS.Services.Assets
 
                 return await GetAssetRequestDtoAsync(request.AssetRequestId);
             }
-            catch
+            catch (Exception ex)
             {
                 await tx.RollbackAsync();
+                Console.WriteLine($"ERROR in ReviewAssetRequestAsync: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+                }
                 throw;
             }
         }
-
         /// <summary>
         /// Cancels a pending asset request.
         /// Employee can cancel their own. HR/OrgAdmin can cancel requests in their scope.
@@ -926,34 +936,48 @@ namespace Humatrix_HRMS.Services.Assets
         }
 
         /// <summary>OrgAdmin approves or rejects a procurement request.</summary>
+        /// <summary>OrgAdmin approves or rejects a procurement request.</summary>
         public async Task<ProcurementRequestDto> ReviewProcurementAsync(
             Guid organizationId,
             ReviewProcurementDto dto,
             string actorUserId)
         {
+            Console.WriteLine($"=== ReviewProcurementAsync START ===");
+            Console.WriteLine($"ProcurementRequestId: {dto.ProcurementRequestId}");
+            Console.WriteLine($"Approve: {dto.Approve}");
+
             var procurement = await _db.ProcurementRequests
                 .Include(p => p.RequestedByEmployee)
+                .Include(p => p.Department)
                 .FirstOrDefaultAsync(p =>
                     p.ProcurementRequestId == dto.ProcurementRequestId &&
                     p.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Procurement request not found.");
 
+            Console.WriteLine($"Found procurement - Current Status: {procurement.Status}");
+
             if (procurement.Status != ProcurementStatus.Pending)
                 throw new InvalidOperationException(
-                    "Only Pending procurement requests can be reviewed.");
+                    $"Only Pending procurement requests can be reviewed. Current status: {procurement.Status}");
 
+            // Update the status
             procurement.Status = dto.Approve ? ProcurementStatus.Approved : ProcurementStatus.Rejected;
             procurement.ReviewedByUserId = actorUserId;
             procurement.ReviewedAt = DateTime.UtcNow;
             procurement.ReviewNotes = dto.Notes?.Trim();
 
-            await _db.SaveChangesAsync();
+            Console.WriteLine($"New Status: {procurement.Status}");
+
+            // Save changes
+            var saveResult = await _db.SaveChangesAsync();
+            Console.WriteLine($"SaveChangesAsync returned: {saveResult} entities modified");
 
             _ = _activityLog.LogAsync(
                 organizationId, AssetModuleName.Procurement,
                 dto.Approve ? "Approved" : "Rejected",
                 "ProcurementRequest", procurement.ProcurementRequestId,
-                actorUserId, "OrgAdmin");
+                actorUserId, "OrgAdmin",
+                newValues: new { NewStatus = procurement.Status, Notes = dto.Notes });
 
             var hrEmployee = procurement.RequestedByEmployee;
             if (hrEmployee != null)
@@ -966,7 +990,6 @@ namespace Humatrix_HRMS.Services.Assets
 
             return await GetProcurementDtoAsync(procurement.ProcurementRequestId);
         }
-
         /// <summary>
         /// OrgAdmin fulfils an approved procurement request by auto-creating assets.
         /// Can be called in batches (partial fulfilment allowed, QuantityToCreate ≤ remaining).
@@ -980,35 +1003,70 @@ namespace Humatrix_HRMS.Services.Assets
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
+                Console.WriteLine($"=== FulfilProcurementAsync START ===");
+                Console.WriteLine($"ProcurementRequestId: {dto.ProcurementRequestId}");
+                Console.WriteLine($"Quantity to create: {dto.QuantityToCreate}");
+
+                // Reload with no tracking to ensure we get fresh data
                 var procurement = await _db.ProcurementRequests
+                    .AsNoTracking()  // Add this to avoid caching issues
                     .FirstOrDefaultAsync(p =>
                         p.ProcurementRequestId == dto.ProcurementRequestId &&
                         p.OrganizationId == organizationId)
                     ?? throw new KeyNotFoundException("Procurement request not found.");
 
-                if (procurement.Status != ProcurementStatus.Approved)
-                    throw new InvalidOperationException(
-                        "Only Approved procurement requests can be fulfilled.");
+                Console.WriteLine($"Procurement Status from DB: {procurement.Status}");
+                Console.WriteLine($"Quantity Requested: {procurement.QuantityRequested}");
+                Console.WriteLine($"Quantity Fulfilled (from DB): {procurement.QuantityFulfilled}");
 
-                var remaining = procurement.QuantityRequested - procurement.QuantityFulfilled;
+                // Re-attach for update
+                var procurementToUpdate = await _db.ProcurementRequests
+                    .FirstOrDefaultAsync(p => p.ProcurementRequestId == dto.ProcurementRequestId);
+
+                if (procurementToUpdate == null)
+                    throw new KeyNotFoundException("Procurement request not found.");
+
+                if (procurementToUpdate.Status != ProcurementStatus.Approved)
+                    throw new InvalidOperationException(
+                        $"Only Approved procurement requests can be fulfilled. Current status: {procurementToUpdate.Status}");
+
+                var remaining = procurementToUpdate.QuantityRequested - procurementToUpdate.QuantityFulfilled;
+                Console.WriteLine($"Remaining to fulfill: {remaining}");
 
                 if (dto.QuantityToCreate < 1 || dto.QuantityToCreate > remaining)
                     throw new ArgumentException(
                         $"QuantityToCreate must be between 1 and {remaining} (remaining unfulfilled).");
 
+                // Generate all asset codes at once to avoid duplicate key issues
+                var codes = await AssetCodeGenerator.NextCodesAsync(
+                    _db, organizationId, procurementToUpdate.AssetCategory, dto.QuantityToCreate);
+
+                Console.WriteLine($"Generated {codes.Count} codes: {string.Join(", ", codes)}");
+
                 var createdAssets = new List<Asset>();
 
                 for (int i = 0; i < dto.QuantityToCreate; i++)
                 {
-                    var code = await AssetCodeGenerator.NextCodeAsync(
-                        _db, organizationId, procurement.AssetCategory);
+                    var code = codes[i];
+                    Console.WriteLine($"Creating asset with code: {code}");
+
+                    // Double-check that this code doesn't already exist in the database
+                    var existingAsset = await _db.Assets
+                        .AnyAsync(a => a.OrganizationId == organizationId && a.AssetCode == code);
+
+                    if (existingAsset)
+                    {
+                        throw new InvalidOperationException(
+                            $"Asset code '{code}' already exists. This indicates a duplicate key issue.");
+                    }
 
                     var asset = new Asset
                     {
+                        AssetId = Guid.NewGuid(),  // Explicitly generate new ID
                         OrganizationId = organizationId,
-                        DepartmentId = procurement.DepartmentId,
+                        DepartmentId = procurementToUpdate.DepartmentId,
                         Name = dto.AssetName.Trim(),
-                        Category = procurement.AssetCategory,
+                        Category = procurementToUpdate.AssetCategory,
                         AssetCode = code,
                         Brand = dto.Brand?.Trim(),
                         Model = dto.Model?.Trim(),
@@ -1018,35 +1076,69 @@ namespace Humatrix_HRMS.Services.Assets
                         Status = AssetStatus.Available,
                         CreatedByUserId = actorUserId,
                         CreatedAt = DateTime.UtcNow,
-                        Notes = $"Created via procurement #{procurement.ProcurementRequestId}"
+                        UpdatedAt = null,
+                        UpdatedByUserId = null,
+                        CurrentEmployeeId = null,
+                        Notes = $"Created via procurement #{procurementToUpdate.ProcurementRequestId}"
                     };
 
                     _db.Assets.Add(asset);
                     createdAssets.Add(asset);
                 }
 
-                procurement.QuantityFulfilled += dto.QuantityToCreate;
+                // Update procurement quantities
+                procurementToUpdate.QuantityFulfilled += dto.QuantityToCreate;
+                Console.WriteLine($"Updated QuantityFulfilled: {procurementToUpdate.QuantityFulfilled}");
 
-                if (procurement.QuantityFulfilled >= procurement.QuantityRequested)
+                if (procurementToUpdate.QuantityFulfilled >= procurementToUpdate.QuantityRequested)
                 {
-                    procurement.Status = ProcurementStatus.Fulfilled;
-                    procurement.FulfilledAt = DateTime.UtcNow;
+                    procurementToUpdate.Status = ProcurementStatus.Fulfilled;
+                    procurementToUpdate.FulfilledAt = DateTime.UtcNow;
+                    Console.WriteLine($"Procurement marked as Fulfilled");
                 }
 
-                await _db.SaveChangesAsync();
+                // Save all changes
+                var saveResult = await _db.SaveChangesAsync();
+                Console.WriteLine($"SaveChangesAsync completed. Entities saved: {saveResult}");
+
                 await tx.CommitAsync();
+                Console.WriteLine($"Transaction committed successfully");
 
                 _ = _activityLog.LogAsync(
                     organizationId, AssetModuleName.Procurement, "Fulfilled",
-                    "ProcurementRequest", procurement.ProcurementRequestId,
+                    "ProcurementRequest", procurementToUpdate.ProcurementRequestId,
                     actorUserId, "OrgAdmin",
-                    newValues: new { dto.QuantityToCreate, procurement.QuantityFulfilled });
+                    newValues: new
+                    {
+                        dto.QuantityToCreate,
+                        procurementToUpdate.QuantityFulfilled,
+                        NewStatus = procurementToUpdate.Status
+                    });
 
                 return createdAssets.Select(a => MapAssetDto(a, null)).ToList();
             }
-            catch
+            catch (DbUpdateException ex)
             {
                 await tx.RollbackAsync();
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+                Console.WriteLine($"DbUpdateException: {innerMessage}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+
+                // Check if it's a duplicate key error
+                if (innerMessage.Contains("duplicate key") || innerMessage.Contains("IX_Assets_OrganizationId_AssetCode"))
+                {
+                    throw new InvalidOperationException(
+                        $"Duplicate asset code detected. This may indicate that the asset code generator is not properly synchronized. " +
+                        $"Please refresh the page and try again. Technical details: {innerMessage}", ex);
+                }
+
+                throw new InvalidOperationException($"Database error: {innerMessage}", ex);
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                Console.WriteLine($"Exception: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 throw;
             }
         }

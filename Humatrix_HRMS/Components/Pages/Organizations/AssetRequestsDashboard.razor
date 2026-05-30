@@ -146,7 +146,10 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
                 <div class="modal-header bg-light border-bottom p-3">
-                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-shield-check text-primary me-2" style="color: #4f46e5 !important;"></i>Evaluate Request</h5>
+                    <h5 class="modal-title fw-bold text-dark">
+                        <i class="bi bi-shield-check text-primary me-2" style="color: #4f46e5 !important;"></i>
+                        Evaluate @selectedRequest.RequestType Request
+                    </h5>
                     <button type="button" class="btn-close" @onclick="CloseReviewModal"></button>
                 </div>
                 <div class="modal-body p-4">
@@ -156,10 +159,58 @@
                         <div><span class="text-muted">Stated Reason:</span> <span class="text-secondary font-italic">"@selectedRequest.Reason"</span></div>
                     </div>
 
+                    <!-- Replacement Asset Selection (Only for Replacement requests) -->
+                    @if (selectedRequest.RequestType == AssetRequestType.Replacement)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-secondary small">Select Replacement Asset <span class="text-danger">*</span></label>
+
+                            @if (loadingReplacementAssets)
+                            {
+                                <div class="text-center py-2">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                    <span class="ms-2 small text-muted">Loading available assets...</span>
+                                </div>
+                            }
+                            else if (availableReplacementAssets.Any())
+                            {
+                                @* <select class="form-select" @bind="selectedReplacementAssetId" @onchange="OnReplacementAssetSelected"> *@
+                                <select class="form-select" @bind="selectedReplacementAssetId" @bind:event="onchange">
+                                    <option value="">-- Select an available asset --</option>
+                                    @foreach (var asset in availableReplacementAssets)
+                                    {
+                                        <option value="@asset.AssetId">
+                                            @asset.Name (@asset.AssetCode) - @asset.Category
+                                        </option>
+                                    }
+                                </select>
+                                <div class="form-text small text-muted mt-1">
+                                    <i class="bi bi-info-circle"></i> Only available assets from the same category are shown.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning small mb-0">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    No available replacement assets found in the same category. Please add new assets or check inventory.
+                                </div>
+                            }
+                        </div>
+                    }
+
                     <div class="mb-3">
                         <label class="form-label fw-semibold text-secondary small">Reviewer Processing Notes / Context</label>
-                        <textarea class="form-control" rows="3" @bind="reviewNotes" placeholder="Provide textual rationale for validation or rejection outcome details..." style="border-radius: 8px; font-size: 0.9rem;"></textarea>
+                        <textarea class="form-control" rows="3" @bind="reviewNotes"
+                                  placeholder="Provide textual rationale for validation or rejection outcome details..."
+                                  style="border-radius: 8px; font-size: 0.9rem;"></textarea>
                     </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger small mb-0">
+                            <i class="bi bi-exclamation-circle me-1"></i> @errorMessage
+                        </div>
+                    }
                 </div>
                 <div class="modal-footer bg-light border-top p-3 d-flex justify-content-between">
                     <button type="button" class="btn btn-secondary px-3 py-2 btn-sm fw-medium" style="border-radius: 8px;" @onclick="CloseReviewModal">Dismiss</button>
@@ -167,7 +218,10 @@
                         <button type="button" class="btn btn-danger px-3 py-2 btn-sm fw-medium" style="border-radius: 8px;" @onclick="() => ActionReviewSubmit(false)">
                             <i class="bi bi-x-circle me-1"></i> Decline Request
                         </button>
-                        <button type="button" class="btn btn-success px-3 py-2 btn-sm fw-medium" style="border-radius: 8px;" @onclick="() => ActionReviewSubmit(true)">
+                        <button type="button" class="btn btn-success px-3 py-2 btn-sm fw-medium"
+                                style="border-radius: 8px;"
+                                @onclick="() => ActionReviewSubmit(true)"
+                                disabled="@(selectedRequest.RequestType == AssetRequestType.Replacement && !selectedReplacementAssetId.HasValue)">
                             <i class="bi bi-check-circle me-1"></i> Approve & Process
                         </button>
                     </div>
@@ -183,6 +237,7 @@
     private bool showReviewModal = false;
     private string reviewNotes = "";
     private string selectedFilterStatus = "";
+    private string errorMessage = "";
 
     private Guid currentOrgId;
     private Guid currentDeptId;
@@ -194,6 +249,8 @@
     private List<AssetRequestDto> allRequests = new();
     private List<AssetRequestDto> requestsList = new();
     private AssetRequestDto? selectedRequest;
+
+    private bool loadingReplacementAssets = false;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
@@ -209,7 +266,6 @@
         {
             loading = true;
 
-            // Check role directly from AuthenticationState (like your Employee page)
             if (AuthState != null)
             {
                 var authState = await AuthState;
@@ -221,7 +277,6 @@
                     currentUserRole = "OrgAdmin";
                     currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
-                    // For OrgAdmin, get the organization from the user's claims or first organization
                     using var db = await DbContextFactory.CreateDbContextAsync();
                     var orgs = await db.Organizations.ToListAsync();
                     currentOrgId = orgs.FirstOrDefault()?.OrganizationId ?? Guid.Empty;
@@ -230,7 +285,6 @@
                 }
                 else
                 {
-                    // HR flow - get employee context
                     var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
                     if (context != null)
                     {
@@ -271,14 +325,13 @@
             }
             else
             {
-                // allRequests = await AssetService.GetAllAssetRequestsAsync(currentOrgId);
                 allRequests = await AssetService.GetAssetRequestsAsync(
-    organizationId: currentOrgId,
-    status: null,
-    employeeId: null,
-    callerRole: currentUserRole,
-    callerDepartmentId: isOrgAdmin ? null : currentDeptId
-);
+                    organizationId: currentOrgId,
+                    status: null,
+                    employeeId: null,
+                    callerRole: currentUserRole,
+                    callerDepartmentId: null
+                );
                 Console.WriteLine($"OrgAdmin - Found {allRequests.Count} requests");
             }
         }
@@ -291,18 +344,13 @@
             }
             else
             {
-                // allRequests = await AssetService.GetAssetRequestsByDepartmentAsync(
-                //     currentOrgId,
-                //     currentDeptId,
-                //     currentEmployeeId
-                // );
                 allRequests = await AssetService.GetAssetRequestsAsync(
-    organizationId: currentOrgId,
-    status: null,
-    employeeId: null,
-    callerRole: "HR",
-    callerDepartmentId: currentDeptId
-);
+                    organizationId: currentOrgId,
+                    status: null,
+                    employeeId: null,
+                    callerRole: "HR",
+                    callerDepartmentId: currentDeptId
+                );
                 Console.WriteLine($"HR - Found {allRequests.Count} requests");
             }
         }
@@ -328,59 +376,90 @@
         ApplyInlineFilters();
     }
 
-    private void OpenReviewModal(AssetRequestDto req)
+    private async Task OpenReviewModal(AssetRequestDto req)
     {
         selectedRequest = req;
         reviewNotes = "";
+        errorMessage = "";
+        selectedReplacementAssetId = null;
+        availableReplacementAssets = new();
         showReviewModal = true;
+        StateHasChanged();
+
+        if (req.RequestType == AssetRequestType.Replacement)
+        {
+            loadingReplacementAssets = true;
+            StateHasChanged();
+
+            try
+            {
+                availableReplacementAssets = await AssetService.GetAvailableReplacementAssetsAsync(
+                    organizationId: currentOrgId,
+                    assetRequestId: req.AssetRequestId,
+                    callerRole: currentUserRole,
+                    callerDepartmentId: isOrgAdmin ? null : currentDeptId
+                );
+                Console.WriteLine($"Found {availableReplacementAssets.Count} replacement assets");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading replacement assets: {ex.Message}");
+                errorMessage = ex.Message;
+            }
+            finally
+            {
+                loadingReplacementAssets = false;
+                StateHasChanged();
+            }
+        }
     }
 
     private void CloseReviewModal()
     {
         showReviewModal = false;
         selectedRequest = null;
+        errorMessage = "";
     }
 
-    // private async Task ActionReviewSubmit(bool approve)
-    // {
-    //     if (selectedRequest == null) return;
-
-    //     try
-    //     {
-    //         loading = true;
-    //         showReviewModal = false;
-
-    //         await AssetService.ReviewAssetRequestAsync(
-    //             currentOrgId,
-    //             selectedRequest.AssetRequestId,
-    //             currentUserId,
-    //             currentUserRole,
-    //             approve,
-    //             reviewNotes
-    //         );
-
-    //         await LoadDataGridAsync();
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         Console.WriteLine($"Review execution error: {ex.Message}");
-    //     }
-    //     finally
-    //     {
-    //         loading = false;
-    //     }
-    // }
+    private void OnReplacementAssetSelected(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var assetId))
+        {
+            selectedReplacementAssetId = assetId;
+            Console.WriteLine($"Replacement asset selected: {selectedReplacementAssetId}");
+        }
+        else
+        {
+            selectedReplacementAssetId = null;
+        }
+        StateHasChanged();
+    }
 
     private async Task ActionReviewSubmit(bool approve)
     {
+
+        Console.WriteLine($"=== ActionReviewSubmit CALLED ===");
+        Console.WriteLine($"Approve: {approve}");
+        Console.WriteLine($"SelectedRequest is null: {selectedRequest == null}");
+
         if (selectedRequest == null) return;
+
+        if (approve && selectedRequest.RequestType == AssetRequestType.Replacement)
+        {
+            if (!selectedReplacementAssetId.HasValue)
+            {
+                errorMessage = "Please select a replacement asset before approving.";
+                StateHasChanged();
+                return;
+            }
+        }
 
         try
         {
             loading = true;
             showReviewModal = false;
+            StateHasChanged();
 
-            // Create the DTO as expected by the new ReviewAssetRequestAsync method
             var reviewDto = new ReviewAssetRequestDto
             {
                 AssetRequestId = selectedRequest.AssetRequestId,
@@ -388,32 +467,38 @@
                 Notes = reviewNotes
             };
 
-            // For Replacement requests, you might need to select a replacement asset
-            if (selectedRequest.RequestType == AssetRequestType.Replacement && approve)
+            if (approve && selectedRequest.RequestType == AssetRequestType.Replacement)
             {
-                // You'll need to add UI to select a replacement asset
-                // For now, this will fail if no replacement asset is selected
-                reviewDto.ReplacementAssetId = selectedReplacementAssetId; // You'll need to add this
+                reviewDto.ReplacementAssetId = selectedReplacementAssetId;
+                Console.WriteLine($"Approving replacement with asset ID: {selectedReplacementAssetId}");
             }
+
+            // For OrgAdmin, pass null as reviewerEmployeeId
+            Guid? reviewerId = isOrgAdmin ? null : currentEmployeeId;
 
             await AssetService.ReviewAssetRequestAsync(
                 organizationId: currentOrgId,
-                reviewerEmployeeId: currentEmployeeId,  // This should be the reviewer's EmployeeId
+                reviewerEmployeeId: reviewerId,
                 dto: reviewDto,
                 actorUserId: currentUserId,
                 actorRole: currentUserRole,
-                callerDepartmentId: isOrgAdmin ? null : currentDeptId  // Pass department ID for HR scope
+                callerDepartmentId: isOrgAdmin ? null : currentDeptId
             );
 
+            Console.WriteLine("Review completed successfully");
             await LoadDataGridAsync();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Review execution error: {ex.Message}");
+            errorMessage = ex.Message;
+            showReviewModal = true;
+            StateHasChanged();
         }
         finally
         {
             loading = false;
+            StateHasChanged();
         }
     }
 
@@ -441,21 +526,4 @@
         AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
         _ => "bg-light text-dark border"
     };
-
-    private async Task LoadReplacementAssets(Guid requestId)
-    {
-        try
-        {
-            availableReplacementAssets = await AssetService.GetAvailableReplacementAssetsAsync(
-                organizationId: currentOrgId,
-                assetRequestId: requestId,
-                callerRole: currentUserRole,
-                callerDepartmentId: isOrgAdmin ? null : currentDeptId
-            );
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading replacement assets: {ex.Message}");
-        }
-    }
 }
