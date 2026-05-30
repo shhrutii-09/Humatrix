@@ -11,7 +11,6 @@
 
 <div class="dropdown notification-bell-container">
 
-    <!-- BELL BUTTON -->
     <button class="btn btn-light position-relative border"
             type="button"
             data-bs-toggle="dropdown"
@@ -27,93 +26,73 @@
         }
     </button>
 
-    <!-- DROPDOWN -->
     <div class="dropdown-menu dropdown-menu-end shadow border-0 p-0 notification-dropdown">
 
-        <!-- HEADER -->
-        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light sticky-top">
-            <span class="fw-bold">Notifications</span>
-            <div class="d-flex gap-2">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2-5 border-bottom bg-light sticky-top layout-header-node" style="height: 48px;">
+            <span class="fw-bold text-dark m-0" style="font-size: 0.9rem;">Notifications</span>
+            <div class="d-flex align-items-center header-action-pills">
                 @if (notifications.Any(x => !x.IsRead))
                 {
-                    <button class="btn btn-sm btn-link text-primary text-decoration-none p-0"
-                            @onclick="MarkAllRead">
+                    <button class="btn btn-sm btn-link text-primary text-decoration-none p-0 custom-header-action"
+                            @onclick="MarkAllRead" @onclick:stopPropagation="true">
                         Mark all read
                     </button>
                 }
+                @if (notifications.Any(x => !x.IsRead) && notifications.Any())
+                {
+                    <span class="text-muted mx-2 action-separator">|</span>
+                }
                 @if (notifications.Any())
                 {
-                    <button class="btn btn-sm btn-link text-danger text-decoration-none p-0"
-                            @onclick="ClearAll">
+                    <button class="btn btn-sm btn-link text-danger text-decoration-none p-0 custom-header-action"
+                            @onclick="ClearAll" @onclick:stopPropagation="true">
                         Clear all
                     </button>
                 }
             </div>
         </div>
 
-        <!-- FILTER TABS -->
-        <div class="d-flex border-bottom px-2 pt-1 bg-white sticky-top" style="top:41px;">
-            @foreach (var tab in new[] { "All", "Unread" })
+        <div class="notification-scroll-body" style="max-height: 380px; overflow-y: auto;">
+            @if (!notifications.Any())
             {
-                <button class="btn btn-sm me-1 mb-1 @(activeTab == tab ? "btn-primary" : "btn-light")"
-                        @onclick="() => SetTab(tab)">
-                    @tab
-                </button>
-            }
-        </div>
-
-        <!-- LIST -->
-        <div style="max-height: 400px; overflow-y: auto;">
-            @{
-                var visible = activeTab == "Unread"
-                ? notifications.Where(x => !x.IsRead).ToList()
-                : notifications;
-            }
-
-            @if (!visible.Any())
-            {
-                <div class="text-center text-muted p-4">
-                    <i class="bi bi-bell-slash fs-4 d-block mb-2"></i>
-                    No notifications
+                <div class="text-center text-muted p-4 py-5">
+                    <i class="bi bi-bell-slash fs-4 d-block mb-2 text-secondary"></i>
+                    <span class="small fw-medium">No notifications available</span>
                 </div>
             }
             else
             {
-                @foreach (var n in visible)
+                @foreach (var n in notifications)
                 {
                     <div class="notification-item border-bottom d-flex align-items-start p-3 @(!n.IsRead ? "notification-item--unread" : "")"
                          style="cursor: pointer"
                          @onclick="() => Open(n)">
 
-                        <!-- TYPE ICON -->
-                        <div class="notification-icon me-2 flex-shrink-0">
-                            <i class="bi @GetIcon(n.NotificationType) @GetIconColor(n.NotificationType)"></i>
+                        <div class="notification-icon-container me-2 flex-shrink-0">
+                            <i class="bi @GetIcon(n.NotificationType) @GetIconColor(n.NotificationType) fs-5"></i>
                         </div>
 
-                        <!-- CONTENT -->
-                        <div class="flex-grow-1 overflow-hidden">
-                            <div class="fw-semibold text-truncate">@n.Title</div>
-                            <small class="text-muted d-block">@n.Message</small>
-                            <div class="small text-muted mt-1">
-                                @TimeAgo(n.CreatedAt)
+                        <div class="flex-grow-1 overflow-hidden pe-1">
+                            <div class="fw-semibold text-truncate text-dark" style="font-size: 0.85rem;">@n.Title</div>
+                            <small class="text-muted d-block text-wrap-message">@n.Message</small>
+                            <div class="text-muted mt-1 timestamp-meta">
+                                <i class="bi bi-clock me-1"></i>@TimeAgo(n.CreatedAt)
                             </div>
                         </div>
 
-                        <!-- DELETE -->
-                        <button class="btn btn-sm text-muted ms-1 flex-shrink-0"
+                        <button class="btn btn-sm text-muted ms-1 flex-shrink-0 item-dismiss-cross"
                                 title="Dismiss"
                                 @onclick:stopPropagation="true"
                                 @onclick="() => Delete(n.NotificationId)">
-                            <i class="bi bi-x"></i>
+                            <i class="bi bi-x fs-5"></i>
                         </button>
                     </div>
                 }
             }
         </div>
 
-        <!-- FOOTER -->
         <div class="border-top text-center py-2 bg-light">
-            <a href="/notifications" class="small text-primary text-decoration-none">
+            <a href="/notifications" class="small text-primary text-decoration-none fw-semibold">
                 View all notifications
             </a>
         </div>
@@ -121,21 +100,63 @@
 </div>
 
 <style>
+    /* Strict Layout Control Blocks */
     .notification-dropdown {
-        width: 380px;
-        border-radius: 12px;
+        width: 340px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+        border: 1px solid #e2e8f0 !important;
     }
 
-    .notification-item:hover {
-        background-color: #f8f9fa;
+    /* Top Action Buttons Typo Sizing */
+    .custom-header-action {
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        display: inline-block;
+        line-height: 1 !important;
     }
+
+    .action-separator {
+        font-size: 11px;
+        opacity: 0.5;
+        user-select: none;
+    }
+
+    /* Core List Item Styling Constraints */
+    .notification-item {
+        transition: background-color 0.1s ease;
+    }
+
+        .notification-item:hover {
+            background-color: #f8fafc;
+        }
 
     .notification-item--unread {
-        background-color: #f0f7ff;
+        background-color: #f4f7ff !important;
+        border-left: 3px solid #5c4ac7;
     }
 
-        .notification-item--unread:hover {
-            background-color: #e8f2ff;
+    .text-wrap-message {
+        font-size: 11.5px;
+        line-height: 1.4;
+        color: #64748b;
+        margin-top: 1px;
+    }
+
+    .timestamp-meta {
+        font-size: 10.5px;
+    }
+
+    .item-dismiss-cross {
+        padding: 0px 4px !important;
+        line-height: 1 !important;
+        opacity: 0.5;
+    }
+
+        .item-dismiss-cross:hover {
+            opacity: 1;
+            background-color: #e2e8f0 !important;
+            border-radius: 4px;
         }
 </style>
 
@@ -145,7 +166,6 @@
     private int unreadCount;
     private string? currentUserId;
     private bool _connected;
-    private string activeTab = "All";
 
     protected override async Task OnInitializedAsync()
     {
@@ -165,12 +185,10 @@
             .WithAutomaticReconnect()
             .Build();
 
-        // Receive full payload — no DB reload needed
         _hub.On<NotificationPushDto>("ReceiveNotification", async push =>
         {
             try
             {
-                // Prepend to local list without hitting DB
                 notifications.Insert(0, new NotificationDto
                 {
                     NotificationId = push.NotificationId,
@@ -185,7 +203,6 @@
 
                 unreadCount = push.NewUnreadCount;
 
-                // Show toast + sound (respect preferences — check sound toggle)
                 await JS.InvokeVoidAsync("showToastNotification",
                     push.Title, push.Message, push.RedirectUrl, push.Priority);
                 await JS.InvokeVoidAsync("playNotificationSound");
@@ -254,12 +271,6 @@
         StateHasChanged();
     }
 
-    private void SetTab(string tab)
-    {
-        activeTab = tab;
-        StateHasChanged();
-    }
-
     private static string GetIcon(string type) => type switch
     {
         var t when t.StartsWith("leave") => "bi-calendar-check",
@@ -277,29 +288,14 @@
         _ => "text-primary"
     };
 
-    // private static string TimeAgo(DateTime dt)
-    // {
-    //     var diff = DateTime.UtcNow - dt.ToUniversalTime();
-    //     if (diff.TotalMinutes < 1) return "just now";
-    //     if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
-    //     if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
-    //     if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}d ago";
-    //     return dt.ToString("dd MMM");
-    // }
     private static string TimeAgo(DateTime dt)
     {
-        // 1. Force treat the input as UTC if its kind is unassigned
         var utcDateTime = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-
-        // 2. Identify the Indian Standard Timezone mapping
         var indiaZone = TimeZoneInfo.FindSystemTimeZoneById(
             OperatingSystem.IsWindows() ? "India Standard Time" : "Asia/Kolkata");
 
-        // 3. Convert both the notification stamp and the current clock cleanly to Indian time
         var indiaTime = TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, indiaZone);
         var nowIndia = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, indiaZone);
-
-        // 4. Calculate the true mathematical difference
         var diff = nowIndia - indiaTime;
 
         if (diff.TotalSeconds < 60) return "just now";
@@ -309,6 +305,7 @@
 
         return indiaTime.ToString("dd MMM");
     }
+
     public async ValueTask DisposeAsync()
     {
         if (_hub is not null) await _hub.DisposeAsync();
