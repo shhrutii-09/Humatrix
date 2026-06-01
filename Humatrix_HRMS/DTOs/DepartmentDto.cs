@@ -1,15 +1,12 @@
-﻿namespace Humatrix_HRMS.DTOs
+﻿using System;
+
+namespace Humatrix_HRMS.DTOs
 {
     public class DepartmentDto
     {
-
-        //DepartmentDto(for display)
-
         public Guid DepartmentId { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty; // ✅ Handled compilation warning
         public string? Description { get; set; }
-
-        public bool IsActive { get; set; } // ✅ REQUIRED
-
+        public bool IsActive { get; set; } = true;
     }
 }

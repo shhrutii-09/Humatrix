@@ -23,13 +23,15 @@ namespace Humatrix_HRMS.Services
 
             var orgId = user.OrganizationId!.Value;
 
+            // Added .AsNoTracking() so state alterations won't hijack database updates prematurely
             var workWeek = await _context.WorkWeeks
+                .AsNoTracking()
                 .FirstOrDefaultAsync(w => w.OrganizationId == orgId);
 
             if (workWeek != null)
                 return workWeek;
 
-            // ✅ AUTO CREATE DEFAULT (Mon–Fri working)
+            // AUTO CREATE DEFAULT (Mon–Fri working)
             workWeek = new WorkWeek
             {
                 WorkWeekId = Guid.NewGuid(),
@@ -57,7 +59,7 @@ namespace Humatrix_HRMS.Services
 
             var orgId = user.OrganizationId!.Value;
 
-            // ✅ VALIDATION (CRITICAL)
+            // VALIDATION (CRITICAL)
             if (!model.IsMondayWorking &&
                 !model.IsTuesdayWorking &&
                 !model.IsWednesdayWorking &&
@@ -88,6 +90,8 @@ namespace Humatrix_HRMS.Services
                 existing.IsFridayWorking = model.IsFridayWorking;
                 existing.IsSaturdayWorking = model.IsSaturdayWorking;
                 existing.IsSundayWorking = model.IsSundayWorking;
+
+                _context.WorkWeeks.Update(existing);
             }
 
             await _context.SaveChangesAsync();
