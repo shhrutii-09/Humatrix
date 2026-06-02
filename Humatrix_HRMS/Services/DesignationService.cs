@@ -18,179 +18,145 @@ namespace Humatrix_HRMS.Services
             _currentUser = currentUser;
         }
 
-        // =========================
-        // COMMON: GET CURRENT USER
-        // =========================
         private async Task<ApplicationUser> GetCurrentUserAsync()
         {
             var user = await _currentUser.GetUserAsync();
-
             if (user == null || user.OrganizationId == null)
-                throw new Exception("Unauthorized");
-
+                throw new Exception("Unauthorized: Organization context missing.");
             return user;
         }
 
-        // =========================
-        // CREATE DESIGNATION
-        // =========================
-        // =========================
-        // CREATE DESIGNATION
-        // =========================
+        public async Task BulkInactivateByDepartmentAsync(Guid departmentId, Guid organizationId)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+
+            var linkedDesignations = await _context.Designations
+                .Where(d => d.DepartmentId == departmentId && d.OrganizationId == organizationId && d.IsActive)
+                .ToListAsync();
+
+            foreach (var designation in linkedDesignations)
+            {
+                designation.IsActive = false;
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
         public async Task CreateAsync(CreateDesignationDto dto)
         {
             using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
             if (dto.DepartmentId == Guid.Empty)
-                throw new Exception("Department is required");
+                throw new Exception("Department selection is required.");
 
             if (string.IsNullOrWhiteSpace(dto.Name))
-                throw new Exception("Designation name is required");
+                throw new Exception("Designation name cannot be blank.");
 
-            // FIX: Removed !d.IsActive so it checks for duplicates among all records
+            var dept = await _context.Departments
+                .FirstOrDefaultAsync(x => x.DepartmentId == dto.DepartmentId && x.OrganizationId == user.OrganizationId);
+
+            if (dept == null)
+                throw new Exception("Selected department does not exist.");
+
+            if (!dept.IsActive)
+                throw new Exception("Cannot add designations to an Inactive Department.");
+
             var exists = await _context.Designations
                 .AnyAsync(d =>
-                    d.Name.ToLower() == dto.Name.ToLower() &&
+                    d.Name.ToLower() == dto.Name.Trim().ToLower() &&
                     d.DepartmentId == dto.DepartmentId &&
                     d.OrganizationId == user.OrganizationId);
 
             if (exists)
-                throw new Exception("Designation already exists in this department");
+                throw new Exception("Designation already exists within this department.");
 
             var designation = new Designation
             {
                 Name = dto.Name.Trim(),
                 DepartmentId = dto.DepartmentId,
                 OrganizationId = user.OrganizationId.Value,
-                IsActive = true
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow // Explicit baseline safety
             };
 
             _context.Designations.Add(designation);
             await _context.SaveChangesAsync();
         }
 
-        // =========================
-        // UPDATE DESIGNATION
-        // =========================
         public async Task UpdateAsync(Guid id, CreateDesignationDto dto)
         {
             using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
             if (string.IsNullOrWhiteSpace(dto.Name))
-                throw new Exception("Designation name is required");
+                throw new Exception("Designation name is required.");
 
-            // FIX: Removed !d.IsActive. It was preventing updates on active records.
             var designation = await _context.Designations
-                .FirstOrDefaultAsync(d =>
-                    d.DesignationId == id &&
-                    d.OrganizationId == user.OrganizationId);
+                .FirstOrDefaultAsync(d => d.DesignationId == id && d.OrganizationId == user.OrganizationId);
 
             if (designation == null)
-                throw new Exception("Designation not found");
+                throw new Exception("Designation records not found.");
 
-            // FIX: Removed !d.IsActive from duplicate check
             var exists = await _context.Designations.AnyAsync(d =>
                 d.DesignationId != id &&
-                d.Name.ToLower() == dto.Name.ToLower() &&
+                d.Name.ToLower() == dto.Name.Trim().ToLower() &&
                 d.DepartmentId == designation.DepartmentId &&
                 d.OrganizationId == user.OrganizationId);
 
             if (exists)
-                throw new Exception("Designation name already exists in this department");
+                throw new Exception("Designation name already exists in this department.");
 
             designation.Name = dto.Name.Trim();
-
             await _context.SaveChangesAsync();
         }
 
-        // =========================
-        // GET ALL DESIGNATIONS
-        // =========================
+        // ========================================================
+        // 🔴 FIXED: STRICT DATABASE LIFO ORDERING BY CREATEDAT
+        // ========================================================
         public async Task<List<DesignationDto>> GetAllAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
+            // Yahan OrderByDescending ko query level par inject kiya gaya hai
             return await (
-                from d in _context.Designations
-                join dep in _context.Departments
-                    on d.DepartmentId equals dep.DepartmentId
+                from d in _context.Designations.OrderByDescending(x => x.CreatedAt)
+                join dep in _context.Departments on d.DepartmentId equals dep.DepartmentId
                 where d.OrganizationId == user.OrganizationId
-                orderby d.Name
                 select new DesignationDto
                 {
                     DesignationId = d.DesignationId,
                     DepartmentId = d.DepartmentId,
-                    Name = d.Name,
+                    Name = d.Name ?? string.Empty,
                     Department = dep.Name,
-                    IsActive = d.IsActive // ✅
+                    IsActive = d.IsActive
                 }
             ).ToListAsync();
         }
 
-        // =========================
-        // GET BY DEPARTMENT (FOR DROPDOWN)
-        // =========================
-        // =========================
-        // GET BY DEPARTMENT (FOR DROPDOWN)
-        // =========================
+        // ========================================================
+        // 🔴 FIXED: STRICT DROPDOWN STREAM LIFO ORDERING
+        // ========================================================
         public async Task<List<DesignationDto>> GetByDepartmentAsync(Guid departmentId)
         {
             using var _context = _contextFactory.CreateDbContext();
-
             var user = await GetCurrentUserAsync();
 
             return await _context.Designations
                 .Where(d => d.OrganizationId == user.OrganizationId
                          && d.DepartmentId == departmentId
-                         && d.IsActive) // ✅ Changed from !d.IsActive to d.IsActive
-                .OrderBy(d => d.Name)
+                         && d.IsActive)
+                .OrderByDescending(d => d.CreatedAt) // Database handles sequential alignment
                 .Select(d => new DesignationDto
                 {
                     DesignationId = d.DesignationId,
-                    Name = d.Name
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name ?? string.Empty,
+                    IsActive = d.IsActive
                 })
                 .ToListAsync();
         }
-
-        // =========================
-        // UPDATE DESIGNATION
-        // =========================
-        //public async Task UpdateAsync(Guid id, CreateDesignationDto dto)
-        //{
-        //    using var _context = _contextFactory.CreateDbContext();
-
-        //    var user = await GetCurrentUserAsync();
-
-        //    if (string.IsNullOrWhiteSpace(dto.Name))
-        //        throw new Exception("Designation name is required");
-
-        //    var designation = await _context.Designations
-        //        .FirstOrDefaultAsync(d =>
-        //            d.DesignationId == id &&
-        //            d.OrganizationId == user.OrganizationId &&
-        //            !d.IsActive);
-
-        //    if (designation == null)
-        //        throw new Exception("Designation not found");
-
-        //    var exists = await _context.Designations.AnyAsync(d =>
-        //        d.DesignationId != id &&
-        //        d.Name.ToLower() == dto.Name.ToLower() &&
-        //        d.DepartmentId == designation.DepartmentId &&
-        //        d.OrganizationId == user.OrganizationId &&
-        //        !d.IsActive);
-
-        //    if (exists)
-        //        throw new Exception("Designation already exists");
-
-        //    designation.Name = dto.Name.Trim();
-
-        //    await _context.SaveChangesAsync();
-        //}
-
 
         public async Task ToggleStatusAsync(Guid id, bool isActive)
         {
@@ -201,37 +167,22 @@ namespace Humatrix_HRMS.Services
                 .FirstOrDefaultAsync(d => d.DesignationId == id);
 
             if (designation == null)
-                throw new Exception("Designation not found");
+                throw new Exception("Designation reference missing.");
 
             if (designation.OrganizationId != user.OrganizationId)
-                throw new Exception("Access denied");
+                throw new Exception("Access denied.");
+
+            if (isActive)
+            {
+                var dept = await _context.Departments.FirstOrDefaultAsync(x => x.DepartmentId == designation.DepartmentId);
+                if (dept != null && !dept.IsActive)
+                {
+                    throw new Exception("Cannot activate designation because its parent Department is Inactive.");
+                }
+            }
 
             designation.IsActive = isActive;
-
             await _context.SaveChangesAsync();
-        }
-
-        public async Task<List<DesignationDto>> GetActiveAsync()
-        {
-            using var _context = _contextFactory.CreateDbContext();
-            var user = await GetCurrentUserAsync();
-
-            return await (
-                from d in _context.Designations
-                join dep in _context.Departments
-                    on d.DepartmentId equals dep.DepartmentId
-                where d.OrganizationId == user.OrganizationId
-                      && d.IsActive // ✅ ONLY ACTIVE
-                orderby d.Name
-                select new DesignationDto
-                {
-                    DesignationId = d.DesignationId,
-                    DepartmentId = d.DepartmentId,
-                    Name = d.Name,
-                    Department = dep.Name,
-                    IsActive = d.IsActive
-                }
-            ).ToListAsync();
         }
     }
 }

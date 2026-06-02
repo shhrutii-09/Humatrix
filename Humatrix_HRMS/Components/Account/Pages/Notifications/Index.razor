@@ -16,52 +16,48 @@
 
 <div class="container-fluid py-4">
 
-    <!-- HEADER -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
 
         <div>
             <h3 class="fw-bold mb-1">
                 Notifications
             </h3>
-
             <div class="text-muted">
                 View all your recent activity and updates
             </div>
         </div>
 
-        <div class="d-flex flex-wrap gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
 
             @if (notifications.Any(x => !x.IsRead))
             {
                 <button type="button"
-                        class="btn btn-primary"
+                        class="btn btn-primary btn-action-custom"
                         @onclick="MarkAllRead">
-
                     <i class="bi bi-check2-all me-1"></i>
                     Mark all read
-
                 </button>
             }
 
             @if (notifications.Any())
             {
                 <button type="button"
-                        class="btn btn-outline-danger"
+                        class="btn btn-outline-danger btn-action-custom"
                         @onclick="ClearAll">
-
                     <i class="bi bi-trash me-1"></i>
                     Clear all
-
                 </button>
             }
+
+            <a href="/org/dashboard" class="btn btn-dashboard-matching">
+                DASHBOARD
+            </a>
 
         </div>
 
     </div>
 
-    <!-- FILTERS -->
     <div class="card shadow-sm border-0 mb-3">
-
         <div class="card-body d-flex flex-wrap gap-2">
 
             <button type="button"
@@ -83,10 +79,8 @@
             </button>
 
         </div>
-
     </div>
 
-    <!-- LIST -->
     <div class="card shadow-sm border-0">
 
         <div class="card-body p-0">
@@ -103,17 +97,13 @@
             @if (!visible.Any())
             {
                 <div class="text-center py-5">
-
                     <i class="bi bi-bell-slash fs-1 text-muted"></i>
-
                     <div class="mt-3 fw-semibold">
                         No notifications found
                     </div>
-
                     <div class="text-muted small">
                         You're all caught up.
                     </div>
-
                 </div>
             }
             else
@@ -123,34 +113,23 @@
                     <div class="notification-row d-flex align-items-start p-4 border-bottom @(!n.IsRead ? "notification-unread" : "")"
                          @onclick="() => Open(n)">
 
-                        <!-- ICON -->
                         <div class="me-3 fs-4 flex-shrink-0">
-
                             <i class="bi @GetIcon(n.NotificationType) @GetIconColor(n.NotificationType)"></i>
-
                         </div>
 
-                        <!-- CONTENT -->
                         <div class="flex-grow-1 overflow-hidden">
-
                             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-
                                 <div class="overflow-hidden">
-
                                     <div class="fw-semibold text-break">
                                         @n.Title
                                     </div>
-
                                     <div class="text-muted mt-1 text-break">
                                         @n.Message
                                     </div>
-
                                 </div>
-
                                 <div class="small text-muted text-nowrap">
                                     @TimeAgo(n.CreatedAt)
                                 </div>
-
                             </div>
 
                             @if (!n.IsRead)
@@ -159,18 +138,14 @@
                                     Unread
                                 </span>
                             }
-
                         </div>
 
-                        <!-- DELETE -->
                         <button type="button"
                                 class="btn btn-sm btn-light ms-3 flex-shrink-0"
                                 title="Delete"
                                 @onclick:stopPropagation="true"
                                 @onclick="() => Delete(n.NotificationId)">
-
                             <i class="bi bi-x-lg"></i>
-
                         </button>
 
                     </div>
@@ -184,6 +159,37 @@
 </div>
 
 <style>
+    /* Exact UI Styling Replica from image_592ffe.png */
+    .btn-dashboard-matching {
+        background-color: #ffffff !important;
+        color: #495057 !important;
+        border: 1px solid #dee2e6 !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.5px !important;
+        padding: 8px 20px !important;
+        border-radius: 6px !important;
+        text-transform: uppercase !important;
+        transition: all 0.2s ease-in-out;
+        display: inline-flex;
+        align-items: center;
+        text-decoration: none;
+    }
+
+        .btn-dashboard-matching:hover {
+            background-color: #f8f9fa !important;
+            color: #212529 !important;
+            border-color: #cdd3d9 !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+        }
+
+    /* Uniform height alignment for other header action buttons */
+    .btn-action-custom {
+        padding: 8px 16px !important;
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+    }
 
     .notification-row {
         transition: all 0.15s ease;
@@ -201,7 +207,6 @@
         .notification-unread:hover {
             background-color: #e4f0ff;
         }
-
 </style>
 
 @code {
@@ -212,28 +217,18 @@
     private string activeTab = "All";
     private string? currentUserId;
 
-    // =========================================================
-    // INITIALIZE (Lightweight metadata fetch only)
-    // =========================================================
     protected override async Task OnInitializedAsync()
     {
         await LoadUser();
     }
 
-    // =========================================================
-    // LIFECYCLE & SIGNALR (Where interactive setup belongs!)
-    // =========================================================
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
 
-        // 1. Load the data now that the UI is interactive
         await LoadNotifications();
-
-        // 2. Start the background time-ago ticker safely
         StartLiveTimeRefresh();
 
-        // 3. Connect to SignalR
         if (_connected || string.IsNullOrWhiteSpace(currentUserId))
             return;
 
@@ -244,7 +239,6 @@
             .WithAutomaticReconnect()
             .Build();
 
-        // RECEIVE REAL-TIME PUSH
         _hub.On<NotificationPushDto>("ReceiveNotification", async push =>
         {
             try
@@ -269,7 +263,6 @@
                     push.Priority);
 
                 await JS.InvokeVoidAsync("playNotificationSound");
-
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
@@ -279,13 +272,9 @@
         });
 
         await _hub.StartAsync();
-
         await _hub.SendAsync("JoinUserGroup", currentUserId);
     }
 
-    // =========================================================
-    // LOAD USER
-    // =========================================================
     private async Task LoadUser()
     {
         var auth = await AuthProvider.GetAuthenticationStateAsync();
@@ -294,9 +283,6 @@
             ?.Value;
     }
 
-    // =========================================================
-    // LOAD NOTIFICATIONS
-    // =========================================================
     private async Task LoadNotifications()
     {
         if (string.IsNullOrWhiteSpace(currentUserId))
@@ -308,9 +294,6 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    // =========================================================
-    // OPEN
-    // =========================================================
     private async Task Open(NotificationDto n)
     {
         if (!n.IsRead)
@@ -327,9 +310,6 @@
         }
     }
 
-    // =========================================================
-    // DELETE
-    // =========================================================
     private async Task Delete(int id)
     {
         await NotificationEngine.DeleteAsync(id, currentUserId!);
@@ -337,9 +317,6 @@
         StateHasChanged();
     }
 
-    // =========================================================
-    // MARK ALL READ
-    // =========================================================
     private async Task MarkAllRead()
     {
         await NotificationEngine.MarkAllReadAsync(currentUserId!);
@@ -350,9 +327,6 @@
         StateHasChanged();
     }
 
-    // =========================================================
-    // CLEAR ALL
-    // =========================================================
     private async Task ClearAll()
     {
         await NotificationEngine.ClearAllAsync(currentUserId!);
@@ -360,18 +334,12 @@
         StateHasChanged();
     }
 
-    // =========================================================
-    // TABS
-    // =========================================================
     private void SetTab(string tab)
     {
         activeTab = tab;
         StateHasChanged();
     }
 
-    // =========================================================
-    // ICONS
-    // =========================================================
     private static string GetIcon(string type) => type switch
     {
         var t when t.StartsWith("leave") => "bi-calendar-check",
@@ -389,9 +357,6 @@
         _ => "text-primary"
     };
 
-    // =========================================================
-    // REAL INDIAN TIME
-    // =========================================================
     private static string TimeAgo(DateTime utcDateTime)
     {
         utcDateTime = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
@@ -411,9 +376,6 @@
         return indiaTime.ToString("dd MMM yyyy hh:mm tt");
     }
 
-    // =========================================================
-    // LIVE REFRESH OF TIME LABELS
-    // =========================================================
     private void StartLiveTimeRefresh()
     {
         _timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
@@ -429,14 +391,11 @@
             }
             catch
             {
-                // Suppress background thread errors on disposal
+                // Suppress thread errors on disposal
             }
         });
     }
 
-    // =========================================================
-    // DISPOSE
-    // =========================================================
     public void Dispose()
     {
         _timer?.Dispose();

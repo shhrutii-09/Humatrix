@@ -2,7 +2,6 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 
-<!-- LOGO -->
 <div class="sidebar-header">
     <span class="logo-text">HuMatrix</span>
 </div>
@@ -15,7 +14,6 @@
         <AuthorizeView Context="mainContext">
             <Authorized>
 
-                <!-- SUPER ADMIN -->
                 <AuthorizeView Roles="SuperAdmin" Context="superContext">
                     <NavLink class="nav-item-custom" href="/admin/dashboard">
                         <i class="bi bi-speedometer2"></i>
@@ -28,7 +26,6 @@
                     </NavLink>
                 </AuthorizeView>
 
-                <!-- HR -->
                 <AuthorizeView Roles="HR" Context="hrContext">
                     <NavLink class="nav-item-custom" href="/hr/profile">
                         <i class="bi bi-person-circle"></i>
@@ -44,10 +41,9 @@
                         <i class="bi bi-person-plus"></i>
                         <span>Add Employee</span>
                     </NavLink>
-                  
+
                 </AuthorizeView>
 
-                <!-- EMPLOYEE -->
                 <AuthorizeView Roles="Employee" Context="empContext">
                     <NavLink class="nav-item-custom" href="/employee/profile">
                         <i class="bi bi-person-badge"></i>
@@ -59,9 +55,8 @@
                         <span>Dashboard</span>
                     </NavLink>
 
-                                   </AuthorizeView>
+                </AuthorizeView>
 
-                <!-- ORG ADMIN -->
                 <AuthorizeView Roles="OrgAdmin" Context="orgContext">
                     <NavLink class="nav-item-custom" href="/org/departments">
                         <i class="bi bi-diagram-3"></i>
@@ -97,7 +92,6 @@
                     </NavLink>
                 </AuthorizeView>
 
-                <!-- OrgAdmin , HR -->
                 <AuthorizeView Roles="OrgAdmin,HR" Context="commonContext">
                     <NavLink class="nav-item-custom" href="/employees">
                         <i class="bi bi-people"></i>
@@ -108,7 +102,7 @@
                         <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
                     </NavLink>
-                   
+
                     <NavLink class="nav-item-custom" href="/hr/leaves">
                         <i class="bi bi-person-plus"></i>
                         <span>Leave Requests</span>
@@ -121,7 +115,6 @@
                 </AuthorizeView>
 
 
-                <!-- Employee , HR -->
                 <AuthorizeView Roles="Employee , HR" Context="commonContext">
                     <NavLink class="nav-item-custom" href="/employee/attendance">
                         <i class="bi bi-calendar-check"></i>
@@ -135,10 +128,6 @@
                         <i class="bi bi-calendar-x"></i>
                         <span>My Leaves</span>
                     </NavLink>
-                    @* <NavLink class="nav-item-custom" href="/employee/leaves/apply">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>Leaves Apply</span>
-                    </NavLink> *@
                     <NavLink class="nav-item-custom" href="/employee/wfh">
                         <i class="bi bi-laptop"></i>
                         <span>WFH</span>
@@ -146,11 +135,10 @@
 
                 </AuthorizeView>
 
-                <!-- FOOTER -->
                 <div class="sidebar-footer">
-                    <div class="user-info">
+                    <div class="user-info-custom">
                         <i class="bi bi-person-circle"></i>
-                        <span class="text-truncate">@mainContext.User.Identity?.Name</span>
+                        <span class="user-name-text">@mainContext.User.Identity?.Name</span>
                     </div>
 
                     <form action="Account/Logout" method="post" onsubmit="return confirmLogout()">
@@ -167,14 +155,6 @@
                             return confirm("Are you sure you want to logout?");
                         }
                     </script>
-                    @* <form id="logoutForm" action="Account/Logout" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                    </form>
-                    <button class="logout-btn" @onclick="ConfirmLogout">
-                        <i class="bi bi-box-arrow-left"></i>
-                        <span>Logout</span>
-                    </button> *@
                 </div>
 
             </Authorized>
@@ -263,14 +243,34 @@
         border-top: 1px solid rgba(255,255,255,0.1);
     }
 
-    /* USER */
-    .user-info {
+    /* FIXED USER SECTION STYLE */
+    .user-info-custom {
         display: flex;
         align-items: center;
         gap: 10px;
-        font-size: 0.85rem;
-        opacity: 0.8;
-        margin-bottom: 10px;
+        font-size: 0.88rem;
+        padding: 6px 10px;
+        color: #ffffff !important; /* Forced text white color */
+        background: transparent !important; /* Removes any selection background overlay */
+        background-color: transparent !important;
+        user-select: text;
+    }
+
+        .user-info-custom i {
+            color: #ffffff !important;
+            font-size: 1.1rem;
+        }
+
+    .user-name-text {
+        color: #ffffff !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-truncate: clip;
+        display: inline-block;
+        max-width: 170px;
+        text-overflow: ellipsis;
     }
 
     /* LOGOUT */
@@ -309,7 +309,6 @@
     }
 
     public void Dispose() => NavigationManager.LocationChanged -= OnLocationChanged;
-
 
     private async Task ConfirmLogout()
     {

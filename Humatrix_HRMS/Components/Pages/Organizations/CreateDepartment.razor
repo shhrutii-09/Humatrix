@@ -51,7 +51,7 @@
 
                         @if (!string.IsNullOrEmpty(error))
                         {
-                            <div class="alert alert-premium-danger d-flex align-items-center mb-4 border-0" role="alert">
+                            <div class="alert alert-premium-danger d-flex align-items-center mb-4 border-0 shadow-sm" role="alert">
                                 <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
                                 <div class="small fw-medium">@error</div>
                             </div>
@@ -88,7 +88,6 @@
 </div>
 
 <style>
-    /* Framework Structural Configuration Rules */
     .tracking-tight {
         letter-spacing: -0.025em;
     }
@@ -104,7 +103,6 @@
         max-width: 800px;
     }
 
-    /* Premium Typography Inputs styling */
     .premium-form-input {
         font-size: 14px;
         padding: 10px 14px;
@@ -126,7 +124,6 @@
             font-size: 13.5px;
         }
 
-    /* Interactive Navigation Header Controls */
     .btn-interactive-back {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
@@ -145,7 +142,6 @@
             transform: translateY(-1px);
         }
 
-    /* Action Form Processing Buttons */
     .btn-action-submit {
         background-color: #5c4ac7 !important;
         color: #ffffff !important;
@@ -184,7 +180,6 @@
             color: #1e293b;
         }
 
-    /* High-End System Alerts Override */
     .alert-premium-danger {
         background-color: #fef2f2;
         color: #991b1b;
@@ -214,8 +209,26 @@
 
         try
         {
+            // 1. Existing departments fetch karein
+            var existingDepts = await DeptService.GetAllAsync();
+
+            if (existingDepts != null)
+            {
+                // 2. Case-insensitive check lagayein duplicate verify karne ke liye
+                bool isDuplicate = existingDepts.Any(d => d.Name.Equals(model.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                if (isDuplicate)
+                {
+                    error = "Department already exists.";
+                    isSubmitting = false;
+                    return;
+                }
+            }
+
+            // 3. Agar duplicate nahi hai toh proceed karein
             await DeptService.CreateAsync(model);
-            Nav.NavigateTo("/org/departments");
+
+            Nav.NavigateTo($"/org/departments?success={Uri.EscapeDataString("Department created successfully.")}");
         }
         catch (Exception ex)
         {

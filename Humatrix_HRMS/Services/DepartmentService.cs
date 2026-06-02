@@ -9,51 +9,29 @@ namespace Humatrix_HRMS.Services
     {
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
+        private readonly DesignationService _designationService;
 
         public DepartmentService(
             IDbContextFactory<ApplicationDbContext> contextFactory,
-            CurrentUserService currentUser)
+            CurrentUserService currentUser,
+            DesignationService designationService)
         {
             _contextFactory = contextFactory;
             _currentUser = currentUser;
+            _designationService = designationService;
         }
 
         private async Task<ApplicationUser> GetCurrentUserAsync()
         {
             var user = await _currentUser.GetUserAsync();
-
             if (user == null || user.OrganizationId == null)
-                throw new Exception("Unauthorized access");
-
+                throw new Exception("Unauthorized: Organization context missing.");
             return user;
         }
 
-        // ✅ CREATE
-        public async Task CreateAsync(CreateDepartmentDto dto)
-        {
-            using var _context = _contextFactory.CreateDbContext();
-            var user = await GetCurrentUserAsync();
-
-            var exists = await _context.Departments.AnyAsync(d =>
-                d.OrganizationId == user.OrganizationId &&
-                d.Name.ToLower().Trim() == dto.Name.ToLower().Trim());
-
-            if (exists)
-                throw new Exception("Department already exists");
-
-            var dept = new Department
-            {
-                Name = dto.Name.Trim(),
-                Description = dto.Description,
-                OrganizationId = user.OrganizationId.Value,
-                IsActive = true
-            };
-
-            _context.Departments.Add(dept);
-            await _context.SaveChangesAsync();
-        }
-
-        // ✅ GET ALL (IMPORTANT: show ALL, not only active)
+        // ========================================================
+        // 🔴 FIXED: DB-LEVEL LIFO ORDERING
+        // ========================================================
         public async Task<List<DepartmentDto>> GetAllAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
@@ -61,88 +39,20 @@ namespace Humatrix_HRMS.Services
 
             return await _context.Departments
                 .Where(d => d.OrganizationId == user.OrganizationId)
-                .OrderBy(d => d.Name)
+                .OrderByDescending(d => d.CreatedAt)
                 .Select(d => new DepartmentDto
                 {
                     DepartmentId = d.DepartmentId,
-                    Name = d.Name,
+                    Name = d.Name ?? string.Empty,
                     Description = d.Description,
                     IsActive = d.IsActive
                 })
                 .ToListAsync();
         }
 
-        // ✅ UPDATE (IMPORTANT FIX)
-        public async Task UpdateAsync(Guid id, string name, string? description)
-        {
-            using var _context = _contextFactory.CreateDbContext();
-            var user = await GetCurrentUserAsync();
-
-            var dept = await _context.Departments
-                .FirstOrDefaultAsync(d => d.DepartmentId == id);
-
-            if (dept == null)
-                throw new Exception("Department not found");
-
-            if (dept.OrganizationId != user.OrganizationId)
-                throw new Exception("Access denied");
-
-            var exists = await _context.Departments.AnyAsync(d =>
-    d.DepartmentId != id &&
-    d.OrganizationId == user.OrganizationId &&
-    d.Name.ToLower().Trim() == name.ToLower().Trim());
-
-            if (exists)
-                throw new Exception("Department already exists");
-
-            dept.Name = name;
-            dept.Description = description;
-
-            await _context.SaveChangesAsync();
-        }
-
-        // ✅ TOGGLE (MAIN FIX)
-        public async Task ToggleStatusAsync(Guid id, bool isActive)
-        {
-            using var _context = _contextFactory.CreateDbContext();
-            var user = await GetCurrentUserAsync();
-
-            var dept = await _context.Departments
-                .FirstOrDefaultAsync(d => d.DepartmentId == id);
-
-            if (dept == null)
-                throw new Exception("Department not found");
-
-            if (dept.OrganizationId != user.OrganizationId)
-                throw new Exception("Access denied");
-
-            dept.IsActive = isActive; // ✅ CORRECT
-
-            await _context.SaveChangesAsync();
-        }
-
-        public async Task<DepartmentDto?> GetByIdAsync(Guid id)
-        {
-            using var _context = _contextFactory.CreateDbContext();
-            var user = await GetCurrentUserAsync();
-
-            var dept = await _context.Departments
-                .FirstOrDefaultAsync(d =>
-                    d.DepartmentId == id &&
-                    d.OrganizationId == user.OrganizationId);
-
-            if (dept == null)
-                return null;
-
-            return new DepartmentDto
-            {
-                DepartmentId = dept.DepartmentId,
-                Name = dept.Name,
-                Description = dept.Description,
-                IsActive = dept.IsActive
-            };
-        }
-
+        // ========================================================
+        // 🔴 FIXED: DB-LEVEL LIFO ORDERING FOR ACTIVE ONLY
+        // ========================================================
         public async Task<List<DepartmentDto>> GetActiveAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
@@ -150,15 +60,32 @@ namespace Humatrix_HRMS.Services
 
             return await _context.Departments
                 .Where(d => d.OrganizationId == user.OrganizationId && d.IsActive)
-                .OrderBy(d => d.Name)
+                .OrderByDescending(d => d.CreatedAt)
                 .Select(d => new DepartmentDto
                 {
                     DepartmentId = d.DepartmentId,
-                    Name = d.Name,
+                    Name = d.Name ?? string.Empty,
                     Description = d.Description,
                     IsActive = d.IsActive
                 })
                 .ToListAsync();
+        }
+
+        public async Task<DepartmentDto?> GetByIdAsync(Guid id)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            var user = await GetCurrentUserAsync();
+
+            return await _context.Departments
+                .Where(d => d.DepartmentId == id && d.OrganizationId == user.OrganizationId)
+                .Select(d => new DepartmentDto
+                {
+                    DepartmentId = d.DepartmentId,
+                    Name = d.Name ?? string.Empty,
+                    Description = d.Description,
+                    IsActive = d.IsActive
+                })
+                .FirstOrDefaultAsync();
         }
 
         public async Task<List<DepartmentDto>> GetDepartmentsByOrganizationAsync(Guid organizationId)
@@ -166,14 +93,111 @@ namespace Humatrix_HRMS.Services
             using var _context = _contextFactory.CreateDbContext();
 
             return await _context.Departments
-                .Where(d => d.OrganizationId == organizationId && d.IsActive)
+                .Where(d => d.OrganizationId == organizationId)
+                .OrderByDescending(d => d.CreatedAt)
                 .Select(d => new DepartmentDto
                 {
                     DepartmentId = d.DepartmentId,
-                    Name = d.Name
+                    Name = d.Name ?? string.Empty,
+                    Description = d.Description,
+                    IsActive = d.IsActive
                 })
-                .OrderBy(d => d.Name)
                 .ToListAsync();
+        }
+
+        public async Task ToggleStatusAsync(Guid id, bool isActive)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            var user = await GetCurrentUserAsync();
+
+            var department = await _context.Departments
+                .FirstOrDefaultAsync(d => d.DepartmentId == id && d.OrganizationId == user.OrganizationId);
+
+            if (department == null)
+                throw new Exception("Department records not found.");
+
+            department.IsActive = isActive;
+            await _context.SaveChangesAsync();
+
+            if (!isActive)
+            {
+                await _designationService.BulkInactivateByDepartmentAsync(id, user.OrganizationId.Value);
+            }
+        }
+
+        public async Task CreateAsync(CreateDepartmentDto dto)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            var user = await GetCurrentUserAsync();
+
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                throw new Exception("Department name cannot be blank.");
+
+            var exists = await _context.Departments
+                .AnyAsync(d => d.Name.ToLower() == dto.Name.Trim().ToLower() && d.OrganizationId == user.OrganizationId);
+
+            if (exists)
+                throw new Exception("Department already exists.");
+
+            var department = new Department
+            {
+                Name = dto.Name.Trim(),
+                OrganizationId = user.OrganizationId.Value,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Departments.Add(department);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateAsync(Guid id, CreateDepartmentDto dto)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            var user = await GetCurrentUserAsync();
+            await ExecuteUpdateInternalAsync(_context, id, dto.Name, user.OrganizationId.Value);
+        }
+
+        public async Task UpdateAsync(Guid id, string name, string? description)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            var user = await GetCurrentUserAsync();
+            await ExecuteUpdateInternalAsync(_context, id, name, user.OrganizationId.Value);
+        }
+
+        public async Task UpdateAsync(Guid id, CreateDepartmentDto dto, Guid organizationId)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            await ExecuteUpdateInternalAsync(_context, id, dto.Name, organizationId);
+        }
+
+        public async Task UpdateAsync(Guid id, string name, Guid organizationId)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+            await ExecuteUpdateInternalAsync(_context, id, name, organizationId);
+        }
+
+        private async Task ExecuteUpdateInternalAsync(ApplicationDbContext context, Guid id, string name, Guid organizationId)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new Exception("Department name is required.");
+
+            var department = await context.Departments
+                .FirstOrDefaultAsync(d => d.DepartmentId == id && d.OrganizationId == organizationId);
+
+            if (department == null)
+                throw new Exception("Department not found.");
+
+            var exists = await context.Departments.AnyAsync(d =>
+                d.DepartmentId != id &&
+                d.Name.ToLower() == name.Trim().ToLower() &&
+                d.OrganizationId == organizationId);
+
+            if (exists)
+                throw new Exception("Department name already exists.");
+
+            department.Name = name.Trim();
+            await context.SaveChangesAsync();
         }
     }
 }

@@ -12,8 +12,37 @@
 
 <PageTitle>Departments | Humatrix HRMS</PageTitle>
 
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
+                    <span class="small fw-medium">@message</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #fef2f2; color: #991b1b; border-left: 4px solid #ef4444 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5" style="color: #ef4444;"></i>
+                    <span class="small fw-medium"><strong>Error:</strong> @error</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => error = null"></button>
+            </div>
+        </div>
+    }
+</div>
+
 <div class="container-fluid px-4 mt-4">
 
+    @* Header Section *@
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
             <h2 class="fw-bold tracking-tight text-dark mb-1">Departments</h2>
@@ -31,6 +60,53 @@
         </div>
     </div>
 
+    @* Summary Widgets *@
+    <div class="row g-3 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #5c4ac7 !important;">
+                <div class="card-body d-flex align-items-center justify-content-between p-3">
+                    <div>
+                        <span class="text-secondary small fw-bold tracking-wider text-uppercase d-block mb-1">Total Departments</span>
+                        <h3 class="fw-bold text-dark mb-0">@totalCount</h3>
+                    </div>
+                    <div class="metric-icon-box" style="background-color: rgba(92, 74, 199, 0.08); color: #5c4ac7;">
+                        <i class="bi bi-building"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #ef4444 !important;">
+                <div class="card-body d-flex align-items-center justify-content-between p-3">
+                    <div>
+                        <span class="text-secondary small fw-bold tracking-wider text-uppercase d-block mb-1">Inactive Units</span>
+                        <h3 class="fw-bold text-dark mb-0">@inactiveCount</h3>
+                    </div>
+                    <div class="metric-icon-box" style="background-color: rgba(239, 68, 68, 0.08); color: #ef4444;">
+                        <i class="bi bi-building-exclamation"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Live Search Bar *@
+    <div class="mb-3 position-relative search-wrapper">
+        <i class="bi bi-search search-icon text-muted"></i>
+        <input type="text"
+               class="form-control premium-search-input"
+               placeholder="Search department by name or description instantly..."
+               @bind-value="SearchQuery"
+               @bind-value:event="oninput" />
+        @if (!string.IsNullOrEmpty(SearchQuery))
+        {
+            <button class="btn btn-clear-search" @onclick="ClearSearch">
+                <i class="bi bi-x-circle-fill"></i>
+            </button>
+        }
+    </div>
+
+    @* Main Table View *@
     <div class="card border-0 shadow-sm panel-container-card">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -52,18 +128,18 @@
                             </td>
                         </tr>
                     }
-                    else if (!departments.Any())
+                    else if (!FilteredDepartments.Any())
                     {
                         <tr>
                             <td colspan="4" class="text-center py-5 text-muted">
-                                <div class="fs-2 text-light mb-2"><i class="bi bi-diagram-3"></i></div>
-                                <span class="fw-medium">No departments configured yet.</span>
+                                <div class="fs-2 text-light mb-2"><i class="bi bi-search"></i></div>
+                                <span class="fw-medium">No records found matching your search query.</span>
                             </td>
                         </tr>
                     }
                     else
                     {
-                        @foreach (var d in departments)
+                        @foreach (var d in PagedDepartments)
                         {
                             <tr class="table-row-interactive">
                                 <td class="ps-4">
@@ -126,17 +202,43 @@
                 </tbody>
             </table>
         </div>
+
+        @* PREMIUM MINIMALIST RIGHT-ALIGNED PAGINATION PANEL *@
+        <div class="d-flex justify-content-end align-items-center p-3 border-top bg-light pe-4">
+            <div class="d-flex align-items-center gap-1 core-pagination-wrapper shadow-sm rounded-3 p-1 bg-white border">
+
+                @* Left Arrow Button (Previous Page) *@
+                <button class="btn btn-paging-arrow @(CurrentPage == 1 ? "disabled" : "")"
+                        @onclick="() => ChangePage(CurrentPage - 1)"
+                        title="Previous Page">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+
+                @* Center Dynamic State: Page X/Y Counter *@
+                <div class="premium-page-state-text px-2 fw-semibold text-secondary select-none">
+                    Page <span class="text-indigo-premium">@CurrentPage</span>/<span>@(TotalPages == 0 ? 1 : TotalPages)</span>
+                </div>
+
+                @* Right Arrow Button (Next Page) *@
+                <button class="btn btn-paging-arrow @(CurrentPage >= TotalPages || TotalPages == 0 ? "disabled" : "")"
+                        @onclick="() => ChangePage(CurrentPage + 1)"
+                        title="Next Page">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+
+            </div>
+        </div>
     </div>
 </div>
 
 <style>
-    /* Premium Styling Core Definitions */
     .tracking-tight {
         letter-spacing: -0.025em;
     }
 
     .tracking-wider {
         letter-spacing: 0.04em;
+        font-size: 11px;
     }
 
     .panel-container-card {
@@ -145,7 +247,66 @@
         overflow: hidden;
     }
 
-    /* Table Component Refinements */
+    .metric-panel-card {
+        border-radius: 12px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .metric-icon-box {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .search-wrapper {
+        max-width: 450px;
+    }
+
+    .search-icon {
+        position: absolute;
+        top: 50%;
+        left: 14px;
+        transform: translateY(-50%);
+        font-size: 14px;
+        pointer-events: none;
+    }
+
+    .premium-search-input {
+        padding: 10px 40px 10px 38px;
+        font-size: 13.5px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background-color: #ffffff;
+        color: #1e293b;
+        transition: all 0.2s ease;
+    }
+
+        .premium-search-input:focus {
+            border-color: #5c4ac7;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12);
+        }
+
+    .btn-clear-search {
+        position: absolute;
+        top: 50%;
+        right: 8px;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #94a3b8;
+        padding: 4px;
+        transition: color 0.15s ease;
+    }
+
+        .btn-clear-search:hover {
+            color: #64748b;
+        }
+
     .table thead th {
         background-color: #f8fafc;
         border-bottom: 1px solid #e2e8f0;
@@ -169,7 +330,6 @@
         font-size: 13.5px;
     }
 
-    /* Action Buttons Architecture */
     .btn-add-dept {
         background-color: #5c4ac7 !important;
         color: #ffffff !important;
@@ -206,7 +366,49 @@
             transform: translateY(-1px);
         }
 
-    /* Action Control Triggers */
+    /* Sleek Arrow Pagination Custom Styles */
+    .core-pagination-wrapper {
+        background-color: #ffffff;
+    }
+
+    .btn-paging-arrow {
+        border: none;
+        background: transparent;
+        color: #475569;
+        padding: 4px 10px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .btn-paging-arrow:hover {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+
+        .btn-paging-arrow.disabled {
+            color: #cbd5e1;
+            background: transparent;
+            pointer-events: none;
+        }
+
+    .premium-page-state-text {
+        font-size: 12.5px;
+        min-width: 75px;
+        text-align: center;
+    }
+
+    .text-indigo-premium {
+        color: #5c4ac7;
+        font-weight: 700;
+    }
+
+    .select-none {
+        user-select: none;
+    }
+
     .btn-action-edit {
         background: #f1f5f9;
         border: 1px solid #e2e8f0;
@@ -241,7 +443,6 @@
         font-size: 12.5px;
     }
 
-    /* Premium Form Inputs Overrides */
     .premium-edit-input {
         font-size: 13.5px;
         padding: 5px 10px;
@@ -255,7 +456,6 @@
             background-color: #ffffff !important;
         }
 
-    /* Status Badging & Custom Protocol Toggles */
     .protocol-switch .form-check-input {
         width: 2.3em;
         height: 1.15em;
@@ -290,25 +490,86 @@
 
 @code {
     private List<DepartmentDto> departments = new();
+    private string _searchQuery = string.Empty;
+
+    private string SearchQuery
+    {
+        get => _searchQuery;
+        set
+        {
+            if (_searchQuery != value)
+            {
+                _searchQuery = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string? message;
+    private string? error;
 
     private Guid? editId;
     private string? editName;
     private string? editDesc;
 
+    // Counters
+    private int totalCount = 0;
+    private int inactiveCount = 0;
+
+    // Paging Configuration Variables
+    private int CurrentPage { get; set; } = 1;
+    private int PageSize { get; set; } = 10;
+    private int TotalPages => (int)Math.Ceiling((double)FilteredDepartments.Count() / PageSize);
+
+    private IEnumerable<DepartmentDto> FilteredDepartments =>
+        string.IsNullOrWhiteSpace(SearchQuery)
+            ? departments
+            : departments.Where(d => d.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                     (d.Description != null && d.Description.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)));
+
+    private IEnumerable<DepartmentDto> PagedDepartments =>
+        FilteredDepartments.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+
     protected override async Task OnInitializedAsync()
     {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var value))
+        {
+            message = value.ToString();
+        }
+
         await LoadDepartments();
     }
 
     private async Task LoadDepartments()
     {
         var rawData = await DeptService.GetAllAsync();
-
         if (rawData != null)
         {
-            // Reverse order rendering logic to satisfy strict LIFO processing requirements
-            departments = rawData.AsEnumerable().Reverse().ToList();
+            departments = rawData;
+
+            totalCount = departments.Count;
+            inactiveCount = departments.Count(d => !d.IsActive);
+
+            if (CurrentPage > TotalPages && TotalPages > 0)
+            {
+                CurrentPage = TotalPages;
+            }
         }
+    }
+
+    private void ChangePage(int pageNumber)
+    {
+        if (pageNumber >= 1 && pageNumber <= TotalPages)
+        {
+            CurrentPage = pageNumber;
+        }
+    }
+
+    private void ClearSearch()
+    {
+        SearchQuery = string.Empty;
+        CurrentPage = 1;
     }
 
     void GoToCreate() => Nav.NavigateTo("/org/create-department");
@@ -321,32 +582,43 @@
         editDesc = dept.Description;
     }
 
-    void CancelEdit()
-    {
-        editId = null;
-    }
+    void CancelEdit() => editId = null;
 
     async Task SaveEdit(Guid id)
     {
-        if (string.IsNullOrWhiteSpace(editName))
-            return;
+        if (string.IsNullOrWhiteSpace(editName)) return;
 
-        await DeptService.UpdateAsync(id, editName!, editDesc);
-        editId = null;
-
-        await LoadDepartments();
+        try
+        {
+            await DeptService.UpdateAsync(id, editName!, editDesc);
+            editId = null;
+            message = "Department details updated successfully.";
+            error = null;
+            await LoadDepartments();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            message = null;
+        }
     }
 
     private async Task ToggleDeptStatus(DepartmentDto d, ChangeEventArgs e)
     {
         var isActive = (bool)e.Value!;
-
-        // Update instantly for responsive UI experience
         d.IsActive = isActive;
 
-        await DeptService.ToggleStatusAsync(d.DepartmentId, isActive);
-
-        // Re-sync array matrix with database system
-        await LoadDepartments();
+        try
+        {
+            await DeptService.ToggleStatusAsync(d.DepartmentId, isActive);
+            message = $"Department state changed to {(isActive ? "Active" : "Inactive")}.";
+            error = null;
+            await LoadDepartments();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            message = null;
+        }
     }
 }
