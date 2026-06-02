@@ -58,7 +58,6 @@ namespace Humatrix_HRMS.Services.Assets
                     max = num;
             }
 
-            // Also check local entities that are not yet saved (if any)
             var localEntries = db.ChangeTracker.Entries<Asset>()
                 .Where(e => e.State == EntityState.Added)
                 .Select(e => e.Entity)
