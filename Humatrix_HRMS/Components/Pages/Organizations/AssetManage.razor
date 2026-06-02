@@ -40,6 +40,12 @@
                 <i class="bi bi-plus-lg"></i>
                 <span>Add Asset</span>
             </button>
+            <button class="am-btn am-btn-ghost me-3" @onclick="AssetProcurement" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
+                <i class="bi bi-arrow-right"></i> Procurement Request
+            </button>
+            <button class="am-btn am-btn-ghost me-3" @onclick="AssetRequest" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
+                <i class="bi bi-arrow-right"></i> Asset Request Dashboard
+            </button>
         </div>
     </div>
 
@@ -1089,6 +1095,11 @@
     }
     // ── CREATE ────────────────────────────────────────────────────────────────
     private void OpenCreateModal() { createDto = new CreateAssetDto(); errorMessage = ""; showCreateModal = true; }
+
+
+    private void AssetProcurement() => Nav.NavigateTo("/org/procurement");
+    private void AssetRequest() => Nav.NavigateTo("/org/asset-requests");
+
 
     private async Task SubmitCreateAsync()
     {

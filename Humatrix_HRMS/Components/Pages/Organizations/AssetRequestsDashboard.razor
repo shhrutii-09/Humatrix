@@ -12,7 +12,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
-
+@inject NavigationManager Nav
 @inject IDbContextFactory<ApplicationDbContext> DbContextFactory
 @inject AssetService AssetService
 @inject CurrentUserService CurrentUserService
@@ -24,6 +24,9 @@
     <div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom: 1px solid #e2e8f0;">
         <div>
             <div class="d-flex align-items-center gap-2">
+                <button class="am-btn am-btn-ghost me-3" @onclick="BackToList" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
+                    <i class="bi bi-arrow-left"></i> Back
+                </button>
                 <div class="bg-dark text-white d-flex align-items-center justify-content-center rounded" style="width: 40px; height: 40px; font-size: 1.3rem; background-color: #0f172a !important;">
                     <i class="bi bi-shield-check"></i>
                 </div>
@@ -259,6 +262,9 @@
     {
         await LoadDashboardContextAsync();
     }
+
+    private void BackToList() => Nav.NavigateTo("/org/assets");
+
 
     private async Task LoadDashboardContextAsync()
     {

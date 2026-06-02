@@ -41,6 +41,10 @@
                         <i class="bi bi-person-plus"></i>
                         <span>Add Employee</span>
                     </NavLink>
+                    <NavLink class="nav-item-custom" href="/hr/assets">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Department Assets</span>
+                    </NavLink>
 
                 </AuthorizeView>
 
@@ -73,6 +77,11 @@
                         <span>Shifts</span>
                     </NavLink>
 
+                    <NavLink class="nav-item-custom" href="/org/assets">
+                        <i class="bi bi-house-check"></i>
+                        <span>Manage Assets</span>
+                    </NavLink>
+
                     <NavLink class="nav-item-custom" href="/org/add-hr">
                         <i class="bi bi-person-plus"></i>
                         <span>Add HR</span>
@@ -90,6 +99,10 @@
                         <i class="bi bi-calendar-range"></i>
                         <span>Work Week</span>
                     </NavLink>
+                    <NavLink class="nav-item-custom" href="/org/assets">
+                        <i class="bi bi-calendar-range"></i>
+                        <span>Asset Inentory</span>
+                    </NavLink>
                 </AuthorizeView>
 
                 <AuthorizeView Roles="OrgAdmin,HR" Context="commonContext">
@@ -102,6 +115,10 @@
                         <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
                     </NavLink>
+                    <NavLink class="nav-item-custom" href="/hr/corrections">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Attendance Correction Desk</span>
+                    </NavLink>
 
                     <NavLink class="nav-item-custom" href="/hr/leaves">
                         <i class="bi bi-person-plus"></i>
@@ -112,6 +129,23 @@
                         <i class="bi bi-house-check"></i>
                         <span>WFH Approvals</span>
                     </NavLink>
+                    <NavLink class="nav-item-custom" href="/hr/overtime">
+                        <i class="bi bi-house-check"></i>
+                        <span>Overtime Approvals</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/admin/tasks">
+                        <i class="bi bi-house-check"></i>
+                        <span>All Tasks</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/hr/assign-task">
+                        <i class="bi bi-house-check"></i>
+                        <span>Assign Tasks</span>
+                    </NavLink>
+                 
+                    <NavLink class="nav-item-custom" href="/hr/tasks">
+                        <i class="bi bi-house-check"></i>
+                        <span>Manage Tasks</span>
+                    </NavLink>
                 </AuthorizeView>
 
 
@@ -119,6 +153,18 @@
                     <NavLink class="nav-item-custom" href="/employee/attendance">
                         <i class="bi bi-calendar-check"></i>
                         <span>My Attendance</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/assets">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>My Workspace Assets</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/overtime">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>My Overtime</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/my-tasks">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>My Tasks</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/holidays">
                         <i class="bi bi-calendar3-event"></i>
@@ -131,6 +177,14 @@
                     <NavLink class="nav-item-custom" href="/employee/wfh">
                         <i class="bi bi-laptop"></i>
                         <span>WFH</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/corrections">
+                        <i class="bi bi-laptop"></i>
+                        <span>Attendance Correction </span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/asset-requests">
+                        <i class="bi bi-laptop"></i>
+                        <span>Assets Requesting </span>
                     </NavLink>
 
                 </AuthorizeView>

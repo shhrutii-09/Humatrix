@@ -9,10 +9,6 @@
 @using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "Employee,HR")]
 
-@* FIX: Inject IDbContextFactory instead of ApplicationDbContext directly.
-   Blazor Server circuits are long-lived; injecting a scoped DbContext and
-   using it across multiple async render cycles causes stale-tracked-entity bugs.
-   IDbContextFactory creates a fresh context per query. *@
 @inject AttendanceCorrectionService CorrectionService
 @inject CurrentUserService CurrentUserService
 @using System.Globalization

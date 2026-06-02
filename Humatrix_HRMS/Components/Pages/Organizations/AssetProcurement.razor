@@ -34,6 +34,9 @@
                 <i class="bi bi-arrow-clockwise @(loading ? "spin" : "")"></i>
                 Refresh
             </button>
+            <button class="am-btn am-btn-ghost me-3" @onclick="BackToList" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
+                <i class="bi bi-arrow-left"></i> Back
+            </button>
         </div>
     </div>
 
@@ -605,6 +608,9 @@
         await LoadDepartmentsAsync();
         await LoadProcurementRequestsAsync();
     }
+
+    private void BackToList() => Nav.NavigateTo("/org/assets");
+
 
     private async Task LoadDepartmentsAsync()
     {
