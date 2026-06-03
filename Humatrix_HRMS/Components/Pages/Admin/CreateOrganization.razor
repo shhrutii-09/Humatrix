@@ -8,283 +8,211 @@
 @attribute [Authorize(Roles = "SuperAdmin")]
 
 @inject OrganizationService OrgService
+@inject NavigationManager Nav
 
-<PageTitle>Create Organization</PageTitle>
+<PageTitle>Create Organization | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- HEADER -->
-    <div class="d-flex justify-content-end align-items-center mb-3">
-
-        <a href="/admin/dashboard"
-           class="btn btn-primary shadow-sm"
-           style="background-color: #5c4ac7; border: none;">
-            BACK TO DASHBOARD
-        </a>
-
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Register Organization</h2>
+            <p class="text-muted small mb-0">Fill in the details to onboard a new company into the system.</p>
+        </div>
+        <button class="btn btn-interactive-back shadow-sm" @onclick="GoBack">
+            DASHBOARD
+        </button>
     </div>
 
-    <!-- FORM CARD -->
-    <div class="card shadow-sm border-0">
-
+    <div class="card border-0 shadow-sm">
         <div class="card-body p-4">
 
-            <!-- TOP TITLE -->
-            <div class="text-center mb-4">
-
-                <div class="icon-shape bg-purple-light text-purple mb-3">
-                    <i class="bi bi-building fs-3"></i>
-                </div>
-
-                <h3 class="fw-bold">
-                    Register Organization
-                </h3>
-
-                <p class="text-muted">
-                    Fill in the details to onboard a new company.
-                </p>
-
-            </div>
-
-            <!-- FORM -->
-            <EditForm Model="orgDto"
-                      OnValidSubmit="HandleCreateOrganization">
-
+            <EditForm Model="orgDto" OnValidSubmit="HandleCreateOrganization">
                 <DataAnnotationsValidator />
 
-                <!-- COMPANY NAME -->
-                <div class="mb-3">
+                <div class="row">
+                    <div class="col-lg-12">
 
-                    <label class="form-label small fw-bold">
-                        Company Name
-                    </label>
-
-                    <InputText @bind-Value="orgDto.Name"
-                               class="form-control border-0 bg-light py-2 px-3"
-                               placeholder="Enter company name" />
-
-                    <ValidationMessage For="() => orgDto.Name"
-                                       class="text-danger small mt-1" />
-
-                </div>
-
-                <!-- EMAIL + PHONE -->
-                <div class="row mb-3">
-
-                    <div class="col-md-6">
-
-                        <label class="form-label small fw-bold">
-                            Email
-                        </label>
-
-                        <InputText @bind-Value="orgDto.Email"
-                                   type="email"
-                                   class="form-control border-0 bg-light py-2"
-                                   placeholder="organization@email.com" />
-
-                        <ValidationMessage For="() => orgDto.Email"
-                                           class="text-danger small mt-1" />
-
-                    </div>
-
-                    <div class="col-md-6">
-
-                        <label class="form-label small fw-bold">
-                            Phone
-                        </label>
-
-                        <InputText @bind-Value="orgDto.Phone"
-                                   class="form-control border-0 bg-light py-2"
-                                   placeholder="10-digit number" />
-
-                        <ValidationMessage For="() => orgDto.Phone"
-                                           class="text-danger small mt-1" />
-
-                    </div>
-
-                </div>
-
-                <!-- ADDRESS -->
-                <div class="mb-4">
-
-                    <label class="form-label small fw-bold">
-                        Address
-                    </label>
-
-                    <InputTextArea @bind-Value="orgDto.Address"
-                                   class="form-control border-0 bg-light py-2"
-                                   rows="2"
-                                   placeholder="Enter full address" />
-
-                    <ValidationMessage For="() => orgDto.Address"
-                                       class="text-danger small mt-1" />
-
-                </div>
-
-                <!-- ADMIN EMAIL -->
-                <div class="admin-section mb-4 p-3 rounded-3">
-
-                    <label class="form-label small fw-bold text-primary">
-                        Assign Admin User Email
-                    </label>
-
-                    <InputText @bind-Value="orgDto.AdminEmail"
-                               type="email"
-                               class="form-control border-0 py-2 shadow-sm"
-                               placeholder="admin@email.com" />
-
-                    <ValidationMessage For="() => orgDto.AdminEmail"
-                                       class="text-danger small mt-1" />
-
-                    <small class="text-muted d-block mt-2"
-                           style="font-size: 0.75rem;">
-
-                        *Admin will receive activation mail on Yopmail.
-
-                    </small>
-
-                </div>
-
-                <!-- BUTTONS -->
-                <div class="d-grid gap-2">
-
-                    <button type="submit"
-                            class="btn btn-primary py-2 fw-bold rounded-3 shadow-sm"
-                            style="background-color: #5c4ac7; border: none;"
-                            disabled="@isSubmitting">
-
-                        @if (isSubmitting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2"></span>
-                            <span>Creating...</span>
-                        }
-                        else
-                        {
-                            <span>CREATE ORGANIZATION</span>
-                        }
-
-                    </button>
-
-                    <a href="/admin/dashboard"
-                       class="btn btn-link text-muted small text-decoration-none text-center">
-
-                        Cancel and return
-
-                    </a>
-
-                </div>
-
-                <!-- ERROR -->
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <div class="alert alert-danger mt-3 border-0 shadow-sm">
-
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-
-                        @errorMessage
-
-                    </div>
-                }
-
-            </EditForm>
-
-            <!-- SUCCESS MESSAGE -->
-            @if (isCreatedSuccessfully)
-            {
-                <div class="alert alert-success mt-4 border-0 shadow-sm p-4"
-                     style="background-color: #e6ffed;">
-
-                    <div class="d-flex align-items-start">
-
-                        <i class="bi bi-check-circle-fill fs-3 text-success me-3"></i>
-
-                        <div>
-
-                            <h5 class="text-success fw-bold mb-2">
-                                Organization Created Successfully!
-                            </h5>
-
-                            <p class="mb-1">
-                                Admin activation mail has been sent successfully.
-                            </p>
-
-                            <p class="mb-0 text-muted small">
-                                Please check the provided Yopmail inbox and activate the admin account.
-                            </p>
-
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-secondary tracking-wider mb-2">COMPANY NAME</label>
+                            <InputText @bind-Value="orgDto.Name" class="form-control premium-form-input" placeholder="Enter company name" />
+                            <ValidationMessage For="() => orgDto.Name" class="text-danger small mt-1 d-block fw-medium" />
                         </div>
 
-                    </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">YOPMAIL</label>
+                                <InputText @bind-Value="orgDto.Email" type="email" class="form-control premium-form-input" placeholder="organization@yopmail.com" />
+                                <ValidationMessage For="() => orgDto.Email" class="text-danger small mt-1 d-block fw-medium" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">PHONE</label>
+                                <InputText @bind-Value="orgDto.Phone" class="form-control premium-form-input" placeholder="10-digit number" />
+                                <ValidationMessage For="() => orgDto.Phone" class="text-danger small mt-1 d-block fw-medium" />
+                            </div>
+                        </div>
 
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-secondary tracking-wider mb-2">ADDRESS</label>
+                            <InputTextArea @bind-Value="orgDto.Address" class="form-control premium-form-input" rows="2" placeholder="Enter full address" />
+                            <ValidationMessage For="() => orgDto.Address" class="text-danger small mt-1 d-block fw-medium" />
+                        </div>
+
+                        <div class="admin-section mb-4 p-3 rounded-3 border">
+                            <label class="form-label small fw-bold text-primary tracking-wider mb-2">ASSIGN ADMIN YOPMAIL</label>
+                            <InputText @bind-Value="orgDto.AdminEmail" type="email" class="form-control premium-form-input" placeholder="admin@yopmail.com" />
+                            <ValidationMessage For="() => orgDto.AdminEmail" class="text-danger small mt-1 d-block fw-medium" />
+                            <small class="text-muted d-block mt-2" style="font-size: 0.75rem;">*Admin will receive activation mail on Yopmail.</small>
+                        </div>
+
+                        <div class="d-flex gap-2 border-top pt-4 mt-2">
+                            <button type="submit" class="btn btn-action-submit px-4 shadow-sm d-flex align-items-center gap-2" disabled="@isSubmitting">
+                                @if (isSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                    <span>Creating...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Create Organization</span>
+                                }
+                            </button>
+                            <button type="button" class="btn btn-action-cancel px-4" @onclick="GoBack">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </EditForm>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-premium-danger d-flex align-items-center mt-4 border-0 shadow-sm" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                    <div class="small fw-medium">@errorMessage</div>
                 </div>
             }
 
+            @if (isCreatedSuccessfully)
+            {
+                <div class="alert alert-success mt-4 border-0 shadow-sm p-4">
+                    <div class="d-flex align-items-start">
+                        <i class="bi bi-check-circle-fill fs-3 text-success me-3"></i>
+                        <div>
+                            <h5 class="text-success fw-bold mb-2">Organization Created Successfully!</h5>
+                            <p class="mb-1">Admin activation mail has been sent successfully.</p>
+                            <p class="mb-0 text-muted small">Please check the provided Yopmail inbox and activate the admin account.</p>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
-
     </div>
-
 </div>
 
 <style>
-
-    .card {
-        border-radius: 14px;
+    .tracking-tight {
+        letter-spacing: -0.025em;
     }
 
-    .form-control:focus,
-    .form-select:focus {
-        border-color: #5c4ac7;
-        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+    .tracking-wider {
+        letter-spacing: 0.05em;
+        font-size: 11px !important;
     }
 
-    .icon-shape {
-        width: 70px;
-        height: 70px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+    .premium-form-input {
+        font-size: 14px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background-color: #f8fafc !important;
+        color: #1e293b;
+        transition: all 0.2s ease;
     }
 
-    .bg-purple-light {
-        background-color: rgba(92, 74, 199, 0.1);
+        .premium-form-input:focus {
+            border-color: #5c4ac7;
+            background-color: #ffffff !important;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12);
+        }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
 
-    .text-purple {
-        color: #5c4ac7;
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    .btn-action-submit {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
+
+        .btn-action-submit:hover:not(:disabled) {
+            background-color: #4b3ba6 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .btn-action-cancel {
+        background-color: #ffffff;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-size: 13.5px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+        .btn-action-cancel:hover {
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
 
     .admin-section {
         background-color: #f8f7ff;
         border: 1px solid #ece9ff;
     }
 
+    .alert-premium-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+        border-left: 4px solid #ef4444 !important;
+    }
 </style>
 
 @code {
-
     public CreateOrganizationDto orgDto { get; set; } = new();
-
     private bool isSubmitting = false;
-
     private bool isCreatedSuccessfully = false;
-
     private string? errorMessage;
 
     private async Task HandleCreateOrganization()
     {
         isSubmitting = true;
-
         errorMessage = null;
-
         isCreatedSuccessfully = false;
-
         try
         {
             await OrgService.CreateOrganizationAsync(orgDto);
-
             isCreatedSuccessfully = true;
-
             orgDto = new();
         }
         catch (Exception ex)
@@ -299,16 +227,11 @@
 
     private string GetFriendlyMessage(string message)
     {
-        if (message.Contains("Organization with this email"))
-            return "This organization email is already registered.";
-
-        if (message.Contains("User with this email"))
-            return "This admin email is already in use.";
-
-        if (message.Contains("Password"))
-            return "Password rules not satisfied. Please check requirements.";
-
+        if (message.Contains("Organization with this email")) return "This organization Yopmail is already registered.";
+        if (message.Contains("User with this email")) return "This admin Yopmail is already in use.";
+        if (message.Contains("Password")) return "Password rules not satisfied. Please check requirements.";
         return "Something went wrong. Please try again.";
     }
 
+    void GoBack() => Nav.NavigateTo("/admin/dashboard");
 }
