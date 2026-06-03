@@ -13,30 +13,22 @@
 
 <PageTitle>Designations | Humatrix HRMS</PageTitle>
 
-@* Floating Notifications *@
-<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
-    @if (!string.IsNullOrEmpty(message))
+@* Premium Floating Notifications Container with 4 Sec Auto-Dismiss *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    @if (showToast)
     {
-        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
-            <div class="d-flex p-3">
-                <div class="toast-body d-flex align-items-center p-0">
-                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
-                    <span class="small fw-medium">@message</span>
+        <div class="toast show premium-side-toast animate-slide-in @(isError ? "toast-danger-border" : "toast-success-border")" role="alert">
+            <div class="toast-body d-flex align-items-center gap-3 p-3">
+                <div class="toast-icon-circle @(isError ? "bg-light-danger text-danger" : "bg-light-success text-success")">
+                    <i class="bi @(isError ? "bi-shield-fill-x" : "bi-check-circle-fill") fs-5"></i>
                 </div>
-                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
-            </div>
-        </div>
-    }
-
-    @if (!string.IsNullOrEmpty(error))
-    {
-        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #fef2f2; color: #991b1b; border-left: 4px solid #ef4444 !important; border-radius: 10px;">
-            <div class="d-flex p-3">
-                <div class="toast-body d-flex align-items-center p-0">
-                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5" style="color: #ef4444;"></i>
-                    <span class="small fw-medium"><strong>Error:</strong> @error</span>
+                <div class="flex-grow-1">
+                    <h6 class="mb-0 fw-bold @(isError ? "text-danger" : "text-success")" style="font-size: 13.5px;">
+                        @(isError ? "Execution Failure" : "Action Completed")
+                    </h6>
+                    <small class="text-secondary d-block mt-0.5" style="font-size: 12px; line-height: 1.3;">@toastMessage</small>
                 </div>
-                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => error = null"></button>
+                <button type="button" class="btn-close shadow-none ms-auto" @onclick="CloseToast"></button>
             </div>
         </div>
     }
@@ -44,6 +36,7 @@
 
 <div class="container-fluid px-4 mt-4">
 
+    @* Header Section with Department Style Buttons *@
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
             <h2 class="fw-bold tracking-tight text-dark mb-1">Designations</h2>
@@ -54,7 +47,9 @@
                 <i class="bi bi-plus-circle"></i>
                 ADD DESIGNATION
             </button>
-            <button class="btn btn-interactive-back shadow-sm" @onclick="GoBack">
+
+            <button class="btn btn-interactive-dashboard d-flex align-items-center gap-2 shadow-sm" @onclick="GoBack">
+                <i class="bi bi-speedometer2"></i>
                 DASHBOARD
             </button>
         </div>
@@ -215,7 +210,6 @@
         @* COMPACT PAGINATION SYSTEM *@
         <div class="d-flex justify-content-end align-items-center p-3 border-top bg-light pe-4">
             <div class="d-flex align-items-center gap-1 core-pagination-wrapper shadow-sm rounded-3 p-1 bg-white border">
-
                 <button class="btn btn-paging-arrow @(CurrentPage == 1 ? "disabled" : "")"
                         @onclick="() => ChangePage(CurrentPage - 1)">
                     <i class="bi bi-chevron-left"></i>
@@ -229,13 +223,69 @@
                         @onclick="() => ChangePage(CurrentPage + 1)">
                     <i class="bi bi-chevron-right"></i>
                 </button>
-
             </div>
         </div>
     </div>
 </div>
 
 <style>
+    /* Synced Premium Toast Layout Variables */
+    .premium-side-toast {
+        background: #ffffff !important;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important;
+        min-width: 320px;
+        max-width: 380px;
+        overflow: hidden;
+    }
+
+    .toast-success-border {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .toast-danger-border {
+        border-left: 4px solid #ef4444 !important;
+    }
+
+    .toast-icon-circle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .bg-light-success {
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    .bg-light-danger {
+        background-color: rgba(239, 68, 68, 0.1);
+    }
+
+    .animate-slide-in {
+        animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    .animate-slide-in {
+        animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @@keyframes toastSlideIn {
+        from {
+            transform: translateX(100%) translateY(-10px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0) translateY(0);
+            opacity: 1;
+        }
+    }
+
     .tracking-tight {
         letter-spacing: -0.025em;
     }
@@ -341,6 +391,24 @@
         border-radius: 6px;
     }
 
+    .btn-interactive-dashboard {
+        background-color: #ffffff !important;
+        color: #4b5563 !important;
+        border: 1px solid #e5e7eb !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-dashboard:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
     .btn-add-designation {
         background-color: #5c4ac7 !important;
         color: #ffffff;
@@ -349,7 +417,13 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
+        transition: all 0.2s ease;
     }
+
+        .btn-add-designation:hover {
+            background-color: #4c3ca3 !important;
+            transform: translateY(-1px);
+        }
 
     .btn-action-edit {
         background: #f1f5f9;
@@ -453,8 +527,11 @@
     private List<DepartmentDto>? departments;
     private string _selectedDepartment = string.Empty;
     private string _searchQuery = string.Empty;
-    private string? message;
-    private string? error;
+
+    // Toast Notification System variables
+    private string? toastMessage;
+    private bool isError;
+    private bool showToast = false;
 
     private Guid? editId;
     private string? editName;
@@ -486,7 +563,7 @@
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var value))
         {
-            message = value.ToString();
+            await TriggerToast(value.ToString(), false);
         }
         await Task.WhenAll(LoadDesignations(), LoadDepartments());
     }
@@ -527,6 +604,24 @@
     void StartEdit(DesignationDto d) { editId = d.DesignationId; editName = d.Name; editDepartmentId = d.DepartmentId; }
     void CancelEdit() => editId = null;
 
+    // Trigger Toast with 4 Seconds Auto Dismiss Delay
+    private async Task TriggerToast(string message, bool errorState)
+    {
+        toastMessage = message;
+        isError = errorState;
+        showToast = true;
+        StateHasChanged();
+
+        await Task.Delay(4000);
+        CloseToast();
+    }
+
+    private void CloseToast()
+    {
+        showToast = false;
+        StateHasChanged();
+    }
+
     async Task SaveEdit(Guid id)
     {
         if (string.IsNullOrWhiteSpace(editName)) return;
@@ -534,10 +629,13 @@
         {
             await DesignationService.UpdateAsync(id, new CreateDesignationDto { Name = editName, DepartmentId = editDepartmentId ?? Guid.Empty });
             editId = null;
-            message = "Designation updated successfully.";
+            await TriggerToast("Designation structures updated smoothly in corporate archives.", false);
             await LoadDesignations();
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex)
+        {
+            await TriggerToast(ex.Message, true);
+        }
     }
 
     private async Task ToggleStatus(DesignationDto d, ChangeEventArgs e)
@@ -546,12 +644,12 @@
         try
         {
             await DesignationService.ToggleStatusAsync(d.DesignationId, isActive);
-            message = $"Status updated to {(isActive ? "Active" : "Inactive")}.";
+            await TriggerToast($"Status updated to {(isActive ? "Active" : "Inactive")}.", false);
             await LoadDesignations();
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            await TriggerToast(ex.Message, true);
             await LoadDesignations(); // Force reload/reset visual state
         }
     }
