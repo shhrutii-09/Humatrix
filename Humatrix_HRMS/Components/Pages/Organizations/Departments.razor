@@ -55,6 +55,7 @@
             </button>
 
             <button class="btn btn-interactive-back shadow-sm" @onclick="GoBack">
+                <i class="bi bi-speedometer2"></i>
                 DASHBOARD
             </button>
         </div>
@@ -203,23 +204,20 @@
             </table>
         </div>
 
-        @* PREMIUM MINIMALIST RIGHT-ALIGNED PAGINATION PANEL *@
+        @* COMPACT PAGINATION PANEL *@
         <div class="d-flex justify-content-end align-items-center p-3 border-top bg-light pe-4">
             <div class="d-flex align-items-center gap-1 core-pagination-wrapper shadow-sm rounded-3 p-1 bg-white border">
 
-                @* Left Arrow Button (Previous Page) *@
                 <button class="btn btn-paging-arrow @(CurrentPage == 1 ? "disabled" : "")"
                         @onclick="() => ChangePage(CurrentPage - 1)"
                         title="Previous Page">
                     <i class="bi bi-chevron-left"></i>
                 </button>
 
-                @* Center Dynamic State: Page X/Y Counter *@
                 <div class="premium-page-state-text px-2 fw-semibold text-secondary select-none">
                     Page <span class="text-indigo-premium">@CurrentPage</span>/<span>@(TotalPages == 0 ? 1 : TotalPages)</span>
                 </div>
 
-                @* Right Arrow Button (Next Page) *@
                 <button class="btn btn-paging-arrow @(CurrentPage >= TotalPages || TotalPages == 0 ? "disabled" : "")"
                         @onclick="() => ChangePage(CurrentPage + 1)"
                         title="Next Page">
@@ -366,11 +364,6 @@
             transform: translateY(-1px);
         }
 
-    /* Sleek Arrow Pagination Custom Styles */
-    .core-pagination-wrapper {
-        background-color: #ffffff;
-    }
-
     .btn-paging-arrow {
         border: none;
         background: transparent;
@@ -512,11 +505,9 @@
     private string? editName;
     private string? editDesc;
 
-    // Counters
     private int totalCount = 0;
     private int inactiveCount = 0;
 
-    // Paging Configuration Variables
     private int CurrentPage { get; set; } = 1;
     private int PageSize { get; set; } = 10;
     private int TotalPages => (int)Math.Ceiling((double)FilteredDepartments.Count() / PageSize);
@@ -536,6 +527,7 @@
         if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var value))
         {
             message = value.ToString();
+            TriggerAutoDismiss(true); // Query string notifications auto dismiss
         }
 
         await LoadDepartments();
@@ -547,7 +539,6 @@
         if (rawData != null)
         {
             departments = rawData;
-
             totalCount = departments.Count;
             inactiveCount = departments.Count(d => !d.IsActive);
 
@@ -556,6 +547,21 @@
                 CurrentPage = TotalPages;
             }
         }
+    }
+
+    // Helper system to auto-wipe alerts after a 10s wait duration
+    private async void TriggerAutoDismiss(bool isSuccess)
+    {
+        await Task.Delay(4000);
+        if (isSuccess)
+        {
+            message = null;
+        }
+        else
+        {
+            error = null;
+        }
+        StateHasChanged();
     }
 
     private void ChangePage(int pageNumber)
@@ -595,11 +601,13 @@
             message = "Department details updated successfully.";
             error = null;
             await LoadDepartments();
+            TriggerAutoDismiss(true);
         }
         catch (Exception ex)
         {
             error = ex.Message;
             message = null;
+            TriggerAutoDismiss(false);
         }
     }
 
@@ -614,11 +622,13 @@
             message = $"Department state changed to {(isActive ? "Active" : "Inactive")}.";
             error = null;
             await LoadDepartments();
+            TriggerAutoDismiss(true);
         }
         catch (Exception ex)
         {
             error = ex.Message;
             message = null;
+            TriggerAutoDismiss(false);
         }
     }
 }
