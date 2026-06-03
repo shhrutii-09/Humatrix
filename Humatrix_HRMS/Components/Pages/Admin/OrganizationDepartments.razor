@@ -14,19 +14,22 @@
 @inject EmployeeService EmpService
 @inject NavigationManager Nav
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject DepartmentEventService EventService
+@implements IDisposable
 
 <PageTitle>Departments - @orgName</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-normal">Departments - @orgName</h2>
+            <h2 class="fw-normal">Departments</h2>
+            <nav aria-label="breadcrumb">
+                <small class="text-muted">Organization: <span class="fw-bold">@orgName</span></small>
+            </nav>
         </div>
-        <button class="btn btn-primary shadow-sm"
-                style="background-color: #5c4ac7; border: none;"
+        <button class="btn btn-interactive-back shadow-sm"
                 @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}")'>
-            BACK TO DETAILS
+            <i class="bi bi-arrow-left"></i> BACK TO DETAILS
         </button>
     </div>
 
@@ -52,7 +55,6 @@
                            @bind:event="oninput" />
                 </div>
             </div>
-
             @if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 <div class="col-md-3">
@@ -90,13 +92,14 @@
                                         <i class="bi bi-building me-2 text-muted"></i> @dept.DepartmentName
                                     </td>
                                     <td class="text-center">
-                                        <span class="badge bg-secondary-subtle text-secondary px-3 py-1.5 fs-7">
+                                        <span class="badge bg-secondary-subtle text-secondary px-3 py-2 fs-7">
                                             @dept.TotalStaff Members
                                         </span>
                                     </td>
                                     <td class="text-center">
-                                        <span class="status-badge-compact active-badge">
-                                            <i class="bi bi-check-circle-fill me-1"></i> Active
+                                        <span class="status-badge-compact @(dept.IsActive ? "active-badge" : "inactive-badge")">
+                                            <i class="bi @(dept.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                                            @(dept.IsActive ? "Active" : "Inactive")
                                         </span>
                                     </td>
                                 </tr>
@@ -109,48 +112,8 @@
     }
 </div>
 
-<style>
-    .card {
-        border-radius: 12px;
-    }
-
-    .table th {
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-        letter-spacing: 0.5px;
-        color: #6c757d;
-    }
-
-    .fs-7 {
-        font-size: 0.85rem;
-    }
-
-    .status-badge-compact {
-        padding: 5px 12px;
-        border-radius: 50px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .active-badge {
-        background-color: #d1fae5;
-        color: #047857;
-        border: 1px solid #a7f3d0;
-    }
-
-    .input-group-text, .form-control {
-        border-radius: 8px;
-        padding: 0.6rem 1rem;
-    }
-</style>
-
 @code {
-    [Parameter]
-    public Guid id { get; set; }
-
+    [Parameter] public Guid id { get; set; }
     private List<DepartmentSummaryDto>? _departments;
     private string orgName = "Loading...";
     private string _searchQuery = string.Empty;
@@ -159,11 +122,19 @@
     {
         public string DepartmentName { get; set; } = string.Empty;
         public int TotalStaff { get; set; }
+        public bool IsActive { get; set; }
     }
 
     protected override async Task OnInitializedAsync()
     {
+        EventService.OnDepartmentChanged += HandleDepartmentChanged;
         await LoadOrganizationDepartments();
+    }
+
+    private async void HandleDepartmentChanged()
+    {
+        await LoadOrganizationDepartments();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadOrganizationDepartments()
@@ -171,31 +142,21 @@
         try
         {
             var result = await OrgService.GetOrganizationDetailsAsync(id);
-            if (result.Organization == null)
-            {
-                Nav.NavigateTo("/admin/organizations");
-                return;
-            }
-
+            if (result.Organization == null) { Nav.NavigateTo("/admin/organizations"); return; }
             orgName = result.Organization.Name;
 
-            // 1. Workforce se saare employees nikal kar unka ek dictionary map banao (for staff count)
             var rawEmployees = await EmpService.GetEmployeesByOrganizationIdAsync(id);
-
             var employeeCountMap = rawEmployees
                 .Where(x => x != null && !string.IsNullOrWhiteSpace(x.Department) && x.Department != "N/A")
                 .GroupBy(x => x.Department!.Trim().ToLower())
                 .ToDictionary(g => g.Key, g => g.Count());
 
-            // 2. Sirf ISI Organization ke SAARE structural departments ko database se load karo (LIFO order me)
             using var context = await DbFactory.CreateDbContextAsync();
-
             var structuralDepartments = await context.Departments
                 .Where(x => x.OrganizationId == id)
-                .OrderByDescending(x => x.CreatedAt) // Department.cs model ki CreatedAt property use ho rahi hai (LIFO)
+                .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync();
 
-            // 3. Structural master list ke upar map karo taaki 0 employees wale departments bhi properly display ho sakein
             _departments = structuralDepartments
                 .Where(d => d != null && !string.IsNullOrWhiteSpace(d.Name))
                 .Select(d =>
@@ -204,31 +165,67 @@
                     return new DepartmentSummaryDto
                     {
                         DepartmentName = cleanName,
-                        TotalStaff = employeeCountMap.TryGetValue(cleanName.ToLower(), out var count) ? count : 0
+                        TotalStaff = employeeCountMap.TryGetValue(cleanName.ToLower(), out var count) ? count : 0,
+                        IsActive = d.IsActive
                     };
                 }).ToList();
         }
-        catch (Exception)
-        {
-            Nav.NavigateTo("/admin/organizations");
-        }
+        catch { Nav.NavigateTo("/admin/organizations"); }
     }
 
     private IEnumerable<DepartmentSummaryDto> GetFilteredDepartments()
     {
         if (_departments == null) return Enumerable.Empty<DepartmentSummaryDto>();
-
         if (!string.IsNullOrWhiteSpace(_searchQuery))
         {
             var cleanSearch = _searchQuery.Trim().ToLower();
             return _departments.Where(x => x.DepartmentName.ToLower().Contains(cleanSearch));
         }
-
         return _departments;
     }
 
-    private void ClearFilters()
-    {
-        _searchQuery = string.Empty;
-    }
+    private void ClearFilters() => _searchQuery = string.Empty;
+
+    public void Dispose() => EventService.OnDepartmentChanged -= HandleDepartmentChanged;
 }
+
+<style>
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    .card {
+        border-radius: 12px;
+    }
+
+    .status-badge-compact {
+        padding: 5px 12px;
+        border-radius: 50px;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    .active-badge {
+        background: #d1fae5;
+        color: #047857;
+    }
+
+    .inactive-badge {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+</style>

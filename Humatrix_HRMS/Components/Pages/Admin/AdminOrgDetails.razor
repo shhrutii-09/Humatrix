@@ -23,10 +23,9 @@
         <div>
             <h2 class="fw-normal">Organization Details</h2>
         </div>
-        <button class="btn btn-primary shadow-sm"
-                style="background-color: #5c4ac7; border: none;"
+        <button class="btn btn-interactive-back shadow-sm"
                 @onclick='() => Nav.NavigateTo("/admin/organizations")'>
-            BACK TO ORGANIZATIONS
+            <i class="bi bi-arrow-left"></i> BACK TO ORGANIZATIONS
         </button>
     </div>
 
@@ -50,65 +49,36 @@
 
             <div class="row">
                 <div class="col-md-6">
-                    <p class="mb-2">
-                        <b>Email:</b>
-                        <span class="text-muted">@org.Email</span>
-                    </p>
-                    <p class="mb-2">
-                        <b>Phone:</b>
-                        <span class="text-muted">@org.Phone</span>
-                    </p>
-                    <p class="mb-2">
-                        <b>Current Admin:</b>
-                        <span class="text-muted">@currentAdminEmail</span>
-                    </p>
+                    <p class="mb-2"><b>Email:</b> <span class="text-muted">@org.Email</span></p>
+                    <p class="mb-2"><b>Phone:</b> <span class="text-muted">@org.Phone</span></p>
+                    <p class="mb-2"><b>Current Admin:</b> <span class="text-muted">@currentAdminEmail</span></p>
                 </div>
                 <div class="col-md-6">
-                    <p class="mb-2">
-                        <b>Address:</b>
-                        <span class="text-muted">@org.Address</span>
-                    </p>
+                    <p class="mb-2"><b>Address:</b> <span class="text-muted">@org.Address</span></p>
                 </div>
             </div>
         </div>
 
         <div class="row g-3 mb-4">
             <div class="col-md-4">
-                <div class="card dashboard-card shadow-sm border-0 p-3 text-center"
-                     style="cursor:pointer"
-                     @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/employees")'>
-                    <div class="mb-2">
-                        <i class="bi bi-people-fill fs-2 text-primary"></i>
-                    </div>
+                <div class="card dashboard-card shadow-sm border-0 p-3 text-center" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/employees")'>
+                    <div class="mb-2"><i class="bi bi-people-fill fs-2 text-primary"></i></div>
                     <h6 class="text-muted small text-uppercase">Employees</h6>
                     <h3 class="fw-bold">@employeeCount</h3>
-                    <small class="text-muted">Click to view all employees</small>
                 </div>
             </div>
-
             <div class="col-md-4">
-                <div class="card dashboard-card shadow-sm border-0 p-3 text-center"
-                     style="cursor:pointer"
-                     @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/hrs")'>
-                    <div class="mb-2">
-                        <i class="bi bi-person-badge-fill fs-2 text-success"></i>
-                    </div>
+                <div class="card dashboard-card shadow-sm border-0 p-3 text-center" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/hrs")'>
+                    <div class="mb-2"><i class="bi bi-person-badge-fill fs-2 text-success"></i></div>
                     <h6 class="text-muted small text-uppercase">HRs</h6>
                     <h3 class="fw-bold">@hrCount</h3>
-                    <small class="text-muted">Click to view all HR managers</small>
                 </div>
             </div>
-
             <div class="col-md-4">
-                <div class="card dashboard-card shadow-sm border-0 p-3 text-center"
-                     style="cursor:pointer"
-                     @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/departments")'>
-                    <div class="mb-2">
-                        <i class="bi bi-diagram-3-fill fs-2 text-warning"></i>
-                    </div>
+                <div class="card dashboard-card shadow-sm border-0 p-3 text-center" style="cursor:pointer" @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}/departments")'>
+                    <div class="mb-2"><i class="bi bi-diagram-3-fill fs-2 text-warning"></i></div>
                     <h6 class="text-muted small text-uppercase">Departments</h6>
                     <h3 class="fw-bold">@departmentCount</h3>
-                    <small class="text-muted">Click to view all departments</small>
                 </div>
             </div>
         </div>
@@ -119,59 +89,109 @@
             @if (!org.IsActive)
             {
                 <div class="alert alert-warning border-0 small mb-3 py-2">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    Admin changes are disabled because this organization is currently inactive.
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Admin changes are disabled because this organization is currently inactive.
                 </div>
             }
 
-            <InputText @bind-Value="newAdminEmail"
-                       class="form-control mb-3"
-                       placeholder="Enter new admin email"
-                       disabled="@(!org.IsActive || isAdminChanging)" />
+            <div class="admin-section mb-4 p-3 rounded-3 border">
+                <label class="form-label small fw-bold text-primary tracking-wider mb-2">ASSIGN NEW ADMIN YOPMAIL</label>
+                <InputText @bind-Value="newAdminEmail" type="email" class="form-control premium-form-input" placeholder="admin@yopmail.com" disabled="@(!org.IsActive || isAdminChanging)" />
+                <small class="text-muted d-block mt-2" style="font-size: 0.75rem;">*Admin will receive activation mail on Yopmail.</small>
+            </div>
 
-            <button class="btn btn-primary w-100"
-                    @onclick="ChangeAdmin"
-                    disabled="@(!org.IsActive || isAdminChanging || string.IsNullOrWhiteSpace(newAdminEmail))"
-                    style="background-color: #5c4ac7; border: none;">
+            <button class="btn btn-action-save w-100"
+                    @onclick="() => showConfirmModal = true"
+                    disabled="@(!org.IsActive || isAdminChanging || string.IsNullOrWhiteSpace(newAdminEmail))">
                 @if (isAdminChanging)
                 {
                     <span class="spinner-border spinner-border-sm me-2"></span>
-                    <span>Updating Admin...</span>
-                }
+                    <span>Updating...</span>
+     }
                 else
                 {
-                    <span>Change Admin</span>
+                    <span>CHANGE ADMIN</span>
                 }
             </button>
 
             @if (isAdminChangedSuccessfully)
             {
-                <div class="alert alert-success mt-4 border-0 shadow-sm p-4"
-                     style="background-color: #e6ffed;">
-                    <div class="d-flex align-items-start">
-                        <i class="bi bi-check-circle-fill fs-3 text-success me-3"></i>
-                        <div>
-                            <h5 class="text-success fw-bold mb-2">Admin Changed Successfully!</h5>
-                            <p class="mb-1 text-dark">Admin activation mail has been sent successfully.</p>
-                            <p class="mb-0 text-muted small">Please check the provided Yopmail inbox and activate the admin account.</p>
-                        </div>
-                    </div>
+                <div class="alert alert-success mt-4 border-0 shadow-sm p-3">
+                    <i class="bi bi-check-circle-fill me-2"></i> Admin changed successfully!
                 </div>
             }
 
             @if (!string.IsNullOrEmpty(errorMessage))
             {
                 <div class="alert alert-danger mt-3 border-0 shadow-sm">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    @errorMessage
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
                 </div>
             }
         </div>
     }
-
 </div>
 
+@if (showConfirmModal)
+{
+    <div class="modal d-block" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-body p-4 text-center">
+                    <i class="bi bi-exclamation-triangle text-warning fs-1"></i>
+                    <h5 class="mt-3 fw-bold">Confirm Admin Change</h5>
+                    <p class="text-muted">Are you sure you want to change the admin to <b>@newAdminEmail</b>? This action will update the system settings.</p>
+                    <div class="d-flex gap-2 mt-4">
+                        <button class="btn btn-outline-secondary w-50" @onclick="() => showConfirmModal = false">Cancel</button>
+                        <button class="btn btn-primary w-50" @onclick="ConfirmChangeAdmin">Yes, Change</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <style>
+    /* Same styles as before */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
+
+    .btn-action-save {
+        background-color: #5c4ac7;
+        color: white;
+        border: none;
+        padding: 10px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+        .btn-action-save:hover:not(:disabled) {
+            background-color: #4b3ba6;
+        }
+
+    .premium-form-input {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+        .premium-form-input:focus {
+            border-color: #5c4ac7;
+            box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
+        }
+
     .card {
         border-radius: 12px;
     }
@@ -185,11 +205,6 @@
             box-shadow: 0 8px 25px rgba(0,0,0,0.12) !important;
         }
 
-    .form-control:focus {
-        border-color: #5c4ac7;
-        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.1);
-    }
-
     .status-badge {
         padding: 10px 18px;
         border-radius: 50px;
@@ -197,7 +212,6 @@
         font-weight: 600;
         display: inline-flex;
         align-items: center;
-        letter-spacing: 0.3px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     }
 
@@ -215,89 +229,48 @@
 </style>
 
 @code {
-
-    [Parameter]
-    public Guid id { get; set; }
-
+    [Parameter] public Guid id { get; set; }
     private Organization? org;
-
-    private int employeeCount;
-    private int hrCount;
-    private int departmentCount;
-
+    private int employeeCount, hrCount, departmentCount;
     private string newAdminEmail = "";
-    private string? currentAdminEmail;
-    private string? errorMessage;
-    private bool isAdminChanging = false;
-    private bool isAdminChangedSuccessfully = false;
+    private string? currentAdminEmail, errorMessage;
+    private bool isAdminChanging = false, isAdminChangedSuccessfully = false, showConfirmModal = false;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadData();
-    }
+    protected override async Task OnInitializedAsync() => await LoadData();
 
     private async Task LoadData()
     {
         try
         {
             var result = await OrgService.GetOrganizationDetailsAsync(id);
-
             org = result.Organization;
             employeeCount = result.EmployeeCount;
             hrCount = result.HRCount;
             departmentCount = result.DepartmentCount;
-
             currentAdminEmail = await OrgService.GetOrganizationAdminEmailAsync(id);
+        }
+        catch { Nav.NavigateTo("/admin/organizations"); }
+    }
 
-            // Clear UI local context tracking cache instantly
-            using var uiContext = await DbFactory.CreateDbContextAsync();
-            uiContext.ChangeTracker.Clear();
-        }
-        catch (Exception)
-        {
-            Nav.NavigateTo("/admin/organizations");
-        }
+    private async Task ConfirmChangeAdmin()
+    {
+        showConfirmModal = false;
+        await ChangeAdmin();
     }
 
     private async Task ChangeAdmin()
     {
-        if (string.IsNullOrWhiteSpace(newAdminEmail) || org == null || !org.IsActive)
-            return;
-
-        isAdminChanging = true;
-        errorMessage = null;
-        isAdminChangedSuccessfully = false;
-
+        if (string.IsNullOrWhiteSpace(newAdminEmail) || org == null || !org.IsActive) return;
+        isAdminChanging = true; errorMessage = null; isAdminChangedSuccessfully = false;
         try
         {
-            using (var secondaryClear = await DbFactory.CreateDbContextAsync())
-            {
-                secondaryClear.ChangeTracker.Clear();
-            }
-
-            var resultPlaceholder = await OrgService.ChangeOrganizationAdminAsync(id, newAdminEmail);
-
-            isAdminChangedSuccessfully = true;
-            currentAdminEmail = newAdminEmail;
-            newAdminEmail = "";
+            await OrgService.ChangeOrganizationAdminAsync(id, newAdminEmail);
+            isAdminChangedSuccessfully = true; currentAdminEmail = newAdminEmail; newAdminEmail = "";
         }
         catch (Exception ex)
         {
-            if (ex.Message.Contains("User with this email") || ex.Message.Contains("already used"))
-            {
-                errorMessage = "This admin email is already in use by another user.";
-            }
-            else
-            {
-                errorMessage = $"{ex.Message}";
-            }
+            errorMessage = ex.Message.Contains("already used") ? "This email is already in use." : ex.Message;
         }
-        finally
-        {
-            isAdminChanging = false;
-
-            using var postClear = await DbFactory.CreateDbContextAsync();
-            postClear.ChangeTracker.Clear();
-        }
+        finally { isAdminChanging = false; }
     }
 }

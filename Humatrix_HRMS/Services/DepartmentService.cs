@@ -10,15 +10,18 @@ namespace Humatrix_HRMS.Services
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
         private readonly DesignationService _designationService;
+        private readonly DepartmentEventService _eventService; // Inject Event Service
 
         public DepartmentService(
             IDbContextFactory<ApplicationDbContext> contextFactory,
             CurrentUserService currentUser,
-            DesignationService designationService)
+            DesignationService designationService,
+            DepartmentEventService eventService) // Add to constructor
         {
             _contextFactory = contextFactory;
             _currentUser = currentUser;
             _designationService = designationService;
+            _eventService = eventService;
         }
 
         private async Task<ApplicationUser> GetCurrentUserAsync()
@@ -29,9 +32,6 @@ namespace Humatrix_HRMS.Services
             return user;
         }
 
-        // ========================================================
-        // 🔴 FIXED: DB-LEVEL LIFO ORDERING
-        // ========================================================
         public async Task<List<DepartmentDto>> GetAllAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
@@ -50,9 +50,6 @@ namespace Humatrix_HRMS.Services
                 .ToListAsync();
         }
 
-        // ========================================================
-        // 🔴 FIXED: DB-LEVEL LIFO ORDERING FOR ACTIVE ONLY
-        // ========================================================
         public async Task<List<DepartmentDto>> GetActiveAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
@@ -123,6 +120,8 @@ namespace Humatrix_HRMS.Services
             {
                 await _designationService.BulkInactivateByDepartmentAsync(id, user.OrganizationId.Value);
             }
+
+            _eventService.NotifyStateChanged(); // Trigger UI Refresh
         }
 
         public async Task CreateAsync(CreateDepartmentDto dto)
@@ -149,35 +148,36 @@ namespace Humatrix_HRMS.Services
 
             _context.Departments.Add(department);
             await _context.SaveChangesAsync();
+            _eventService.NotifyStateChanged();
         }
 
         public async Task UpdateAsync(Guid id, CreateDepartmentDto dto)
         {
             using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
-            await ExecuteUpdateInternalAsync(_context, id, dto.Name, user.OrganizationId.Value);
+            await ExecuteUpdateInternalAsync(_context, id, dto.Name, dto.Description, user.OrganizationId.Value);
         }
 
         public async Task UpdateAsync(Guid id, string name, string? description)
         {
             using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
-            await ExecuteUpdateInternalAsync(_context, id, name, user.OrganizationId.Value);
+            await ExecuteUpdateInternalAsync(_context, id, name, description, user.OrganizationId.Value);
         }
 
         public async Task UpdateAsync(Guid id, CreateDepartmentDto dto, Guid organizationId)
         {
             using var _context = _contextFactory.CreateDbContext();
-            await ExecuteUpdateInternalAsync(_context, id, dto.Name, organizationId);
+            await ExecuteUpdateInternalAsync(_context, id, dto.Name, dto.Description, organizationId);
         }
 
         public async Task UpdateAsync(Guid id, string name, Guid organizationId)
         {
             using var _context = _contextFactory.CreateDbContext();
-            await ExecuteUpdateInternalAsync(_context, id, name, organizationId);
+            await ExecuteUpdateInternalAsync(_context, id, name, null, organizationId);
         }
 
-        private async Task ExecuteUpdateInternalAsync(ApplicationDbContext context, Guid id, string name, Guid organizationId)
+        private async Task ExecuteUpdateInternalAsync(ApplicationDbContext context, Guid id, string name, string? description, Guid organizationId)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new Exception("Department name is required.");
@@ -197,7 +197,9 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Department name already exists.");
 
             department.Name = name.Trim();
+            department.Description = description; // Description Update logic
             await context.SaveChangesAsync();
+            _eventService.NotifyStateChanged(); // Trigger UI Refresh
         }
     }
 }
