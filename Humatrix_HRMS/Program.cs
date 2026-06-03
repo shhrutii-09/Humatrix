@@ -120,6 +120,8 @@ builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddSignalR();
 
+builder.Services.AddHttpClient();
+
 var app = builder.Build();
 
 // 🔥 Seed Roles + SuperAdmin

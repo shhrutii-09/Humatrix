@@ -12,6 +12,27 @@
 
 <PageTitle>Holidays | Humatrix</PageTitle>
 
+@* Premium Floating Notifications Container with 4 Sec Auto-Dismiss *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+    @if (showToast)
+    {
+        <div class="toast show premium-side-toast animate-slide-in @(isError ? "toast-danger-border" : "toast-success-border")" role="alert">
+            <div class="toast-body d-flex align-items-center gap-3 p-3">
+                <div class="toast-icon-circle @(isError ? "bg-light-danger text-danger" : "bg-light-success text-success")">
+                    <i class="bi @(isError ? "bi-shield-fill-x" : "bi-check-circle-fill") fs-5"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="mb-0 fw-bold @(isError ? "text-danger" : "text-success")" style="font-size: 13.5px;">
+                        @(isError ? "Execution Failure" : "Action Completed")
+                    </h6>
+                    <small class="text-secondary d-block mt-0.5" style="font-size: 12px; line-height: 1.3;">@toastMessage</small>
+                </div>
+                <button type="button" class="btn-close shadow-none ms-auto" @onclick="CloseToast"></button>
+            </div>
+        </div>
+    }
+</div>
+
 <div class="container-fluid px-4 mt-4">
 
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
@@ -20,6 +41,19 @@
             <p class="text-muted small mb-0">Manage and configure public holidays, optional leaves, and corporate calendar events.</p>
         </div>
         <div class="d-flex gap-2">
+            <button class="btn btn-import-holiday d-flex align-items-center gap-2 shadow-sm" @onclick="ImportSystemHolidays" disabled="@isImporting">
+                @if (isImporting)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span>IMPORTING...</span>
+                }
+                else
+                {
+                    <i class="bi bi-cloud-download"></i>
+                    <span>IMPORT REAL HOLIDAYS</span>
+                }
+            </button>
+
             <button class="btn btn-add-holiday d-flex align-items-center gap-2 shadow-sm" @onclick="Open">
                 <i class="bi bi-plus-circle"></i>
                 ADD HOLIDAY
@@ -31,17 +65,6 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrEmpty(pageMessage))
-    {
-        <div class="alert alert-premium-info d-flex align-items-center mb-4 border-0 justify-content-between" role="alert">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-info-circle-fill me-2 fs-5"></i>
-                <div class="small fw-medium">@pageMessage</div>
-            </div>
-            <button type="button" class="btn-close shadow-none" style="font-size: 11px;" @onclick="ClearPageMessage"></button>
-        </div>
-    }
-
     <div class="card border-0 shadow-sm panel-container-card">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -50,11 +73,20 @@
                         <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">DATE</th>
                         <th class="text-secondary small fw-bold tracking-wider py-3">HOLIDAY NAME</th>
                         <th class="text-secondary small fw-bold tracking-wider py-3">TYPE</th>
-                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pr-4" style="width: 160px;">ACTIONS</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pe-4" style="width: 160px;">ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (holidays.Count == 0)
+                    @if (holidays == null)
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-5">
+                                <div class="spinner-border text-primary" style="width: 2rem; height: 2rem;" role="status"></div>
+                                <p class="mt-2 text-muted small mb-0">Loading calendar stream...</p>
+                            </td>
+                        </tr>
+                    }
+                    else if (holidays.Count == 0)
                     {
                         <tr>
                             <td colspan="4" class="text-center py-5 text-muted">
@@ -129,7 +161,7 @@
 
                             <div class="col-12 mt-4">
                                 <div class="form-check form-switch protocol-switch bg-light p-3 ps-5 rounded-3 border d-inline-block w-100 flex-row align-items-center">
-                                    <InputCheckbox class="form-check-input fs-5" id="isOptionalSwitch" @bind-Value="model.IsOptional" style="margin-left: -1.8em; mt-1" />
+                                    <InputCheckbox class="form-check-input fs-5" id="isOptionalSwitch" @bind-Value="model.IsOptional" style="margin-left: -1.8em; margin-top: 1px;" />
                                     <label class="form-check-label fw-semibold text-dark pt-0.5 ms-2" for="isOptionalSwitch">Mark as Optional Holiday</label>
                                 </div>
                                 <div class="text-muted small mt-2 ps-1">
@@ -153,7 +185,62 @@
 </div>
 
 <style>
-    /* System Native Tokens Integrated directly from Core Style Rules */
+    /* Premium Designations Style Toast Variables */
+    .premium-side-toast {
+        background: #ffffff !important;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important;
+        min-width: 320px;
+        max-width: 380px;
+        overflow: hidden;
+    }
+
+    .toast-success-border {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .toast-danger-border {
+        border-left: 4px solid #ef4444 !important;
+    }
+
+    .toast-icon-circle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .bg-light-success {
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    .bg-light-danger {
+        background-color: rgba(239, 68, 68, 0.1);
+    }
+
+    .animate-slide-in {
+        animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @@keyframes toastSlideIn {
+        from
+
+    {
+        transform: translateX(100%) translateY(-10px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0) translateY(0);
+        opacity: 1;
+    }
+
+    }
+
     .tracking-tight {
         letter-spacing: -0.025em;
     }
@@ -161,6 +248,7 @@
     .tracking-wider {
         letter-spacing: 0.04em;
         font-size: 11px;
+        text-transform: uppercase;
     }
 
     .panel-container-card {
@@ -174,13 +262,9 @@
         border-bottom: 1px solid #e2e8f0;
     }
 
-    .table-row-interactive {
-        transition: background-color 0.15s ease;
+    .table-row-interactive:hover {
+        background-color: #f8fafc;
     }
-
-        .table-row-interactive:hover {
-            background-color: #f8fafc;
-        }
 
     .text-heading-field {
         font-size: 14px;
@@ -201,6 +285,24 @@
             border-color: #5c4ac7 !important;
             box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12) !important;
             outline: none;
+        }
+
+    .btn-import-holiday {
+        background-color: #10b981 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        transition: all 0.2s ease;
+    }
+
+        .btn-import-holiday:hover:not(:disabled) {
+            background-color: #059669 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2) !important;
         }
 
     .btn-add-holiday {
@@ -245,7 +347,6 @@
         color: #475569;
         border-radius: 8px;
         padding: 5px 10px;
-        transition: all 0.15s ease;
     }
 
         .btn-action-edit:hover {
@@ -260,7 +361,6 @@
         color: #ef4444;
         border-radius: 8px;
         padding: 5px 10px;
-        transition: all 0.15s ease;
     }
 
         .btn-action-delete:hover {
@@ -313,23 +413,21 @@
     .status-indicator-pill {
         font-size: 11px;
         font-weight: 600;
-        padding: 4px 10px;
+        padding: 2px 8px;
         border-radius: 6px;
         display: inline-block;
-        min-width: 85px;
+        min-width: 60px;
         text-align: center;
     }
 
     .pill-active {
         background-color: #ecfdf5;
         color: #065f46;
-        border: 1px solid rgba(16, 185, 129, 0.15);
     }
 
     .pill-inactive {
-        background-color: #fffbeb;
-        color: #92400e;
-        border: 1px solid rgba(245, 158, 11, 0.15);
+        background-color: #fef2f2;
+        color: #991b1b;
     }
 
     .alert-premium-danger {
@@ -339,26 +437,31 @@
         border-radius: 8px;
         padding: 12px 16px;
     }
-
-    .alert-premium-info {
-        background-color: #f0fdf4;
-        color: #166534;
-        border-left: 4px solid #10b981 !important;
-        border-radius: 8px;
-        padding: 12px 16px;
-    }
 </style>
 
 @code {
-    private List<Holiday> holidays = new();
+    private List<Holiday>? holidays;
     private Holiday model = new();
     private bool showModal = false;
     private bool isEditing = false;
-
-    private string? pageMessage;
+    private bool isImporting = false;
     private string? modalError;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    // Synced Local Toast Notification Engine State
+    private string? toastMessage;
+    private bool isError;
+    private bool showToast = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Deep integration with query string checks if redirected with state parameters
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var value))
+        {
+            await TriggerToast(value.ToString(), false);
+        }
+        await Load();
+    }
 
     private async Task Load() => holidays = await HolidayService.GetAllAsync();
 
@@ -387,13 +490,30 @@
 
     private void Close() => showModal = false;
 
+    // Toast Trigger Method sync with 4 Sec Auto Dismiss Delay
+    private async Task TriggerToast(string message, bool errorState)
+    {
+        toastMessage = message;
+        isError = errorState;
+        showToast = true;
+        StateHasChanged();
+
+        await Task.Delay(4000);
+        CloseToast();
+    }
+
+    private void CloseToast()
+    {
+        showToast = false;
+        StateHasChanged();
+    }
+
     private async Task Save()
     {
         try
         {
             modalError = null;
 
-            // Strict Compulsory Form Validations
             if (string.IsNullOrWhiteSpace(model.Name))
             {
                 modalError = "Holiday Name description field is compulsory and cannot be left blank.";
@@ -408,20 +528,22 @@
             if (isEditing)
             {
                 await HolidayService.UpdateAsync(model);
-                pageMessage = $"Holiday target data for '{model.Name}' successfully modified.";
+                showModal = false;
+                await TriggerToast($"Holiday structures for '{model.Name}' successfully modified.", false);
             }
             else
             {
                 await HolidayService.CreateAsync(model);
-                pageMessage = $"New system holiday instance '{model.Name}' successfully configured and published.";
+                showModal = false;
+                await TriggerToast($"Holiday '{model.Name}' successfully configured and published.", false);
             }
 
-            showModal = false;
             await Load();
         }
         catch (Exception ex)
         {
             modalError = ex.Message;
+            await TriggerToast($"Operation failed: {ex.Message}", true);
         }
     }
 
@@ -430,15 +552,44 @@
         try
         {
             await HolidayService.DeleteAsync(id);
-            pageMessage = "Holiday configuration profile has been successfully dropped from system arrays.";
+            await TriggerToast("Holiday configuration profile has been successfully deleted from archives.", false);
             await Load();
         }
         catch (Exception ex)
         {
-            pageMessage = $"Failed to execute deletion stream: {ex.Message}";
+            await TriggerToast($"Failed to execute deletion stream: {ex.Message}", true);
         }
     }
 
-    private void ClearPageMessage() => pageMessage = null;
+    private async Task ImportSystemHolidays()
+    {
+        try
+        {
+            isImporting = true;
+            int currentYear = DateTime.Today.Year;
+
+            int importedCount = await HolidayService.ImportPublicHolidaysAsync(currentYear, "IN");
+
+            if (importedCount > 0)
+            {
+                await TriggerToast($"Successfully imported {importedCount} official holidays for {currentYear} timeline!", false);
+            }
+            else
+            {
+                await TriggerToast("No new configurations detected. Your system calendar matrix is already up-to-date.", false);
+            }
+
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            await TriggerToast($"Integration Error: {ex.Message}", true);
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
     private void GoToDashboard() => Nav.NavigateTo("/org/dashboard");
 }

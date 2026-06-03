@@ -11,29 +11,29 @@
 @inject DesignationService DesignationService
 @inject ShiftService ShiftService
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>Add Employee | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fw-normal">Add New Employee</h2>
-        <button class="btn btn-primary shadow-sm"
-                style="background-color: #5c4ac7; border: none;"
-                @onclick='() => Nav.NavigateTo("/org/dashboard")'>
-            BACK TO DASHBOARD
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-1" style="font-size: 2rem;">Add New Employee</h2>
+            <p class="text-muted small mb-0">Define a new employee structure and trigger an activation email.</p>
+        </div>
+        <button class="btn bg-white border text-secondary fw-bold px-4 py-2 text-uppercase shadow-sm text-back-btn"
+                @onclick='() => Nav.NavigateTo("/employees")'>
+            Back to Employees
         </button>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
+    <div class="card shadow-sm border-0 rounded-3 bg-white mb-4 custom-form-card">
+        <div class="card-body p-4.5">
 
             @if (isPageLoading)
             {
-                <!-- 🔥 PAGE LOADING -->
                 <div class="text-center py-5">
-                    <div class="spinner-border text-primary"></div>
-                    <div class="text-muted mt-2">Loading form...</div>
+                    <div class="spinner-border text-indigo"></div>
+                    <div class="text-muted mt-2 small">Loading onboarding configurations...</div>
                 </div>
             }
             else
@@ -42,49 +42,49 @@
                     <DataAnnotationsValidator />
 
                     <div class="row g-4">
-                        <!-- LEFT -->
-                        <div class="col-md-7">
-                            <h5 class="mb-3 text-muted border-bottom pb-2">Basic Information</h5>
+                        <div class="col-md-7 pe-md-4">
+                            <h5 class="mb-4 text-secondary text-uppercase tracking-wider section-title">Basic Information</h5>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">First Name</label>
+                                <div class="col-md-6 mb-4">
+                                    <label class="form-label small fw-bold text-uppercase tracking-wider input-label">First Name</label>
                                     <InputText @bind-Value="model.FirstName"
-                                               class="form-control"
-                                               placeholder="Enter first name"
+                                               class="form-control custom-dept-input shadow-none"
+                                               placeholder="e.g. John"
                                                disabled="@isSubmitting" />
-                                    <ValidationMessage For="@(() => model.FirstName)" class="text-danger small" />
+                                    <ValidationMessage For="@(() => model.FirstName)" class="text-danger small mt-1" />
                                 </div>
 
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">Last Name</label>
+                                <div class="col-md-6 mb-4">
+                                    <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Last Name</label>
                                     <InputText @bind-Value="model.LastName"
-                                               class="form-control"
-                                               placeholder="Enter last name"
+                                               class="form-control custom-dept-input shadow-none"
+                                               placeholder="e.g. Doe"
                                                disabled="@isSubmitting" />
-                                    <ValidationMessage For="@(() => model.LastName)" class="text-danger small" />
+                                    <ValidationMessage For="@(() => model.LastName)" class="text-danger small mt-1" />
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Email Address</label>
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Corporate Email Address</label>
                                 <InputText @bind-Value="model.Email"
                                            type="email"
-                                           class="form-control"
-                                           placeholder="employee@company.com"
+                                           class="form-control custom-dept-input shadow-none"
+                                           placeholder="employee@yopmail.com"
                                            disabled="@isSubmitting" />
-                                <ValidationMessage For="@(() => model.Email)" class="text-danger small" />
+                                <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1" />
+                                <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                                    *Employee will receive activation mail on Yopmail.
+                                </small>
                             </div>
                         </div>
 
-                        <!-- RIGHT -->
-                        <div class="col-md-5 border-start ps-4">
-                            <h5 class="mb-3 text-muted border-bottom pb-2">Assignment</h5>
+                        <div class="col-md-5 border-start ps-md-4">
+                            <h5 class="mb-4 text-secondary text-uppercase tracking-wider section-title">Assignment</h5>
 
-                            <!-- Department -->
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Department</label>
-                                <select class="form-select"
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Department</label>
+                                <select class="form-select custom-dept-input shadow-none"
                                         @onchange="OnDepartmentChanged"
                                         disabled="@isSubmitting">
                                     <option value="" disabled selected>Select Department</option>
@@ -93,25 +93,24 @@
                                         <option value="@d.DepartmentId">@d.Name</option>
                                     }
                                 </select>
-                                <ValidationMessage For="@(() => model.DepartmentId)" class="text-danger small" />
+                                <ValidationMessage For="@(() => model.DepartmentId)" class="text-danger small mt-1" />
                             </div>
 
-                            <!-- Designation -->
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Designation</label>
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Designation</label>
 
                                 @if (isDesignationLoading)
                                 {
-                                    <div class="text-muted small">
-                                        <span class="spinner-border spinner-border-sm me-2"></span>
-                                        Loading designations...
+                                    <div class="text-muted small py-2 d-flex align-items-center">
+                                        <span class="spinner-border spinner-border-sm text-indigo me-2"></span>
+                                        Retrieving roles...
                                     </div>
                                 }
                                 else
                                 {
                                     <InputSelect @bind-Value="model.DesignationId"
-                                                 class="form-select"
-                                                 disabled="@isSubmitting">
+                                                 class="form-select custom-dept-input shadow-none"
+                                                 disabled="@(isSubmitting || !model.DepartmentId.HasValue)">
                                         <option value="" disabled selected>Select Designation</option>
                                         @foreach (var d in designations)
                                         {
@@ -120,14 +119,13 @@
                                     </InputSelect>
                                 }
 
-                                <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small" />
+                                <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small mt-1" />
                             </div>
 
-                            <!-- Shift -->
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Work Shift</label>
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Work Shift</label>
                                 <InputSelect @bind-Value="model.ShiftId"
-                                             class="form-select"
+                                             class="form-select custom-dept-input shadow-none"
                                              disabled="@isSubmitting">
                                     <option value="" disabled selected>Select Shift</option>
                                     @foreach (var s in shifts)
@@ -135,64 +133,63 @@
                                         <option value="@s.ShiftId">@s.Name</option>
                                     }
                                 </InputSelect>
-                                <ValidationMessage For="@(() => model.ShiftId)" class="text-danger small" />
+                                <ValidationMessage For="@(() => model.ShiftId)" class="text-danger small mt-1" />
                             </div>
                         </div>
                     </div>
 
-                    <!-- SUBMIT -->
-                    <div class="mt-4 border-top pt-3 text-end">
+                    <div class="mt-4 pt-4 border-top d-flex gap-2 justify-content-start">
                         <button type="submit"
-                                class="btn btn-success px-5"
-                                style="background-color: #28a745; border: none;"
+                                class="btn text-white fw-bold px-4 py-2 text-uppercase btn-create-dept"
                                 disabled="@isSubmitting">
-
                             @if (isSubmitting)
                             {
                                 <span class="spinner-border spinner-border-sm me-2"></span>
-                                <span>PROCESSING...</span>
+                                <span>Provisioning Employee...</span>
                             }
                             else
                             {
-                                <span>GENERATE INVITE</span>
+                                <i class="bi bi-shield-check me-2"></i>
+                        
+                                <span>CREATE EMPLOYEE</span>
                             }
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-light border bg-white text-secondary fw-medium px-4 py-2"
+                                @onclick='() => Nav.NavigateTo("/employees")'
+                                disabled="@isSubmitting">
+                            Cancel
                         </button>
                     </div>
                 </EditForm>
             }
 
-            <!-- ✅ KEEPING YOUR ORIGINAL SUCCESS BLOCK EXACTLY -->
-            @if (!string.IsNullOrEmpty(link))
+            @if (isCreatedSuccessfully)
             {
-                <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center p-3" style="background-color: #e6ffed;">
-                    <div class="d-flex w-100 justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-check-circle-fill fs-4 text-success me-3"></i>
-                            <b class="text-success" style="font-size: 1.1rem;">Employee created successfully!</b>
+                <div class="alert alert-premium-success mt-4 border-0 shadow-sm p-4 animate__animated animate__fadeIn"
+                     style="background-color: #e6ffed;">
+                    <div class="d-flex align-items-start">
+                        <div class="success-icon-badge me-3">
+                            <i class="bi bi-check-circle-fill fs-3 text-success"></i>
                         </div>
-
-                        <div class="d-flex align-items-center">
-                            @if (showCopiedFeedback)
-                            {
-                                <span class="badge bg-success me-2 animate__animated animate__fadeIn">Copied!</span>
-                            }
-
-                            <button class="btn btn-link text-success border-0 fs-3 p-0"
-                                    title="Copy Invite Link"
-                                    @onclick="CopyLinkToClipboard">
-                                <i class="bi bi-files"></i>
-                            </button>
+                        <div>
+                            <h5 class="text-success fw-bold mb-2">Employee Account Created Successfully!</h5>
+                            <p class="mb-1 text-dark">Employee activation mail has been sent successfully.</p>
+                            <p class="mb-0 text-muted small">Please check the provided Yopmail inbox and activate the employee account.</p>
                         </div>
                     </div>
                 </div>
             }
 
-            <!-- ERROR -->
             @if (!string.IsNullOrEmpty(error))
             {
-                <div class="alert alert-danger alert-dismissible fade show mt-3 border-0 shadow-sm">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i> @error
-                    <button type="button" class="btn-close" @onclick="() => error = null"></button>
+                <div class="alert alert-premium-danger mt-4 shadow-sm border-0 d-flex align-items-center" style="background-color: #fbebeb; color: #dc3545;">
+                    <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+                    <div>
+                        <h6 class="mb-0 fw-bold">System Registration Blocked</h6>
+                        <span class="small opacity-90">@error</span>
+                    </div>
                 </div>
             }
 
@@ -201,13 +198,76 @@
 </div>
 
 <style>
-    .form-control:focus, .form-select:focus {
-        border-color: #5c4ac7;
-        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.25);
+    .custom-form-card {
+        border-radius: 12px !important;
     }
 
-    .form-label {
-        color: #6c757d;
+    .text-back-btn {
+        font-size: 0.785rem !important;
+        letter-spacing: 0.5px;
+        border-radius: 8px !important;
+        color: #5a6a85 !important;
+    }
+
+    .section-title {
+        font-size: 0.76rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.8px;
+        color: #94a3b8 !important;
+    }
+
+    .input-label {
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.6px;
+        color: #64748b !important;
+        margin-bottom: 0.5rem;
+    }
+
+    .custom-dept-input {
+        background-color: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        padding: 0.7rem 1rem;
+        font-size: 0.92rem;
+        color: #334155;
+    }
+
+        .custom-dept-input:focus {
+            background-color: #ffffff !important;
+            border-color: #5c4ac7 !important;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12) !important;
+        }
+
+    .btn-create-dept {
+        background-color: #5c4ac7 !important;
+        font-size: 0.785rem !important;
+        letter-spacing: 0.5px;
+        border-radius: 8px !important;
+    }
+
+        .btn-create-dept:hover {
+            background-color: #4b3bb3 !important;
+        }
+
+    .alert-premium-success {
+        border: 1px solid rgba(22, 163, 74, 0.15) !important;
+        border-radius: 12px;
+    }
+
+    .success-icon-badge {
+        color: #16a34a;
+        background: rgba(22, 163, 74, 0.1);
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .text-indigo {
+        color: #5c4ac7 !important;
     }
 </style>
 
@@ -217,14 +277,11 @@
     List<DesignationDto> designations = new();
     private List<Shift> shifts = new();
 
-    string? link;
     string? error;
-
     bool isSubmitting;
     bool isPageLoading = true;
     bool isDesignationLoading = false;
-
-    private bool showCopiedFeedback = false;
+    bool isCreatedSuccessfully = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -235,7 +292,7 @@
         }
         catch
         {
-            error = "Failed to load data";
+            error = "Failed to load foundational server parameters.";
         }
         finally
         {
@@ -246,14 +303,12 @@
     private async Task OnDepartmentChanged(ChangeEventArgs e)
     {
         isDesignationLoading = true;
-
         var selectedValue = e.Value?.ToString();
 
         if (Guid.TryParse(selectedValue, out var deptId))
         {
             model.DepartmentId = deptId;
             model.DesignationId = null;
-
             designations = await DesignationService.GetByDepartmentAsync(deptId);
         }
         else
@@ -271,12 +326,15 @@
         try
         {
             error = null;
-            link = null;
+            isCreatedSuccessfully = false;
             isSubmitting = true;
 
             model.Role = "Employee";
-            link = await EmployeeService.CreateEmployeeAsync(model);
 
+            // This triggers the email sending internally inside EmployeeService, just like HR onboarding
+            await EmployeeService.CreateEmployeeAsync(model);
+
+            isCreatedSuccessfully = true;
             model = new CreateEmployeeDto();
             designations.Clear();
         }
@@ -287,21 +345,6 @@
         finally
         {
             isSubmitting = false;
-        }
-    }
-
-    private async Task CopyLinkToClipboard()
-    {
-        if (!string.IsNullOrEmpty(link))
-        {
-            await JS.InvokeVoidAsync("clipboardCopy.copyText", link);
-            showCopiedFeedback = true;
-            StateHasChanged();
-
-            await Task.Delay(2000);
-
-            showCopiedFeedback = false;
-            StateHasChanged();
         }
     }
 }

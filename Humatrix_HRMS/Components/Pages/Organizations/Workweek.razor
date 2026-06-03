@@ -8,6 +8,7 @@
 @attribute [Authorize(Roles = "OrgAdmin")]
 
 @inject WorkWeekService WorkWeekService
+@inject NavigationManager NavigationManager
 
 <PageTitle>Work Week | Humatrix</PageTitle>
 
@@ -47,6 +48,12 @@
                 <i class="bi bi-calendar3-week text-premium me-2"></i>Work Week Settings
             </h2>
             <p class="text-muted small mb-0">Set up your company's standard working days to manage shifts and attendance.</p>
+        </div>
+        <div>
+            <button class="btn btn-hrms-dashboard d-flex align-items-center gap-2 text-uppercase fw-semibold" @onclick="NavigateToDashboard">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
+            </button>
         </div>
     </div>
 
@@ -146,6 +153,30 @@
 </div>
 
 <style>
+    /* CSS Nút Dashboard chuẩn theo thiết kế HuMatrix của bạn */
+    .btn-hrms-dashboard {
+        background-color: #ffffff !important;
+        color: #475569 !important;
+        border: 1px solid #cbd5e1 !important;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        letter-spacing: 0.05em;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+
+        .btn-hrms-dashboard:hover {
+            background-color: #f8fafc !important;
+            color: #1e293b !important;
+            border-color: #94a3b8 !important;
+        }
+
+        .btn-hrms-dashboard i {
+            font-size: 14px;
+            color: #64748b;
+        }
+
     /* Premium App Colors & Variables Restored */
     .text-premium {
         color: #5c4ac7 !important;
@@ -285,23 +316,23 @@
         }
 
     @@media (min-width: 992px) {
-        .lg-grid-divider {
-            --bs-gutter-x: 3rem;
-        }
+        .lg-grid-divider
 
-            .lg-grid-divider > div:first-child {
-                border-right: 1px solid #f1f5f9;
-            }
+    {
+        --bs-gutter-x: 3rem;
+    }
+
+    .lg-grid-divider > div:first-child {
+        border-right: 1px solid #f1f5f9;
+    }
+
     }
 </style>
 
 @code {
-
     private WorkWeek? model;
-
     private string? message;
     private string? error;
-
     private bool saving = false;
 
     protected override async Task OnInitializedAsync()
@@ -314,6 +345,12 @@
         {
             error = ex.Message;
         }
+    }
+
+    // Hàm điều hướng quay lại trang Dashboard chính của tổ chức
+    private void NavigateToDashboard()
+    {
+        NavigationManager.NavigateTo("/org/dashboard");
     }
 
     private int WorkingDaysCount =>
