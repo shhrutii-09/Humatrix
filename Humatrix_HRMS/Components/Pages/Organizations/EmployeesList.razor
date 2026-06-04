@@ -19,9 +19,37 @@
 
 <PageTitle>Employees | Humatrix HRMS</PageTitle>
 
+@* Fixed Premium Toast Notification Display Panel (Matching Department Style) *@
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
+                    <span class="small fw-medium">@message</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #fef2f2; color: #991b1b; border-left: 4px solid #ef4444 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5" style="color: #ef4444;"></i>
+                    <span class="small fw-medium"><strong>Error:</strong> @error</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => error = null"></button>
+            </div>
+        </div>
+    }
+</div>
+
 <div class="container-fluid px-4 mt-4">
 
-    <!-- Top Action Header Line - Exact Department Match -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark mb-1" style="font-size: 2rem;">Employee Directory</h2>
@@ -37,7 +65,6 @@
         </div>
     </div>
 
-    <!-- Filters Row - Clean & Dynamic Input Box Style -->
     <div class="row g-3 mb-4">
         <div class="@(UserIsOrgAdmin ? "col-md-7" : "col-md-12")">
             <div class="position-relative">
@@ -67,7 +94,6 @@
         }
     </div>
 
-    <!-- Main List View Table Card -->
     <div class="card shadow-sm border-0 rounded-3 overflow-hidden bg-white mb-4">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 custom-dept-table">
@@ -152,7 +178,6 @@
             </table>
         </div>
 
-        <!-- Exact Department Box Pagination Matching Layout -->
         <div class="card-footer bg-white border-top py-3 px-4 d-flex justify-content-end">
             <div class="custom-dept-pagination border rounded d-flex align-items-center bg-light-subtle">
                 <button class="btn btn-link text-muted p-2 border-end shadow-none rounded-0 @(currentPage == 1 ? "disabled opacity-50" : "")"
@@ -173,7 +198,6 @@
     </div>
 </div>
 
-<!-- Modal Dialog Context Backdrop -->
 @if (isEditOpen)
 {
     <div class="modal fade show d-block" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);" tabindex="-1">
@@ -210,7 +234,6 @@
                                                  ValueChanged="@((Guid? id) => OnEditDepartmentChanged(id))"
                                                  class="form-select bg-light border-light-subtle shadow-none">
                                         <option value="">Select Department</option>
-                                        <!-- Only Active Departments in Edit Dropdown as well -->
                                         @foreach (var d in departments.Where(x => x.IsActive))
                                         {
                                             <option value="@d.DepartmentId">@d.Name</option>
@@ -375,6 +398,10 @@
     bool UserIsOrgAdmin = false;
     string HRDepartmentName = "";
 
+    // Toast strings matching department style
+    private string? message;
+    private string? error;
+
     int currentPage = 1;
     int pageSize = 10;
     int totalEmployees = 0;
@@ -392,7 +419,6 @@
         }
     }
 
-    // Fixed Real-time Search Handler
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         search = e.Value?.ToString() ?? "";
@@ -437,9 +463,18 @@
             result = await EmployeeService.GetEmployeesForListAsync(search, filterDepartmentId, currentPage, pageSize);
         }
 
-        employees = result.Items;
+        if (result.Items != null)
+        {
+            // Use EmployeeId as the sorting fallback variable
+            employees = result.Items
+                .OrderByDescending(e => e.EmployeeId)
+                .ToList();
+        }
+        else
+        {
+            employees = new List<EmployeeListDto>();
+        }
     }
-
     private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
     {
         if (UserIsOrgAdmin)
@@ -480,29 +515,69 @@
             : new List<DesignationDto>();
     }
 
+    // Auto dismiss handler matching department layout logic
+    private async void TriggerAutoDismiss(bool isSuccess)
+    {
+        await Task.Delay(4000);
+        if (isSuccess)
+        {
+            message = null;
+        }
+        else
+        {
+            error = null;
+        }
+        StateHasChanged();
+    }
+
     private async Task SaveEdit()
     {
         try
         {
             await EmployeeService.UpdateEmployeeAsync(editingEmail!, editModel);
             isEditOpen = false;
+
+            message = $"Properties for {editModel.FirstName} {editModel.LastName} updated successfully.";
+            error = null;
+
             await LoadEmployees();
+            TriggerAutoDismiss(true);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            error = $"Failed to update employee properties: {ex.Message}";
+            message = null;
+            TriggerAutoDismiss(false);
         }
     }
 
     private async Task ToggleStatus(EmployeeListDto e)
     {
-        await EmployeeService.ToggleUserStatusAsync(e.Email, !e.IsActive);
-        await LoadEmployees();
+        var nextStatus = !e.IsActive;
+        e.IsActive = nextStatus; // optimistically reflect locally
+
+        try
+        {
+            await EmployeeService.ToggleUserStatusAsync(e.Email, nextStatus);
+
+            message = $"Employee '{e.Name}' state changed to {(nextStatus ? "Active" : "Inactive")} successfully.";
+            error = null;
+
+            await LoadEmployees();
+            TriggerAutoDismiss(true);
+        }
+        catch (Exception ex)
+        {
+            e.IsActive = !nextStatus; // Revert fallback state change locally on errors
+            error = $"Failed to change employee status: {ex.Message}";
+            message = null;
+            TriggerAutoDismiss(false);
+        }
     }
 
     void CloseModal() => isEditOpen = false;
 
-    private void NavigateToDashboard() => Nav.NavigateTo("/dashboard");
+    private void NavigateToDashboard() => Nav.NavigateTo("/org/dashboard");
 
     private void NavigateToAddEmployee()
     {
