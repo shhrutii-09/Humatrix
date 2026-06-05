@@ -36,6 +36,15 @@
                 style="background: transparent; box-shadow: none;" @onclick='() => ChangeTab("my-requests")'>
             <i class="bi bi-chat-square-text me-2"></i>Request Tracking Logs (@myRequests.Count)
         </button>
+        <button class="btn pb-2 px-3 m-0 rounded-0
+@(activeTab == "history"
+                    ? "border-bottom border-3 border-primary fw-bold text-primary"
+                    : "text-secondary")"
+                @onclick='() => ChangeTab("history")'>
+
+            <i class="bi bi-clock-history me-2"></i>
+            Asset History (@assetHistory.Count)
+        </button>
     </div>
 
     @if (loading)
@@ -252,6 +261,89 @@
     </div>
 }
 
+@if (activeTab == "history")
+{
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                Asset Assignment History
+            </h5>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Code</th>
+                        <th>Assigned On</th>
+                        <th>Returned On</th>
+                        <th>Returned By</th>
+                        <th>Assigned By</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var h in assetHistory)
+                    {
+                        <tr>
+
+                            <td>
+                                @h.AssetName
+                            </td>
+
+                            <td>
+                                @h.AssetCode
+                            </td>
+
+                            <td>
+                                @h.AssignedAt.ToLocalTime().ToString("g")
+                            </td>
+
+                            <td>
+                                @(h.ReturnedAt?.ToLocalTime().ToString("g")
+                                                        ?? "-")
+                            </td>
+                                                           <td>@h.AssignedByName</td>
+
+                    <td>
+                                @(string.IsNullOrWhiteSpace(h.ReturnedByName)
+                                                        ? "-"
+                                                        : h.ReturnedByName)
+                        <br />
+                        <small>@h.ReturnedByRole</small>
+                    </td>
+
+                            <td>
+
+                        @if (h.ReturnedAt.HasValue)
+                                {
+                                    <span class="badge bg-secondary">
+                                        Returned
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">
+                                        Active
+                                    </span>
+                                }
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+}
+
 <style>
     .animate-pulse {
         animation: pulseOpacity 2s infinite;
@@ -278,6 +370,9 @@
     private string currentUserRole = "Employee";
 
     private AssetDto? selectedAsset;
+
+    private List<EmployeeAssetHistoryDto> assetHistory = new();
+
     private string targetRequestType = "";
     private CreateAssetRequestDto createRequestModel = new();
 
@@ -321,6 +416,11 @@
                 myAssets = await AssetService.GetCurrentEmployeeAssetsAsync(
      currentEmployeeId,
      currentOrganizationId);
+
+                assetHistory = await AssetService
+               .GetEmployeeAssetHistoryAsync(
+                   currentEmployeeId,
+                   currentOrganizationId);
 
                 // Get employee's requests
                 myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);

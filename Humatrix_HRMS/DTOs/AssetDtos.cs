@@ -241,4 +241,28 @@ namespace Humatrix_HRMS.DTOs.Assets
         public string? AssignmentNotes { get; set; }
         public string? ReturnNotes { get; set; }
     }
+
+
+    public class EmployeeAssetHistoryDto
+    {
+        public Guid AssetId { get; set; }
+
+        public string AssetName { get; set; } = "";
+        public string AssetCode { get; set; } = "";
+
+        public DateTime AssignedAt { get; set; }
+        public DateTime? ReturnedAt { get; set; }
+
+        public string? AssignedByUserId { get; set; }
+        public string? ReturnedByUserId { get; set; }
+
+        public string? AssignmentNotes { get; set; }
+        public string? ReturnNotes { get; set; }
+        public string? ReturnedByName { get; set; }
+        public string? ReturnedByRole { get; set; }
+
+        public string? AssignedByName { get; set; }
+
+        public string? AssignedByRole { get; set; }
+    }
 }

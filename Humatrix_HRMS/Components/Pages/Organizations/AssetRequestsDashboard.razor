@@ -263,8 +263,18 @@
         await LoadDashboardContextAsync();
     }
 
-    private void BackToList() => Nav.NavigateTo("/org/assets");
-
+    // private void BackToList() => Nav.NavigateTo("/org/assets");
+    private void BackToList()
+    {
+        if (isOrgAdmin)
+        {
+            Nav.NavigateTo("/org/assets");
+        }
+        else
+        {
+            Nav.NavigateTo("/hr/assets");
+        }
+    }
 
     private async Task LoadDashboardContextAsync()
     {

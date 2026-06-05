@@ -1344,6 +1344,54 @@ namespace Humatrix_HRMS.Services.Assets
                 .ToListAsync();
         }
 
+        public async Task<List<EmployeeAssetHistoryDto>>
+      GetEmployeeAssetHistoryAsync(
+          Guid employeeId,
+          Guid organizationId)
+        {
+            return await (
+                from a in _db.AssetAssignments
+                join asset in _db.Assets
+                    on a.AssetId equals asset.AssetId
+
+                join assignedBy in _db.Users
+                    on a.AssignedByUserId equals assignedBy.Id
+
+                join returnedBy in _db.Users
+                    on a.ReturnedByUserId equals returnedBy.Id
+                    into returnedJoin
+                from returnedBy in returnedJoin.DefaultIfEmpty()
+
+                where a.EmployeeId == employeeId
+                      && a.OrganizationId == organizationId
+
+                orderby a.AssignedAt descending
+
+                select new EmployeeAssetHistoryDto
+                {
+                    AssetId = a.AssetId,
+                    AssetName = asset.Name,
+                    AssetCode = asset.AssetCode,
+
+                    AssignedAt = a.AssignedAt,
+                    ReturnedAt = a.ReturnedAt,
+
+                    AssignedByUserId = a.AssignedByUserId,
+                    ReturnedByUserId = a.ReturnedByUserId,
+
+                    AssignedByName =
+                        assignedBy.FirstName + " " + assignedBy.LastName,
+
+                    ReturnedByName =
+                        returnedBy != null
+                            ? returnedBy.FirstName + " " + returnedBy.LastName
+                            : null,
+
+                    AssignmentNotes = a.AssignmentNotes,
+                    ReturnNotes = a.ReturnNotes
+                })
+                .ToListAsync();
+        }
         public async Task<List<AssetDto>> GetCurrentEmployeeAssetsAsync(
      Guid employeeId,
      Guid organizationId)
@@ -1470,16 +1518,19 @@ namespace Humatrix_HRMS.Services.Assets
         /// Returns employees eligible to receive a given asset (respects dept restriction).
         /// HR callers get employees from their dept only. OrgAdmin gets all eligible employees.
         /// </summary>
+        /// <summary>
+        /// OrgAdmin gets all eligible employees. HR gets eligible employees from their department,
+        /// excluding other HR users and the logged-in HR user themselves.
+        /// </summary>
         public async Task<List<EmployeeDropdownDto>> GetAssignableEmployeesAsync(
             Guid organizationId,
             Guid assetId,
             string? callerRole = null,
-            Guid? callerDepartmentId = null)
+            Guid? callerDepartmentId = null,
+            string? actorUserId = null) // Added actorUserId parameter to exclude themselves
         {
             var asset = await _db.Assets
-                .FirstOrDefaultAsync(a =>
-                    a.AssetId == assetId &&
-                    a.OrganizationId == organizationId)
+                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Asset not found.");
 
             IQueryable<Employee> q = _db.Employees
@@ -1489,9 +1540,32 @@ namespace Humatrix_HRMS.Services.Assets
             if (asset.DepartmentId.HasValue)
                 q = q.Where(e => e.DepartmentId == asset.DepartmentId.Value);
 
-            // HR caller scope: further restrict to HR's own department
-            if (callerRole == "HR" && callerDepartmentId.HasValue)
-                q = q.Where(e => e.DepartmentId == callerDepartmentId.Value);
+            // HR caller scope: restrict to department, exclude HRs, and exclude self
+            if (callerRole == "HR")
+            {
+                if (callerDepartmentId.HasValue)
+                {
+                    q = q.Where(e => e.DepartmentId == callerDepartmentId.Value);
+                }
+
+                // 1. Exclude the logged-in HR user from appearing in their own dropdown
+                if (!string.IsNullOrEmpty(actorUserId))
+                {
+                    q = q.Where(e => e.UserId != actorUserId);
+                }
+
+                // 2. Exclude any employee who holds the "HR" role
+                // Querying ASP.NET Identity tables through _db context
+                var hrRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "HR");
+                if (hrRole != null)
+                {
+                    var hrUserIds = _db.UserRoles
+                        .Where(ur => ur.RoleId == hrRole.Id)
+                        .Select(ur => ur.UserId);
+
+                    q = q.Where(e => !hrUserIds.Contains(e.UserId));
+                }
+            }
 
             return await q
                 .OrderBy(e => e.FirstName)
@@ -1503,7 +1577,6 @@ namespace Humatrix_HRMS.Services.Assets
                 })
                 .ToListAsync();
         }
-
         /// <summary>
         /// Returns Available assets suitable as a replacement for a given request.
         /// Filters by same category as the original asset and respects dept compatibility.
@@ -1592,7 +1665,7 @@ namespace Humatrix_HRMS.Services.Assets
             asset.UpdatedAt = DateTime.UtcNow;
             asset.UpdatedByUserId = actorUserId;
         }
-
+            
         /// <summary>
         /// Validates that an HR caller has access to the given asset.
         /// HR can only access assets that belong to their department or have no department (org-wide).
@@ -1806,5 +1879,7 @@ namespace Humatrix_HRMS.Services.Assets
             ReviewNotes = p.ReviewNotes,
             FulfilledAt = p.FulfilledAt
         };
+
+
     }
 }
