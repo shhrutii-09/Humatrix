@@ -23,10 +23,10 @@
         <div>
             <h2 class="fw-normal">HR Personnel - @orgName</h2>
         </div>
-        <button class="btn btn-primary shadow-sm"
-                style="background-color: #5c4ac7; border: none;"
+        <!-- Updated button styling to perfectly match the dashboard design -->
+        <button class="btn btn-interactive-back shadow-sm"
                 @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}")'>
-            BACK TO DETAILS
+            <i class="bi bi-arrow-left me-1"></i> BACK TO DETAILS
         </button>
     </div>
 
@@ -129,6 +129,27 @@
 </div>
 
 <style>
+    /* Injected exact matching clean back-button styles */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
+
     .card {
         border-radius: 12px;
     }
@@ -199,12 +220,10 @@
 
             var rawList = await EmpService.GetEmployeesByOrganizationIdAsync(id);
 
-            // 2. HR Records filtering without targeting DTO missing '.Id' property
             _allHRs = rawList
                 .Where(x => x != null && string.Equals(x.Role, "HR", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            // 3. Database se is Org ke SAARE Master Departments load karein dropdown filter ke liye
             using var context = await DbFactory.CreateDbContextAsync();
 
             _departments = await context.Departments

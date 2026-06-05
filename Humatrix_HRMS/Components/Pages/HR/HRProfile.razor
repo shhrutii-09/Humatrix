@@ -17,140 +17,180 @@
 <PageTitle>Profile | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fw-normal">@(IsSelf ? "My Profile" : "Employee Profile")</h2>
-        <button class="btn btn-primary shadow-sm" style="background-color: #5c4ac7; border: none;" @onclick='() => Nav.NavigateTo("/hr/dashboard")'>
-            BACK TO DASHBOARD
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-normal">@(IsSelf ? "My Profile" : "Employee Profile")</h2>
+        </div>
+        <!-- Unified interactive back button -->
+        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo("/hr/dashboard")'>
+            <i class="bi bi-arrow-left me-1"></i> BACK TO DASHBOARD
         </button>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            @if (model == null && string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-muted">Fetching details...</p>
+    <!-- Main Content Grid -->
+    <div class="row g-4">
+        @if (model == null && string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="col-12">
+                <div class="card shadow-sm border-0 py-5">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted mb-0">Fetching profile details...</p>
+                    </div>
                 </div>
-            }
-            else if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
-            else
-            {
-                <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
-                    <DataAnnotationsValidator />
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="col-12">
+                <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
+                    <div>@errorMessage</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Left Side: Profile Information Form Card -->
+            <div class="col-lg-8 col-md-7 order-2 order-md-1">
+                <div class="card shadow-sm border-0 p-4 h-100">
+                    <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
+                        <DataAnnotationsValidator />
 
-                    <div class="row g-4">
-                        <div class="col-md-8">
-                            <h5 class="mb-3 text-muted border-bottom pb-2">Personal Information</h5>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">First Name</label>
-                                    <InputText @bind-Value="editModel.FirstName" class="form-control" disabled="@(!IsSelf)" />
-                                    <ValidationMessage For="@(() => editModel.FirstName)" class="text-danger small" />
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">Last Name</label>
-                                    <InputText @bind-Value="editModel.LastName" class="form-control" disabled="@(!IsSelf)" />
-                                    <ValidationMessage For="@(() => editModel.LastName)" class="text-danger small" />
-                                </div>
+                        <!-- Section: Personal Info -->
+                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
+                            <i class="bi bi-person-workspace text-muted me-2 fs-5"></i>
+                            <h5 class="mb-0 text-secondary fw-semibold">Personal Information</h5>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold text-muted">First Name</label>
+                                <InputText @bind-Value="editModel.FirstName" class="form-control shadow-sm" disabled="@(!IsSelf)" />
+                                <ValidationMessage For="@(() => editModel.FirstName)" class="text-danger small mt-1" />
                             </div>
-
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Email Address</label>
-                                <input type="text" class="form-control bg-light" value="@model.Email" disabled />
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold text-muted">Last Name</label>
+                                <InputText @bind-Value="editModel.LastName" class="form-control shadow-sm" disabled="@(!IsSelf)" />
+                                <ValidationMessage For="@(() => editModel.LastName)" class="text-danger small mt-1" />
                             </div>
-
-                            <h5 class="mt-4 mb-3 text-muted border-bottom pb-2">Employment Details</h5>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label small fw-bold">Department</label>
-                                    <input type="text" class="form-control bg-light" value="@model.Department" disabled />
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label small fw-bold">Designation</label>
-                                    <input type="text" class="form-control bg-light" value="@model.Designation" disabled />
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label small fw-bold">Work Shift</label>
-                                    <input type="text" class="form-control bg-light" value="@model.ShiftName" disabled />
-                                </div>
-                            </div>
-
-                            @if (IsSelf)
-                            {
-                                <div class="mt-4 d-flex gap-2">
-                                    <button type="submit" class="btn btn-success px-4" disabled="@isSaving">
-                                        @(isSaving ? "Saving..." : "SAVE CHANGES")
-                                    </button>
-                                    <button type="button" class="btn btn-outline-primary" @onclick="() => showPasswordModal = true">
-                                        CHANGE PASSWORD
-                                    </button>
-                                </div>
-                            }
                         </div>
 
-                        <div class="col-md-4 border-start ps-4">
-                            <div class="text-center">
-                                <div class="avatar-lg bg-light rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px; font-size: 2rem; color: #5c4ac7; border: 2px solid #5c4ac7;">
-                                    @model.FirstName[0]@model.LastName[0]
-                                </div>
-                                <h4 class="mb-0">@model.Name</h4>
-                                <p class="text-muted">@model.Role</p>
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">Email Address</label>
+                            <div class="input-group shadow-sm">
+                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-envelope-fill"></i></span>
+                                <input type="text" class="form-control bg-light border-start-0 text-muted" value="@model.Email" disabled />
+                            </div>
+                        </div>
 
-                                <div class="mt-3">
-                                    @if (model.IsActive)
+                        <!-- Section: Employment Details -->
+                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom mt-2">
+                            <i class="bi bi-briefcase-fill text-muted me-2 fs-5"></i>
+                            <h5 class="mb-0 text-secondary fw-semibold">Employment Details</h5>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small fw-bold text-muted">Department</label>
+                                <input type="text" class="form-control bg-light shadow-sm text-muted" value="@model.Department" disabled />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small fw-bold text-muted">Designation</label>
+                                <input type="text" class="form-control bg-light shadow-sm text-muted" value="@model.Designation" disabled />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small fw-bold text-muted">Work Shift</label>
+                                <input type="text" class="form-control bg-light shadow-sm text-muted" value="@model.ShiftName" disabled />
+                            </div>
+                        </div>
+
+                        <!-- Actions Bar -->
+                        @if (IsSelf)
+                        {
+                            <div class="mt-4 pt-3 border-top d-flex gap-2 flex-wrap">
+                                <button type="submit" class="btn btn-action-save px-4 shadow-sm" disabled="@isSaving">
+                                    @if (isSaving)
                                     {
-                                        <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill">ACTIVE ACCOUNT</span>
+                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                        <span>Saving...</span>
                                     }
                                     else
                                     {
-                                        <span class="badge bg-danger-subtle text-danger px-3 py-2 rounded-pill">INACTIVE</span>
+                                        <i class="bi bi-check-circle me-1"></i> <span>SAVE CHANGES</span>
                                     }
-                                </div>
+                                </button>
+                                <button type="button" class="btn btn-action-password px-3 shadow-sm" @onclick="() => showPasswordModal = true">
+                                    <i class="bi bi-shield-lock me-1"></i> CHANGE PASSWORD
+                                </button>
                             </div>
+                        }
+                    </EditForm>
+
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill fs-5 me-2"></i>
+                            <div>@statusMessage</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Right Side: Beautiful Profile Display Badge Card -->
+            <div class="col-lg-4 col-md-5 order-1 order-md-2">
+                <div class="card shadow-sm border-0 p-4 text-center justify-content-center h-100 bg-white">
+                    <div class="position-relative d-inline-block mx-auto mb-3">
+                        <div class="avatar-container shadow">
+                            @model.FirstName[0]@model.LastName[0]
                         </div>
                     </div>
-                </EditForm>
-            }
+                    
+                    <h3 class="fw-normal text-dark mb-1">@model.Name</h3>
+                    <p class="text-muted small text-uppercase tracking-wider mb-3">@model.Role</p>
 
-            @if (!string.IsNullOrEmpty(statusMessage))
-            {
-                <div class="alert alert-success mt-4 border-0 shadow-sm">@statusMessage</div>
-            }
-        </div>
+                    <div class="mt-2">
+                        <span class="status-badge-compact @(model.IsActive ? "active-badge" : "inactive-badge")">
+                            <i class="bi @(model.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @(model.IsActive ? "Active Account" : "Inactive Profile")
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </div>
 
 @* --- Reset Password Modal --- *@
 @if (showPasswordModal)
 {
-    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+    <div class="modal fade show d-block" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold">Change Password</h5>
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+                <div class="modal-header bg-light border-bottom-0 pt-4 px-4">
+                    <h5 class="modal-title fw-semibold text-dark d-flex align-items-center">
+                        <i class="bi bi-shield-lock-fill text-secondary me-2"></i> Change Password
+                    </h5>
                     <button type="button" class="btn-close" @onclick="() => showPasswordModal = false"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body px-4 pb-4">
                     <div class="mb-3">
-                        <label class="small fw-bold">Current Password</label>
-                        <input type="password" class="form-control" @bind="currentPwd" />
+                        <label class="form-label small fw-bold text-muted">Current Password</label>
+                        <input type="password" class="form-control shadow-sm" @bind="currentPwd" placeholder="••••••••" />
                     </div>
                     <div class="mb-3">
-                        <label class="small fw-bold">New Password</label>
-                        <input type="password" class="form-control" @bind="newPwd" />
+                        <label class="form-label small fw-bold text-muted">New Password</label>
+                        <input type="password" class="form-control shadow-sm" @bind="newPwd" placeholder="••••••••" />
                     </div>
                     <div class="mb-3">
-                        <label class="small fw-bold">Confirm New Password</label>
-                        <input type="password" class="form-control" @bind="confirmPwd" />
+                        <label class="form-label small fw-bold text-muted">Confirm New Password</label>
+                        <input type="password" class="form-control shadow-sm" @bind="confirmPwd" placeholder="••••••••" />
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-light" @onclick="() => showPasswordModal = false">Cancel</button>
-                    <button class="btn btn-primary" style="background-color: #5c4ac7;" @onclick="HandlePasswordReset" disabled="@isSaving">
+                <div class="modal-footer bg-light border-top-0 pt-2 pb-3 px-4 d-flex gap-2">
+                    <button class="btn btn-light shadow-sm px-3 border" style="border-radius: 8px;" @onclick="() => showPasswordModal = false">Cancel</button>
+                    <button class="btn btn-action-save shadow-sm px-3" @onclick="HandlePasswordReset" disabled="@isSaving">
                         UPDATE PASSWORD
                     </button>
                 </div>
@@ -160,17 +200,114 @@
 }
 
 <style>
-    .bg-success-subtle {
-        background-color: #d1e7dd;
+    /* Global Elements Theme Uniformity Rules */
+    .card {
+        border-radius: 12px;
     }
 
-    .bg-danger-subtle {
-        background-color: #f8d7da;
+    .form-control, .form-select, .input-group-text {
+        border-radius: 8px;
+        padding: 0.6rem 1rem;
+        border: 1px solid #e5e7eb;
     }
 
     .form-control:focus {
-        border-color: #5c4ac7;
-        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.25);
+        border-color: #5c4ac7 !important;
+        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.15) !important;
+    }
+
+    /* Interactive Clean Back Button Styling Rule Block */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        transition: all 0.2s ease;
+    }
+
+    .btn-interactive-back:hover {
+        background-color: #f8fafc !important;
+        border-color: #5c4ac7 !important;
+        color: #5c4ac7 !important;
+    }
+
+    /* Primary Interactive Buttons */
+    .btn-action-save {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 10px 20px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: opacity 0.2s ease;
+    }
+
+    .btn-action-save:hover {
+        opacity: 0.9;
+    }
+
+    .btn-action-password {
+        background-color: #ffffff !important;
+        color: #5c4ac7 !important;
+        border: 1px solid #5c4ac7 !important;
+        padding: 10px 20px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .btn-action-password:hover {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+    }
+
+    /* Avatar Dynamic Circle Presentation */
+    .avatar-container {
+        width: 110px; 
+        height: 110px; 
+        font-size: 2.2rem; 
+        color: #5c4ac7; 
+        background-color: #f1f0fb;
+        border: 3px solid #5c4ac7;
+        border-radius: 50% !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+    }
+
+    /* System Status Custom Badges */
+    .status-badge-compact {
+        padding: 6px 16px;
+        border-radius: 50px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .active-badge {
+        background-color: #d1fae5;
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+
+    .inactive-badge {
+        background-color: #fee2e2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.05em;
     }
 </style>
 
@@ -203,7 +340,6 @@
 
             if (!string.IsNullOrEmpty(emailToFetch))
             {
-                // Note: Make sure you added 'GetEmployeeByEmailAsync' to your EmployeeService as discussed earlier
                 model = await EmployeeService.GetEmployeeByEmailAsync(emailToFetch);
 
                 if (model != null)
