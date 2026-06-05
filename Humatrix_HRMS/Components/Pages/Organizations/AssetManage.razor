@@ -1248,16 +1248,26 @@
 
     private async Task SubmitRepairCompleteAsync()
     {
+        Console.WriteLine($"Selected Asset: {selectedAsset?.AssetCode}");
+        Console.WriteLine($"Selected AssetId: {selectedAsset?.AssetId}");
         submitting = true; errorMessage = "";
         try
+        {
+
+        }
+        catch (Exception)
+        {
+            
+            throw;
+        }
         {
             await AssetService.CompleteRepairAsync(selectedAsset!.AssetId, orgId, userId, repairCompleteNotes);
             CloseModals();
             await LoadAsync();
-            ShowSuccess("Repair marked complete. Asset is now Available.");
+            ShowSuccess("Repair marked complete successfully.");
         }
-        catch (Exception ex) { errorMessage = ex.Message; }
-        finally { submitting = false; }
+        // catch (Exception ex) { errorMessage = ex.Message; }
+        // finally { submitting = false; }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

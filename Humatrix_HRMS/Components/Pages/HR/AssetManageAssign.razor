@@ -44,6 +44,11 @@
                 <i class="bi bi-arrow-clockwise @(pageLoading ? "spin" : "")"></i>
                 Refresh
             </button>
+            <!-- NATIVE BLAZOR NAVLINK -->
+            <button class="hr-btn hr-btn-outline" @onclick='() => Nav.NavigateTo("hr/asset-requests")'>
+                <i class="bi bi-arrow-right-circle"></i>
+                Go to Asset Requests
+            </button>
             <button class="hr-btn hr-btn-outline" @onclick="OpenProcurementModal">
                 <i class="bi bi-clipboard-plus"></i>
                 Request Assets
@@ -2261,6 +2266,31 @@
     // ─────────────────────────────────────────────────────────────────────────
     // ASSIGN MODAL
     // ─────────────────────────────────────────────────────────────────────────
+//     private async Task OpenAssignModal(AssetListDto asset)
+//     {
+//         modalAsset = asset;
+//         assignEmpId = "";
+//         assignNotes = "";
+//         modalError = "";
+//         showAssignModal = true;
+
+//         empLoading = true;
+//         StateHasChanged();
+//         try
+//         {
+//             Uses the new HR-specific method: excludes HR + OrgAdmin roles
+//             assignableEmps = await AssetService.GetAssignableEmployeesForHRAsync(
+//                 orgId, asset.AssetId, UserManager);
+//             assignableEmps = await AssetService.GetAssignableEmployeesAsync(
+//     organizationId: orgId,
+//     assetId: asset.AssetId,
+//     callerRole: "HR",
+//     callerDepartmentId: hrDeptId
+// );
+//         }
+//         catch (Exception ex) { assignableEmps = new(); modalError = ex.Message; }
+//         finally { empLoading = false; }
+//     }
     private async Task OpenAssignModal(AssetListDto asset)
     {
         modalAsset = asset;
@@ -2273,15 +2303,17 @@
         StateHasChanged();
         try
         {
-            // Uses the new HR-specific method: excludes HR + OrgAdmin roles
-            // assignableEmps = await AssetService.GetAssignableEmployeesForHRAsync(
-            //     orgId, asset.AssetId, UserManager);
+            var currentUser = await CurrentUserService.GetUserAsync();
+            string actorUserId = currentUser?.Id ?? string.Empty;
+
+            // FIX: The component defines 'orgId' and 'hrDeptId', and uses a literal "HR" role here
             assignableEmps = await AssetService.GetAssignableEmployeesAsync(
-    organizationId: orgId,
-    assetId: asset.AssetId,
-    callerRole: "HR",
-    callerDepartmentId: hrDeptId
-);
+                organizationId: orgId,
+                assetId: asset.AssetId,
+                callerRole: "HR",
+                callerDepartmentId: hrDeptId,
+                actorUserId: actorUserId
+            );
         }
         catch (Exception ex) { assignableEmps = new(); modalError = ex.Message; }
         finally { empLoading = false; }
@@ -2322,7 +2354,7 @@
             CloseAll();
             await LoadInventoryAsync();
 
-            Toast($"{assetName} returned successfully.", true);
+            Toast($"{assetName} assigned successfully.", true);
         }
         catch (Exception ex) { modalError = ex.Message; }
         finally { submitting = false; }

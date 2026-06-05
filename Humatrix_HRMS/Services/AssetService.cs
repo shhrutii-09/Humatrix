@@ -318,9 +318,17 @@ namespace Humatrix_HRMS.Services.Assets
                 if (actorRole == "HR")
                     EnsureHRCanAccessAsset(asset, callerDepartmentId);
 
+                if (asset.Status == AssetStatus.InRepair)
+                {
+                    throw new InvalidOperationException(
+                        $"Asset '{asset.AssetCode}' is currently under repair and cannot be returned.");
+                }
+
                 if (asset.Status != AssetStatus.Assigned)
+                {
                     throw new InvalidOperationException(
                         $"Asset '{asset.AssetCode}' is not currently assigned.");
+                }
 
                 var activeAssignment = await _db.AssetAssignments
                     .FirstOrDefaultAsync(a => a.AssetId == asset.AssetId && a.ReturnedAt == null)
@@ -397,11 +405,18 @@ namespace Humatrix_HRMS.Services.Assets
             string? completionNotes = null,
             Guid? callerDepartmentId = null)
         {
+
+
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
                 var asset = await GetAssetOrThrowAsync(assetId, organizationId);
 
+                Console.WriteLine("========== COMPLETE REPAIR ==========");
+                Console.WriteLine($"AssetId: {asset.AssetId}");
+                Console.WriteLine($"AssetCode: {asset.AssetCode}");
+                Console.WriteLine($"Status: {asset.Status}");
+                Console.WriteLine($"CurrentEmployeeId: {asset.CurrentEmployeeId}");
                 if (actorRole == "HR")
                     EnsureHRCanAccessAsset(asset, callerDepartmentId);
 
@@ -419,35 +434,11 @@ namespace Humatrix_HRMS.Services.Assets
 
                 if (asset.CurrentEmployeeId.HasValue)
                 {
-                    // Asset goes back to the employee — re-assign
-                    // Use the state machine to validate the transition
-                    AssetStatusMachine.EnsureCanTransition(asset.Status, AssetStatus.Assigned);
+                    AssetStatusMachine.EnsureCanTransition(
+                        asset.Status,
+                        AssetStatus.Assigned);
 
                     asset.Status = AssetStatus.Assigned;
-
-                    // Check if there's already an active assignment for this asset
-                    var existingActiveAssignment = await _db.AssetAssignments
-                        .FirstOrDefaultAsync(a => a.AssetId == asset.AssetId && a.ReturnedAt == null);
-
-                    if (existingActiveAssignment != null)
-                    {
-                        // Close the existing assignment first (the one from before repair)
-                        existingActiveAssignment.ReturnedAt = DateTime.UtcNow;
-                        existingActiveAssignment.ReturnedByUserId = actorUserId;
-                        existingActiveAssignment.ReturnNotes = "Auto-closed: Asset returned from repair.";
-                    }
-
-                    // Create new assignment
-                    var newAssignment = new AssetAssignment
-                    {
-                        AssetId = asset.AssetId,
-                        EmployeeId = asset.CurrentEmployeeId.Value,
-                        OrganizationId = organizationId,
-                        AssignedAt = DateTime.UtcNow,
-                        AssignedByUserId = actorUserId,
-                        AssignmentNotes = completionNotes?.Trim() ?? "Re-assigned after repair completion."
-                    };
-                    _db.AssetAssignments.Add(newAssignment);
                 }
                 else
                 {
@@ -528,41 +519,73 @@ namespace Humatrix_HRMS.Services.Assets
             // ── Rule 2: HR scope check ──────────────────────────────────────────
             if (requestorRole == "HR")
                 EnsureHRCanAccessAsset(asset, callerDepartmentId);
-
-            // ── Rule 3: Repair blocked if already InRepair ──────────────────────
-            if (dto.RequestType == AssetRequestType.Repair && asset.Status == AssetStatus.InRepair)
+            if (asset.Status == AssetStatus.Retired)
+            {
                 throw new InvalidOperationException(
-                    "This asset is already in repair. No new repair request is needed.");
-
-            // ── Rule 4: Replacement blocked if InRepair ─────────────────────────
-            if (dto.RequestType == AssetRequestType.Replacement && asset.Status == AssetStatus.InRepair)
+                    "Cannot raise a request for a retired asset.");
+            }
+            if (asset.Status != AssetStatus.Assigned)
+            {
                 throw new InvalidOperationException(
-                    "Cannot raise a replacement request for an asset that is currently in repair.");
+                    $"Requests can only be created for assigned assets. Current status: {asset.Status}");
+            }
+            //// ── Rule 3: Repair blocked if already InRepair ──────────────────────
+            //if (dto.RequestType == AssetRequestType.Repair && asset.Status == AssetStatus.InRepair)
+            //    throw new InvalidOperationException(
+            //        "This asset is already in repair. No new repair request is needed.");
 
-            // ── Rule 5: Return blocked if active Repair request exists ──────────
+            //// ── Rule 4: Replacement blocked if InRepair ─────────────────────────
+            //if (dto.RequestType == AssetRequestType.Replacement && asset.Status == AssetStatus.InRepair)
+            //    throw new InvalidOperationException(
+            //        "Cannot raise a replacement request for an asset that is currently in repair.");
+
+            //        // ── Rule 5: Return blocked if active Repair request exists ──────────
+            //        if (dto.RequestType == AssetRequestType.Return)
+            //        {
+            //            var activeRepair = await _db.AssetRequests
+            //               .AnyAsync(r =>
+            //r.AssetId == dto.AssetId &&
+            //(
+            //    r.Status == AssetRequestStatus.Pending ||
+            //    r.Status == AssetRequestStatus.Approved
+            //));
             if (dto.RequestType == AssetRequestType.Return)
             {
-                var activeRepair = await _db.AssetRequests.AnyAsync(r =>
-                    r.AssetId == dto.AssetId &&
-                    r.RequestType == AssetRequestType.Repair &&
-                    (r.Status == AssetRequestStatus.Pending || r.Status == AssetRequestStatus.Approved));
+                var activeRepair = await _db.AssetRequests
+                   .AnyAsync(r =>
+                        r.AssetId == dto.AssetId &&
+                        r.RequestType == AssetRequestType.Repair &&
+                        (
+                            r.Status == AssetRequestStatus.Pending ||
+                            r.Status == AssetRequestStatus.Approved
+                        ));
 
                 if (activeRepair)
                     throw new InvalidOperationException(
-                        "Cannot raise a Return request while a Repair request is pending or approved for this asset. " +
-                        "Please cancel or wait for the Repair request to be resolved first.");
+                        "Cannot raise a Return request while a Repair request is pending or approved.");
+            }
+            // ── Rule 6: No duplicate pending request of the same type ───────────
+            //var duplicate = await _db.AssetRequests.AnyAsync(r =>
+            //    r.AssetId == dto.AssetId &&
+            //    r.RequestType == dto.RequestType &&
+            //    r.Status == AssetRequestStatus.Pending);
+            var activeRequestExists = await _db.AssetRequests.AnyAsync(r =>
+    r.AssetId == dto.AssetId &&
+    (
+        r.Status == AssetRequestStatus.Pending ||
+        r.Status == AssetRequestStatus.Approved
+    ));
+
+            if (activeRequestExists)
+            {
+                throw new InvalidOperationException(
+                    "This asset already has an active request being processed.");
             }
 
-            // ── Rule 6: No duplicate pending request of the same type ───────────
-            var duplicate = await _db.AssetRequests.AnyAsync(r =>
-                r.AssetId == dto.AssetId &&
-                r.RequestType == dto.RequestType &&
-                r.Status == AssetRequestStatus.Pending);
-
-            if (duplicate)
-                throw new InvalidOperationException(
-                    $"A pending '{dto.RequestType}' request already exists for this asset. " +
-                    "Please wait for it to be reviewed before submitting another.");
+            //if (duplicate)
+            //    throw new InvalidOperationException(
+            //        $"A pending '{dto.RequestType}' request already exists for this asset. " +
+            //        "Please wait for it to be reviewed before submitting another.");
 
             var request = new AssetRequest
             {
@@ -649,7 +672,7 @@ namespace Humatrix_HRMS.Services.Assets
                     .Include(r => r.RequestedByEmployee)
                     .FirstOrDefaultAsync(r =>
                         r.AssetRequestId == dto.AssetRequestId &&
-                        r.OrganizationId == organizationId)
+                        r.OrganizationId == organizationId) 
                     ?? throw new KeyNotFoundException("Asset request not found.");
 
                 Console.WriteLine($"=== REVIEW START ===");
@@ -661,7 +684,12 @@ namespace Humatrix_HRMS.Services.Assets
                 if (request.Status != AssetRequestStatus.Pending)
                     throw new InvalidOperationException(
                         $"This request is already '{request.Status}' and cannot be reviewed again.");
-
+                if (request.Asset == null)
+                    throw new InvalidOperationException(
+                        "Asset linked to this request no longer exists.");
+                if (request.RequestedByEmployee == null)
+                    throw new InvalidOperationException(
+                        "Requesting employee no longer exists.");
                 // HR scope check: request must belong to HR's department
                 if (actorRole == "HR")
                 {
@@ -672,7 +700,13 @@ namespace Humatrix_HRMS.Services.Assets
                         throw new InvalidOperationException(
                             "HR can only review requests from employees within their own department.");
                 }
-
+                if (dto.Approve &&
+    request.RequestType == AssetRequestType.Replacement &&
+    !dto.ReplacementAssetId.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        "Replacement asset must be selected.");
+                }
                 request.ReviewedByEmployeeId = reviewerEmployeeId;
                 request.ReviewedAt = DateTime.UtcNow;
                 request.ReviewNotes = dto.Notes?.Trim();
@@ -680,7 +714,16 @@ namespace Humatrix_HRMS.Services.Assets
                 if (!dto.Approve)
                 {
                     request.Status = AssetRequestStatus.Rejected;
-                    Console.WriteLine($"Request Rejected - Status: {request.Status}");
+
+                    await _db.SaveChangesAsync();
+                    await tx.CommitAsync();
+
+                    return await GetAssetRequestDtoAsync(request.AssetRequestId);
+                }
+                if (request.Asset.Status == AssetStatus.InRepair)
+                {
+                    throw new InvalidOperationException(
+                        "Cannot replace an asset that is currently under repair.");
                 }
                 else
                 {
@@ -694,6 +737,8 @@ namespace Humatrix_HRMS.Services.Assets
                             request.Status = AssetRequestStatus.Completed;
                             Console.WriteLine($"Return completed - Status: {request.Status}");
                             break;
+
+
 
                         // ── REPAIR ──────────────────────────────────────────────────────────
                         case AssetRequestType.Repair:
@@ -717,7 +762,7 @@ namespace Humatrix_HRMS.Services.Assets
                             Console.WriteLine($"Request ID: {request.AssetRequestId}");
                             Console.WriteLine($"Replacement Asset ID: {dto.ReplacementAssetId}");
 
-                            if (!dto.ReplacementAssetId.HasValue)
+                            if (dto.Approve && !dto.ReplacementAssetId.HasValue)
                                 throw new ArgumentException(
                                     "ReplacementAssetId is required when approving a Replacement request.");
 
@@ -744,7 +789,11 @@ namespace Humatrix_HRMS.Services.Assets
                             // HR scope: replacement asset must also be in HR's dept
                             if (actorRole == "HR")
                                 EnsureHRCanAccessAsset(replacementAsset, callerDepartmentId);
-
+                            if (request.Asset.Status == AssetStatus.InRepair)
+                            {
+                                throw new InvalidOperationException(
+                                    "Cannot replace an asset that is currently under repair.");
+                            }
                             // 1. Return old asset
                             Console.WriteLine("Returning old asset...");
                             await ApplyReturnInternalAsync(request.Asset, actorUserId,
@@ -816,16 +865,28 @@ namespace Humatrix_HRMS.Services.Assets
 
                 return await GetAssetRequestDtoAsync(request.AssetRequestId);
             }
+            //catch (Exception ex)
+            //{
+            //    await tx.RollbackAsync();
+            //    Console.WriteLine($"ERROR in ReviewAssetRequestAsync: {ex.Message}");
+            //    Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            //    if (ex.InnerException != null)
+            //    {
+            //        Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+            //    }
+            //    throw;
+            //}
             catch (Exception ex)
             {
                 await tx.RollbackAsync();
-                Console.WriteLine($"ERROR in ReviewAssetRequestAsync: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
-                }
-                throw;
+
+                Console.WriteLine("========== FULL ERROR ==========");
+                Console.WriteLine(ex.ToString());
+                Console.WriteLine("================================");
+
+                throw new InvalidOperationException(
+                    ex.InnerException?.Message ?? ex.Message,
+                    ex);
             }
         }
         /// <summary>
@@ -1245,13 +1306,29 @@ namespace Humatrix_HRMS.Services.Assets
             Guid employeeId,
             Guid organizationId)
         {
+
+            var badAssignments = await _db.AssetAssignments
+    .Include(a => a.Asset)
+    .Where(a =>
+        a.ReturnedAt == null &&
+        a.Asset.Status == AssetStatus.Available)
+    .ToListAsync();
+
+            if (badAssignments.Any())
+            {
+                Console.WriteLine(
+                    $"WARNING: Found {badAssignments.Count} inconsistent asset assignments.");
+            }
+
             return await _db.AssetAssignments
                 .Include(a => a.Asset)
                 .Include(a => a.Employee)
-                .Where(a =>
-                    a.EmployeeId == employeeId &&
-                    a.Asset.OrganizationId == organizationId &&
-                    a.ReturnedAt == null)
+             .Where(a =>
+    a.EmployeeId == employeeId &&
+    a.Asset.OrganizationId == organizationId &&
+    a.ReturnedAt == null &&
+    a.Asset.CurrentEmployeeId == employeeId &&
+    a.Asset.Status == AssetStatus.Assigned)
                 .Select(a => new AssignmentDto
                 {
                     AssetAssignmentId = a.AssetAssignmentId,
@@ -1267,6 +1344,75 @@ namespace Humatrix_HRMS.Services.Assets
                 .ToListAsync();
         }
 
+        public async Task<List<EmployeeAssetHistoryDto>>
+      GetEmployeeAssetHistoryAsync(
+          Guid employeeId,
+          Guid organizationId)
+        {
+            return await (
+                from a in _db.AssetAssignments
+                join asset in _db.Assets
+                    on a.AssetId equals asset.AssetId
+
+                join assignedBy in _db.Users
+                    on a.AssignedByUserId equals assignedBy.Id
+
+                join returnedBy in _db.Users
+                    on a.ReturnedByUserId equals returnedBy.Id
+                    into returnedJoin
+                from returnedBy in returnedJoin.DefaultIfEmpty()
+
+                where a.EmployeeId == employeeId
+                      && a.OrganizationId == organizationId
+
+                orderby a.AssignedAt descending
+
+                select new EmployeeAssetHistoryDto
+                {
+                    AssetId = a.AssetId,
+                    AssetName = asset.Name,
+                    AssetCode = asset.AssetCode,
+
+                    AssignedAt = a.AssignedAt,
+                    ReturnedAt = a.ReturnedAt,
+
+                    AssignedByUserId = a.AssignedByUserId,
+                    ReturnedByUserId = a.ReturnedByUserId,
+
+                    AssignedByName =
+                        assignedBy.FirstName + " " + assignedBy.LastName,
+
+                    ReturnedByName =
+                        returnedBy != null
+                            ? returnedBy.FirstName + " " + returnedBy.LastName
+                            : null,
+
+                    AssignmentNotes = a.AssignmentNotes,
+                    ReturnNotes = a.ReturnNotes
+                })
+                .ToListAsync();
+        }
+        public async Task<List<AssetDto>> GetCurrentEmployeeAssetsAsync(
+     Guid employeeId,
+     Guid organizationId)
+        {
+            return await _db.Assets
+                .Where(a =>
+                    a.OrganizationId == organizationId &&
+                    a.CurrentEmployeeId == employeeId)
+                .Select(a => new AssetDto
+                {
+                    AssetId = a.AssetId,
+                    AssetCode = a.AssetCode,
+                    Name = a.Name,
+                    Category = a.Category,
+                    Brand = a.Brand,
+                    Model = a.Model,
+                    SerialNumber = a.SerialNumber,
+                    Status = a.Status
+                })
+                .ToListAsync();
+        }
         /// <summary>
         /// Asset requests visible to OrgAdmin (all) or HR (their department only).
         /// </summary>
@@ -1372,16 +1518,19 @@ namespace Humatrix_HRMS.Services.Assets
         /// Returns employees eligible to receive a given asset (respects dept restriction).
         /// HR callers get employees from their dept only. OrgAdmin gets all eligible employees.
         /// </summary>
+        /// <summary>
+        /// OrgAdmin gets all eligible employees. HR gets eligible employees from their department,
+        /// excluding other HR users and the logged-in HR user themselves.
+        /// </summary>
         public async Task<List<EmployeeDropdownDto>> GetAssignableEmployeesAsync(
             Guid organizationId,
             Guid assetId,
             string? callerRole = null,
-            Guid? callerDepartmentId = null)
+            Guid? callerDepartmentId = null,
+            string? actorUserId = null) // Added actorUserId parameter to exclude themselves
         {
             var asset = await _db.Assets
-                .FirstOrDefaultAsync(a =>
-                    a.AssetId == assetId &&
-                    a.OrganizationId == organizationId)
+                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Asset not found.");
 
             IQueryable<Employee> q = _db.Employees
@@ -1391,9 +1540,32 @@ namespace Humatrix_HRMS.Services.Assets
             if (asset.DepartmentId.HasValue)
                 q = q.Where(e => e.DepartmentId == asset.DepartmentId.Value);
 
-            // HR caller scope: further restrict to HR's own department
-            if (callerRole == "HR" && callerDepartmentId.HasValue)
-                q = q.Where(e => e.DepartmentId == callerDepartmentId.Value);
+            // HR caller scope: restrict to department, exclude HRs, and exclude self
+            if (callerRole == "HR")
+            {
+                if (callerDepartmentId.HasValue)
+                {
+                    q = q.Where(e => e.DepartmentId == callerDepartmentId.Value);
+                }
+
+                // 1. Exclude the logged-in HR user from appearing in their own dropdown
+                if (!string.IsNullOrEmpty(actorUserId))
+                {
+                    q = q.Where(e => e.UserId != actorUserId);
+                }
+
+                // 2. Exclude any employee who holds the "HR" role
+                // Querying ASP.NET Identity tables through _db context
+                var hrRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "HR");
+                if (hrRole != null)
+                {
+                    var hrUserIds = _db.UserRoles
+                        .Where(ur => ur.RoleId == hrRole.Id)
+                        .Select(ur => ur.UserId);
+
+                    q = q.Where(e => !hrUserIds.Contains(e.UserId));
+                }
+            }
 
             return await q
                 .OrderBy(e => e.FirstName)
@@ -1405,7 +1577,6 @@ namespace Humatrix_HRMS.Services.Assets
                 })
                 .ToListAsync();
         }
-
         /// <summary>
         /// Returns Available assets suitable as a replacement for a given request.
         /// Filters by same category as the original asset and respects dept compatibility.
@@ -1460,9 +1631,11 @@ namespace Humatrix_HRMS.Services.Assets
                 .ToListAsync();
         }
 
-        public async Task<List<Organization>> GetOrganizationsAsync()
+        public async Task<Organization?> GetOrganizationAsync(Guid organizationId)
         {
-            return await _db.Organizations.ToListAsync();
+            return await _db.Organizations
+                .FirstOrDefaultAsync(x =>
+                    x.OrganizationId == organizationId);
         }
 
         // =====================================================================
@@ -1492,7 +1665,7 @@ namespace Humatrix_HRMS.Services.Assets
             asset.UpdatedAt = DateTime.UtcNow;
             asset.UpdatedByUserId = actorUserId;
         }
-
+            
         /// <summary>
         /// Validates that an HR caller has access to the given asset.
         /// HR can only access assets that belong to their department or have no department (org-wide).
@@ -1706,5 +1879,7 @@ namespace Humatrix_HRMS.Services.Assets
             ReviewNotes = p.ReviewNotes,
             FulfilledAt = p.FulfilledAt
         };
+
+
     }
 }
