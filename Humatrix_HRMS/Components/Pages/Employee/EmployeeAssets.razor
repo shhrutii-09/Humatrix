@@ -167,9 +167,36 @@
                                 @foreach (var req in myRequests)
                                 {
                                     <tr>
-                                        <td class="ps-4 py-3">
+                                        @* <td class="ps-4 py-3">
                                             <div class="fw-bold text-dark">@req.AssetName</div>
                                             <div class="text-muted font-monospace small">@req.AssetCode</div>
+                                        </td> *@
+                                        <td class="ps-4 py-3">
+                                            <div class="d-flex flex-column gap-1">
+                                                <div>
+                                                    <div class="fw-bold text-dark">@req.AssetName</div>
+                                                    <div class="text-muted font-monospace small">@req.AssetCode</div>
+                                                </div>
+
+                                                @* Check if this is a replacement request that has been successfully fulfilled/completed *@
+                                                @if (req.RequestType == AssetRequestType.Replacement &&
+                                                                                req.Status == AssetRequestStatus.Completed &&
+                                                                                !string.IsNullOrEmpty(req.ReplacementAssetCode))
+                                                {
+                                                    <div class="mt-1">
+                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.75rem;">
+                                                            <i class="bi bi-arrow-right-circle-fill me-1"></i>Replaced by:
+                                                            <strong class="font-monospace ms-1">@req.ReplacementAssetCode</strong>
+                                                        </span>
+                                                        @if (!string.IsNullOrEmpty(req.ReplacementAssetName))
+                                                        {
+                                                            <div class="text-muted text-truncate ms-1" style="font-size: 0.75rem; max-width: 200px;" title="@req.ReplacementAssetName">
+                                                                @req.ReplacementAssetName
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
                                         </td>
                                         <td class="py-3">
                                             <span class="@GetRequestTypeClass(req.RequestType)" style="font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 6px; font-weight: 600;">
@@ -279,64 +306,93 @@
                         <th>Code</th>
                         <th>Assigned On</th>
                         <th>Returned On</th>
-                        <th>Returned By</th>
                         <th>Assigned By</th>
+                        <th>Returned By</th>
                         <th>Status</th>
                     </tr>
                 </thead>
 
                 <tbody>
-
                     @foreach (var h in assetHistory)
                     {
                         <tr>
-
                             <td>
-                                @h.AssetName
+                                <div class="fw-bold text-dark">@h.AssetName</div>
+                                @if (h.IsReplacementAction == true)
+                                {
+                                    <div class="mt-1">
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.75rem;">
+                                            <i class="bi bi-arrow-repeat me-1"></i>
+                                            @(h.ReturnedAt.HasValue ? "Replaced By New Asset" : "Acquired via Replacement")
+                                        </span>
+                                    </div>
+                                }
                             </td>
 
-                            <td>
+                            <td class="font-monospace small">
                                 @h.AssetCode
                             </td>
 
-                            <td>
+                            <td class="text-secondary small">
                                 @h.AssignedAt.ToLocalTime().ToString("g")
                             </td>
 
-                            <td>
-                                @(h.ReturnedAt?.ToLocalTime().ToString("g")
-                                                        ?? "-")
+                            <td class="text-secondary small">
+                                @(h.ReturnedAt?.ToLocalTime().ToString("g") ?? "—")
                             </td>
-                                                           <td>@h.AssignedByName</td>
-
-                    <td>
-                                @(string.IsNullOrWhiteSpace(h.ReturnedByName)
-                                                        ? "-"
-                                                        : h.ReturnedByName)
-                        <br />
-                        <small>@h.ReturnedByRole</small>
-                    </td>
 
                             <td>
-
-                        @if (h.ReturnedAt.HasValue)
+                                @if (!string.IsNullOrWhiteSpace(h.AssignedByName))
                                 {
-                                    <span class="badge bg-secondary">
-                                        Returned
-                                    </span>
+                                    <span>@h.AssignedByName</span>
+                                }
+                                else if (h.IsReplacementAction == true && !string.IsNullOrWhiteSpace(h.ActionedByName))
+                                {
+                                    <span class="text-dark fw-semibold">@h.ActionedByName</span>
+                                    <br />
+                                    <small class="text-muted font-monospace" style="font-size: 0.75rem;">via Replacement Approval</small>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-success">
-                                        Active
-                                    </span>
+                                    <span class="text-muted">—</span>
                                 }
-
                             </td>
 
+                            <td>
+                                @(string.IsNullOrWhiteSpace(h.ReturnedByName) ? "—" : h.ReturnedByName)
+                                @if (!string.IsNullOrWhiteSpace(h.ReturnedByRole))
+                                {
+                                    <br />
+                                    <small class="text-muted" style="font-size: 0.75rem;">@h.ReturnedByRole</small>
+                                }
+                            </td>
+
+                            <td>
+                                <div class="d-flex flex-column gap-1">
+                                    @if (h.ReturnedAt.HasValue)
+                                    {
+                                        <span class="badge bg-secondary" style="width: fit-content;">Returned</span>
+                                        @if (!string.IsNullOrEmpty(h.RelatedAssetCode))
+                                        {
+                                            <small class="text-muted" style="font-size: 0.75rem;">
+                                                Next: <strong class="font-monospace text-primary">@h.RelatedAssetCode</strong>
+                                            </small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success" style="width: fit-content;">Active</span>
+                                        @if (!string.IsNullOrEmpty(h.RelatedAssetCode))
+                                        {
+                                            <small class="text-muted" style="font-size: 0.75rem;">
+                                                Prev: <strong class="font-monospace text-secondary">@h.RelatedAssetCode</strong>
+                                            </small>
+                                        }
+                                    }
+                                </div>
+                            </td>
                         </tr>
                     }
-
                 </tbody>
 
             </table>
@@ -364,15 +420,13 @@
     private Guid currentEmployeeId;
     private Guid currentOrganizationId;
     private string currentUserId = "";
+    private string currentUserRole = "Employee"; // Dynamically hydrated now
 
     private List<AssetDto> myAssets = new();
     private List<AssetRequestDto> myRequests = new();
-    private string currentUserRole = "Employee";
-
-    private AssetDto? selectedAsset;
-
     private List<EmployeeAssetHistoryDto> assetHistory = new();
 
+    private AssetDto? selectedAsset;
     private string targetRequestType = "";
     private CreateAssetRequestDto createRequestModel = new();
 
@@ -395,46 +449,31 @@
                 currentOrganizationId = empContext.OrganizationId;
                 currentUserId = empContext.UserId;
 
-                // Get active assignments
-                // var assignments = await AssetService.GetEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
-                
-                // Convert assignments to AssetDto list
-                // myAssets = new List<AssetDto>();
-                // foreach (var assignment in assignments)
-                // {
-                //     var asset = await AssetService.GetAssetByIdAsync(
-                //         assignment.AssetId, 
-                //         currentOrganizationId, 
-                //         callerRole: "Employee", 
-                //         callerDepartmentId: null
-                //     );
-                //     if (asset != null)
-                //     {
-                //         myAssets.Add(asset);
-                //     }
-                // }
-                myAssets = await AssetService.GetCurrentEmployeeAssetsAsync(
-     currentEmployeeId,
-     currentOrganizationId);
+                // CRITICAL FIX: Extract true contextual security role instead of hardcoding
+                currentUserRole = !string.IsNullOrWhiteSpace(empContext.Role) ? empContext.Role : "Employee";
 
-                assetHistory = await AssetService
-               .GetEmployeeAssetHistoryAsync(
-                   currentEmployeeId,
-                   currentOrganizationId);
-
-                // Get employee's requests
-                myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+                // Load all structural data profiles simultaneously
+                await RefreshInventoryDataAsync();
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error mapping context values: {ex.Message}");
-            errorMessage = ex.Message;
+            errorMessage = "Failed to synchronize security workspace context context data.";
         }
         finally
         {
             loading = false;
         }
+    }
+
+    private async Task RefreshInventoryDataAsync()
+    {
+        myAssets = await AssetService.GetCurrentEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
+
+        myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+
+        assetHistory = await AssetService.GetEmployeeAssetHistoryAsync(currentEmployeeId, currentOrganizationId);
     }
 
     private void ChangeTab(string tabKey)
@@ -460,6 +499,7 @@
     {
         showRequestModal = false;
         selectedAsset = null;
+        createRequestModel = new CreateAssetRequestDto(); // Explicit cleanup
         errorMessage = "";
     }
 
@@ -472,20 +512,19 @@
             submitting = true;
             errorMessage = "";
 
-            // Call the existing CreateAssetRequestAsync method
             await AssetService.CreateAssetRequestAsync(
                 organizationId: currentOrganizationId,
                 requestedByEmployeeId: currentEmployeeId,
-                // requestorRole: AssetRequestorRole.Employee,
-                requestorRole: currentUserRole,
+                requestorRole: currentUserRole, // Correct dynamic scope matching
                 dto: createRequestModel,
                 callerDepartmentId: null
             );
 
             showRequestModal = false;
 
-            // Refresh the requests list
-            myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
+            // CRITICAL FIX: Refresh absolute state arrays to toggle action buttons immediately
+            await RefreshInventoryDataAsync();
+
             activeTab = "my-requests";
         }
         catch (Exception ex)
@@ -501,29 +540,20 @@
 
     private string GetAssetStatusBadge(string status) => status switch
     {
-        AssetStatus.Assigned =>
-            "badge bg-success-subtle text-success border border-success-subtle",
-
-        AssetStatus.InRepair =>
-            "badge bg-warning-subtle text-warning border border-warning-subtle",
-
-        AssetStatus.Available =>
-            "badge bg-info-subtle text-info border border-info-subtle",
-
-        AssetStatus.Retired =>
-            "badge bg-secondary-subtle text-secondary border border-secondary-subtle",
-
-        _ =>
-            "badge bg-light text-dark border"
+        AssetStatus.Assigned => "badge bg-success-subtle text-success border border-success-subtle",
+        AssetStatus.InRepair => "badge bg-warning-subtle text-warning border border-warning-subtle",
+        AssetStatus.Available => "badge bg-info-subtle text-info border border-info-subtle",
+        AssetStatus.Retired => "badge bg-secondary-subtle text-secondary border border-secondary-subtle",
+        _ => "badge bg-light text-dark border"
     };
 
     private AssetRequestDto? GetActiveRequest(Guid assetId)
     {
         return myRequests.FirstOrDefault(r =>
             r.AssetId == assetId &&
-            (r.Status == AssetRequestStatus.Pending ||
-             r.Status == AssetRequestStatus.Approved));
+            (r.Status == AssetRequestStatus.Pending || r.Status == AssetRequestStatus.Approved));
     }
+
     private string GetPlaceholderText() => targetRequestType switch
     {
         AssetRequestType.Repair => "Please describe the issue with this asset (e.g., screen cracked, battery not charging, keyboard malfunction)...",

@@ -52,7 +52,7 @@ namespace Humatrix_HRMS.Models
         [ForeignKey("OrganizationId")]
         public Organization? Organization { get; set; }   // ← Add this navigation property
 
-        [ForeignKey("DepartmentId")]
+        [ForeignKey("DepartmentId")]    
         public Department? Department { get; set; }
 
 

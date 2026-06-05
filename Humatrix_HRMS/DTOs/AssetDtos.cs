@@ -99,6 +99,11 @@ namespace Humatrix_HRMS.DTOs.Assets
         public string? AssignmentNotes { get; set; }
         public string? ReturnNotes { get; set; }
         public bool IsActive => ReturnedAt == null;
+
+        // ── PRODUCTION ADDITIONS FOR TRACEABILITY ──
+        public string? AssignedByUserName { get; set; } // Display who explicitly handed it out
+        public string? ReturnedByUserName { get; set; } // Display who handled the return
+        public Guid? LinkedAssetRequestId { get; set; }
     }
 
     // =========================================================================
@@ -147,6 +152,8 @@ namespace Humatrix_HRMS.DTOs.Assets
         public string? ReviewedByEmployeeName { get; set; }
         public DateTime? ReviewedAt { get; set; }
         public string? ReviewNotes { get; set; }
+        public string? ReplacementAssetCode { get; set; }
+        public string? ReplacementAssetName { get; set; }
     }
 
     // =========================================================================
@@ -264,5 +271,11 @@ namespace Humatrix_HRMS.DTOs.Assets
         public string? AssignedByName { get; set; }
 
         public string? AssignedByRole { get; set; }
+        public bool IsReplacementAction { get; set; }
+        public string? RelatedAssetCode { get; set; }  // Holds HPComp's code if viewing Dell, and vice versa
+        public string? RelatedAssetName { get; set; }  // Holds asset name details
+        public string? ActionedByName { get; set; }
+
+        public string? ReplacementStatusLabel { get; set; } 
     }
 }
