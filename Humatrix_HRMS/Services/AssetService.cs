@@ -789,15 +789,18 @@ namespace Humatrix_HRMS.Services.Assets
                             // HR scope: replacement asset must also be in HR's dept
                             if (actorRole == "HR")
                                 EnsureHRCanAccessAsset(replacementAsset, callerDepartmentId);
+
                             if (request.Asset.Status == AssetStatus.InRepair)
                             {
                                 throw new InvalidOperationException(
                                     "Cannot replace an asset that is currently under repair.");
                             }
+
                             // 1. Return old asset
                             Console.WriteLine("Returning old asset...");
-                            await ApplyReturnInternalAsync(request.Asset, actorUserId,
-                                returnNotes: $"Returned as part of replacement approval. Request: {request.AssetRequestId}");
+                            // UPDATED: Prefixed with explicit production trace token [REPLACED]
+                            string structuredReturnNotes = $"[REPLACED] - Closed via Replacement Ticket #{request.AssetRequestId}. Reason: {request.Reason}. Handled by {actorRole}.";
+                            await ApplyReturnInternalAsync(request.Asset, actorUserId, returnNotes: structuredReturnNotes);
 
                             // 2. Assign replacement asset to the same employee
                             Console.WriteLine("Assigning replacement asset...");
@@ -807,8 +810,9 @@ namespace Humatrix_HRMS.Services.Assets
                                 EmployeeId = request.RequestedByEmployeeId,
                                 OrganizationId = organizationId,
                                 AssignedAt = DateTime.UtcNow,
-                                AssignedByUserId = actorUserId,
-                                AssignmentNotes = $"Replacement for {request.Asset.AssetCode}. Request: {request.AssetRequestId}"
+                                AssignedByUserId = actorUserId, // Explicit user link so it's not empty/anonymous
+                                                                // UPDATED: Prefixed with explicit production trace token [REPLACEMENT ASSET]
+                                AssignmentNotes = $"[REPLACEMENT ASSET] - Dispatched to replace faulty asset code {request.Asset.AssetCode} via Request Ticket #{request.AssetRequestId}."
                             };
                             _db.AssetAssignments.Add(newAssignment);
 
@@ -1211,6 +1215,14 @@ namespace Humatrix_HRMS.Services.Assets
         /// <summary>
         /// Paged asset list for OrgAdmin (all assets in org).
         /// </summary>
+        /// <summary>
+        /// Paged asset list for OrgAdmin (all assets in org).
+        /// STRICT FILTER: Hidden if linked to an inactive department or inactive employee.
+        /// </summary>
+        /// <summary>
+        /// Paged asset list for OrgAdmin (all assets in org).
+        /// DIRECT FILTER: Hidden if linked to an inactive department or inactive employee status.
+        /// </summary>
         public async Task<PagedResult<AssetListDto>> GetAssetsAsync(
             Guid organizationId,
             AssetFilterDto filter)
@@ -1218,7 +1230,9 @@ namespace Humatrix_HRMS.Services.Assets
             var q = _db.Assets
                 .Include(a => a.CurrentEmployee)
                 .Include(a => a.Department)
-                .Where(a => a.OrganizationId == organizationId);
+                .Where(a => a.OrganizationId == organizationId
+                            && (a.DepartmentId == null || a.Department.IsActive)
+                            && (a.CurrentEmployeeId == null || a.CurrentEmployee.Status == "Active")); // Hides assets held by inactive users
 
             q = ApplyAssetFilters(q, filter);
 
@@ -1229,23 +1243,43 @@ namespace Humatrix_HRMS.Services.Assets
         /// Paged asset list for HR — only their department's assets
         /// plus org-wide (DepartmentId == null) assets.
         /// </summary>
+        /// <summary>
+        /// Paged asset list for HR — only their department's assets plus org-wide.
+        /// STRICT FILTER: Completely removes rows tied to inactive departments or inactive employees.
+        /// </summary>
+        /// <summary>
+        /// Paged asset list for HR — only their department's assets plus org-wide.
+        /// DIRECT FILTER: Completely removes rows tied to inactive departments or inactive employee profiles.
+        /// </summary>
         public async Task<PagedResult<AssetListDto>> GetAssetsForHRAsync(
             Guid organizationId,
             Guid hrDepartmentId,
             AssetFilterDto filter)
         {
+            // Verify HR's own department is active first
+            var isHrDeptActive = await _db.Departments
+                .Where(d => d.DepartmentId == hrDepartmentId)
+                .Select(d => d.IsActive)
+                .FirstOrDefaultAsync();
+
+            if (!isHrDeptActive)
+            {
+                // If HR's own department is turned off, their dashboard turns completely blank
+                return new PagedResult<AssetListDto> { Items = new List<AssetListDto>(), TotalCount = 0 };
+            }
+
             var q = _db.Assets
                 .Include(a => a.CurrentEmployee)
                 .Include(a => a.Department)
-                .Where(a =>
-                    a.OrganizationId == organizationId &&
-                    (a.DepartmentId == hrDepartmentId || a.DepartmentId == null));
+                .Where(a => a.OrganizationId == organizationId &&
+                            (a.DepartmentId == hrDepartmentId || a.DepartmentId == null) &&
+                            (a.DepartmentId == null || a.Department.IsActive) &&
+                            (a.CurrentEmployeeId == null || a.CurrentEmployee.Status == "Active")); // Only active workers
 
             q = ApplyAssetFilters(q, filter);
 
             return await ExecuteAssetPagedQueryAsync(q, filter);
         }
-
         public async Task<AssetDto> GetAssetByIdAsync(
             Guid assetId,
             Guid organizationId,
@@ -1270,35 +1304,40 @@ namespace Humatrix_HRMS.Services.Assets
         }
 
         public async Task<List<AssignmentDto>> GetAssetHistoryAsync(
-            Guid assetId,
-            Guid organizationId,
-            string? callerRole = null,
-            Guid? callerDepartmentId = null)
+    Guid assetId,
+    Guid organizationId,
+    string? callerRole = null,
+    Guid? callerDepartmentId = null)
         {
             var asset = await GetAssetOrThrowAsync(assetId, organizationId);
-
             if (callerRole == "HR")
                 EnsureHRCanAccessAsset(asset, callerDepartmentId);
 
-            return await _db.AssetAssignments
-                .Include(a => a.Asset)
-                .Include(a => a.Employee)
-                .Where(a => a.AssetId == assetId)
-                .OrderByDescending(a => a.AssignedAt)
-                .Select(a => new AssignmentDto
-                {
-                    AssetAssignmentId = a.AssetAssignmentId,
-                    AssetId = a.AssetId,
-                    AssetName = a.Asset.Name,
-                    AssetCode = a.Asset.AssetCode,
-                    EmployeeId = a.EmployeeId,
-                    EmployeeName = a.Employee.FirstName + " " + a.Employee.LastName,
-                    AssignedAt = a.AssignedAt,
-                    ReturnedAt = a.ReturnedAt,
-                    AssignmentNotes = a.AssignmentNotes,
-                    ReturnNotes = a.ReturnNotes
-                })
-                .ToListAsync();
+            // Querying with joins to fetch systemic actor names
+            return await (from a in _db.AssetAssignments
+                          join emp in _db.Employees on a.EmployeeId equals emp.EmployeeId
+                          join assigner in _db.Users on a.AssignedByUserId equals assigner.Id into assignerJoin
+                          from asg in assignerJoin.DefaultIfEmpty()
+                          join returner in _db.Users on a.ReturnedByUserId equals returner.Id into returnerJoin
+                          from ret in returnerJoin.DefaultIfEmpty()
+                          where a.AssetId == assetId
+                          orderby a.AssignedAt descending
+                          select new AssignmentDto
+                          {
+                              AssetAssignmentId = a.AssetAssignmentId,
+                              AssetId = a.AssetId,
+                              AssetName = a.Asset.Name,
+                              AssetCode = a.Asset.AssetCode,
+                              EmployeeId = a.EmployeeId,
+                              EmployeeName = emp.FirstName + " " + emp.LastName,
+                              AssignedAt = a.AssignedAt,
+                              ReturnedAt = a.ReturnedAt,
+                              AssignmentNotes = a.AssignmentNotes,
+                              ReturnNotes = a.ReturnNotes,
+                              // Capture clear actors
+                              AssignedByUserName = asg != null ? asg.Email : "System",
+                              ReturnedByUserName = ret != null ? ret.Email : null
+                          }).ToListAsync();
         }
 
         /// <summary>Active (not returned) assignments for an employee.</summary>
@@ -1344,22 +1383,23 @@ namespace Humatrix_HRMS.Services.Assets
                 .ToListAsync();
         }
 
-        public async Task<List<EmployeeAssetHistoryDto>>
-      GetEmployeeAssetHistoryAsync(
-          Guid employeeId,
-          Guid organizationId)
+        public async Task<List<EmployeeAssetHistoryDto>> GetEmployeeAssetHistoryAsync(
+     Guid employeeId,
+     Guid organizationId)
         {
-            return await (
+            var historyData = await (
                 from a in _db.AssetAssignments
                 join asset in _db.Assets
                     on a.AssetId equals asset.AssetId
 
+                // Use a Left Join for AssignedBy so rows never disappear or crash if empty
                 join assignedBy in _db.Users
-                    on a.AssignedByUserId equals assignedBy.Id
+                    on a.AssignedByUserId equals assignedBy.Id into assignedJoin
+                from assignedBy in assignedJoin.DefaultIfEmpty()
 
+                    // Left Join for ReturnedBy
                 join returnedBy in _db.Users
-                    on a.ReturnedByUserId equals returnedBy.Id
-                    into returnedJoin
+                    on a.ReturnedByUserId equals returnedBy.Id into returnedJoin
                 from returnedBy in returnedJoin.DefaultIfEmpty()
 
                 where a.EmployeeId == employeeId
@@ -1367,30 +1407,87 @@ namespace Humatrix_HRMS.Services.Assets
 
                 orderby a.AssignedAt descending
 
-                select new EmployeeAssetHistoryDto
+                select new
                 {
-                    AssetId = a.AssetId,
+                    a.AssetId,
                     AssetName = asset.Name,
-                    AssetCode = asset.AssetCode,
-
-                    AssignedAt = a.AssignedAt,
-                    ReturnedAt = a.ReturnedAt,
-
-                    AssignedByUserId = a.AssignedByUserId,
-                    ReturnedByUserId = a.ReturnedByUserId,
-
-                    AssignedByName =
-                        assignedBy.FirstName + " " + assignedBy.LastName,
-
-                    ReturnedByName =
-                        returnedBy != null
-                            ? returnedBy.FirstName + " " + returnedBy.LastName
-                            : null,
-
-                    AssignmentNotes = a.AssignmentNotes,
-                    ReturnNotes = a.ReturnNotes
+                    asset.AssetCode,
+                    a.AssignedAt,
+                    a.ReturnedAt,
+                    a.AssignedByUserId,
+                    a.ReturnedByUserId,
+                    AssignedByFirstName = assignedBy != null ? assignedBy.FirstName : "",
+                    AssignedByLastName = assignedBy != null ? assignedBy.LastName : "",
+                    ReturnedByFirstName = returnedBy != null ? returnedBy.FirstName : "",
+                    ReturnedByLastName = returnedBy != null ? returnedBy.LastName : "",
+                    a.AssignmentNotes,
+                    a.ReturnNotes
                 })
                 .ToListAsync();
+
+            // 2. Fetch completed replacement requests to calculate accurate item lineage
+            var replacementRequests = await _db.AssetRequests
+                .Include(r => r.Asset)
+                .Where(r => r.OrganizationId == organizationId
+                         && r.RequestType == AssetRequestType.Replacement
+                         && r.Status == AssetRequestStatus.Completed)
+                .ToListAsync();
+
+            // 3. Map values to your DTO with line relationships
+            var resultList = historyData.Select(a =>
+            {
+                var dto = new EmployeeAssetHistoryDto
+                {
+                    AssetId = a.AssetId,
+                    AssetName = a.AssetName,
+                    AssetCode = a.AssetCode,
+                    AssignedAt = a.AssignedAt,
+                    ReturnedAt = a.ReturnedAt,
+                    AssignedByUserId = a.AssignedByUserId,
+                    ReturnedByUserId = a.ReturnedByUserId,
+                    AssignmentNotes = a.AssignmentNotes,
+                    ReturnNotes = a.ReturnNotes,
+
+                    // Build full names smoothly
+                    AssignedByName = !string.IsNullOrWhiteSpace(a.AssignedByFirstName + a.AssignedByLastName)
+                        ? $"{a.AssignedByFirstName} {a.AssignedByLastName}".Trim()
+                        : "System / Admin", // Fallback text so it never displays completely empty
+
+                    ReturnedByName = !string.IsNullOrWhiteSpace(a.ReturnedByFirstName + a.ReturnedByLastName)
+                        ? $"{a.ReturnedByFirstName} {a.ReturnedByLastName}".Trim()
+                        : null
+                };
+
+                // Trace up-line: Is this asset the incoming replacement asset?
+                var parentReplacement = replacementRequests
+                    .FirstOrDefault(r => r.ReplacementAssetId == a.AssetId);
+
+                // Trace down-line: Was this asset the old asset that got replaced?
+                var childReplacement = replacementRequests
+                    .FirstOrDefault(r => r.AssetId == a.AssetId);
+
+                if (parentReplacement != null)
+                {
+                    dto.IsReplacementAction = true;
+                    dto.ReplacementStatusLabel = "Acquired via Replacement";
+                    dto.RelatedAssetCode = parentReplacement.Asset?.AssetCode ?? "Unknown Asset";
+                    dto.RelatedAssetName = parentReplacement.Asset?.Name ?? "Unknown Asset";
+                }
+                else if (childReplacement != null)
+                {
+                    dto.IsReplacementAction = true;
+                    dto.ReplacementStatusLabel = "Replaced by New Asset";
+
+                    // Find the asset code of what took its place
+                    var replacementAsset = _db.Assets.FirstOrDefault(x => x.AssetId == childReplacement.ReplacementAssetId);
+                    dto.RelatedAssetCode = replacementAsset?.AssetCode ?? "New Asset";
+                    dto.RelatedAssetName = replacementAsset?.Name ?? "New Asset";
+                }
+
+                return dto;
+            }).ToList();
+
+            return resultList;
         }
         public async Task<List<AssetDto>> GetCurrentEmployeeAssetsAsync(
      Guid employeeId,
@@ -1416,20 +1513,26 @@ namespace Humatrix_HRMS.Services.Assets
         /// <summary>
         /// Asset requests visible to OrgAdmin (all) or HR (their department only).
         /// </summary>
+        /// <summary>
+        /// Asset requests visible to OrgAdmin (all) or HR (their department only).
+        /// STRICT FILTER: Suppresses any requests linked to inactive employees or inactive departments.
+        /// </summary>
         public async Task<List<AssetRequestDto>> GetAssetRequestsAsync(
-            Guid organizationId,
-            string? status = null,
-            Guid? employeeId = null,
-            string? callerRole = null,
-            Guid? callerDepartmentId = null)
+              Guid organizationId,
+              string? status = null,
+              Guid? employeeId = null,
+              string? callerRole = null,
+              Guid? callerDepartmentId = null)
         {
             var q = _db.AssetRequests
                 .Include(r => r.Asset)
                 .Include(r => r.RequestedByEmployee)
+                .ThenInclude(e => e.Department)
                 .Include(r => r.ReviewedByEmployee)
-                .Where(r => r.OrganizationId == organizationId);
+                .Where(r => r.OrganizationId == organizationId
+                            && r.RequestedByEmployee.Status == "Active" // Filter out inactive requesters
+                            && (r.RequestedByEmployee.DepartmentId == null || r.RequestedByEmployee.Department.IsActive));
 
-            // HR sees only requests from their department's employees
             if (callerRole == "HR" && callerDepartmentId.HasValue)
                 q = q.Where(r => r.RequestedByEmployee.DepartmentId == callerDepartmentId.Value);
 
@@ -1445,6 +1548,33 @@ namespace Humatrix_HRMS.Services.Assets
                 .ToListAsync();
         }
 
+        public async Task<List<ProcurementRequestDto>> GetProcurementRequestsAsync(
+            Guid organizationId,
+            string? status = null,
+            Guid? departmentId = null,
+            string? callerRole = null,
+            Guid? callerDepartmentId = null)
+        {
+            var q = _db.ProcurementRequests
+                .Include(p => p.Department)
+                .Include(p => p.RequestedByEmployee)
+                .Where(p => p.OrganizationId == organizationId
+                            && p.Department.IsActive // Department filter
+                            && p.RequestedByEmployee.Status == "Active"); // Requester status filter
+
+            if (callerRole == "HR" && callerDepartmentId.HasValue)
+                q = q.Where(p => p.DepartmentId == callerDepartmentId.Value);
+            else if (departmentId.HasValue)
+                q = q.Where(p => p.DepartmentId == departmentId.Value);
+
+            if (!string.IsNullOrWhiteSpace(status))
+                q = q.Where(p => p.Status == status);
+
+            return await q
+                .OrderByDescending(p => p.RequestedAt)
+                .Select(p => MapProcurementDto(p))
+                .ToListAsync();
+        }
         /// <summary>Asset requests raised by a specific employee (for Employee dashboard).</summary>
         public async Task<List<AssetRequestDto>> GetAssetRequestsByEmployeeIdAsync(
             Guid employeeId,
@@ -1465,32 +1595,38 @@ namespace Humatrix_HRMS.Services.Assets
         /// <summary>
         /// Procurement requests: OrgAdmin sees all, HR sees their dept only.
         /// </summary>
-        public async Task<List<ProcurementRequestDto>> GetProcurementRequestsAsync(
-            Guid organizationId,
-            string? status = null,
-            Guid? departmentId = null,
-            string? callerRole = null,
-            Guid? callerDepartmentId = null)
-        {
-            var q = _db.ProcurementRequests
-                .Include(p => p.Department)
-                .Include(p => p.RequestedByEmployee)
-                .Where(p => p.OrganizationId == organizationId);
+        /// <summary>
+        /// Procurement requests: OrgAdmin sees all, HR sees their dept only.
+        /// STRICT FILTER: Excludes rows where the targeted department is marked inactive.
+        /// </summary>
+        //public async Task<List<ProcurementRequestDto>> GetProcurementRequestsAsync(
+        //    Guid organizationId,
+        //    string? status = null,
+        //    Guid? departmentId = null,
+        //    string? callerRole = null,
+        //    Guid? callerDepartmentId = null)
+        //{
+        //    var q = _db.ProcurementRequests
+        //        .Include(p => p.Department)
+        //        .Include(p => p.RequestedByEmployee)
+        //        .Where(p => p.OrganizationId == organizationId
+        //                    && p.Department.IsActive // STRICT FILTER: Only show requests for active departments
+        //                    && p.RequestedByEmployee.IsActive); // STRICT FILTER: Requester must still be active
 
-            // HR sees only their department
-            if (callerRole == "HR" && callerDepartmentId.HasValue)
-                q = q.Where(p => p.DepartmentId == callerDepartmentId.Value);
-            else if (departmentId.HasValue)
-                q = q.Where(p => p.DepartmentId == departmentId.Value);
+        //    // HR sees only their department
+        //    if (callerRole == "HR" && callerDepartmentId.HasValue)
+        //        q = q.Where(p => p.DepartmentId == callerDepartmentId.Value);
+        //    else if (departmentId.HasValue)
+        //        q = q.Where(p => p.DepartmentId == departmentId.Value);
 
-            if (!string.IsNullOrWhiteSpace(status))
-                q = q.Where(p => p.Status == status);
+        //    if (!string.IsNullOrWhiteSpace(status))
+        //        q = q.Where(p => p.Status == status);
 
-            return await q
-                .OrderByDescending(p => p.RequestedAt)
-                .Select(p => MapProcurementDto(p))
-                .ToListAsync();
-        }
+        //    return await q
+        //        .OrderByDescending(p => p.RequestedAt)
+        //        .Select(p => MapProcurementDto(p))
+        //        .ToListAsync();
+        //}
 
         public async Task<List<AssetAssignmentHistoryDto>> GetAssetAssignmentHistoryAsync(
             Guid assetId,
@@ -1522,25 +1658,41 @@ namespace Humatrix_HRMS.Services.Assets
         /// OrgAdmin gets all eligible employees. HR gets eligible employees from their department,
         /// excluding other HR users and the logged-in HR user themselves.
         /// </summary>
+        /// <summary>
+        /// Returns employees eligible to receive a given asset (respects dept restriction).
+        /// HR callers get employees from their dept only. OrgAdmin gets all eligible employees.
+        /// DIRECT FILTER: Only returns active employees belonging to active departments.
+        /// </summary>
         public async Task<List<EmployeeDropdownDto>> GetAssignableEmployeesAsync(
             Guid organizationId,
             Guid assetId,
             string? callerRole = null,
             Guid? callerDepartmentId = null,
-            string? actorUserId = null) // Added actorUserId parameter to exclude themselves
+            string? actorUserId = null)
         {
             var asset = await _db.Assets
+                .Include(a => a.Department)
                 .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Asset not found.");
 
+            // If the asset belongs to an inactive department, return nothing (it shouldn't be assigned)
+            if (asset.DepartmentId.HasValue && asset.Department != null && !asset.Department.IsActive)
+            {
+                return new List<EmployeeDropdownDto>();
+            }
+
+            // FILTER: Employee status must equal "Active" and their department must be active
             IQueryable<Employee> q = _db.Employees
-                .Where(e => e.OrganizationId == organizationId);
+                .Include(e => e.Department)
+                .Where(e => e.OrganizationId == organizationId
+                            && e.Status == "Active"
+                            && (e.DepartmentId == null || e.Department.IsActive));
 
             // Asset dept restriction
             if (asset.DepartmentId.HasValue)
                 q = q.Where(e => e.DepartmentId == asset.DepartmentId.Value);
 
-            // HR caller scope: restrict to department, exclude HRs, and exclude self
+            // HR caller scope rules
             if (callerRole == "HR")
             {
                 if (callerDepartmentId.HasValue)
@@ -1548,14 +1700,11 @@ namespace Humatrix_HRMS.Services.Assets
                     q = q.Where(e => e.DepartmentId == callerDepartmentId.Value);
                 }
 
-                // 1. Exclude the logged-in HR user from appearing in their own dropdown
                 if (!string.IsNullOrEmpty(actorUserId))
                 {
                     q = q.Where(e => e.UserId != actorUserId);
                 }
 
-                // 2. Exclude any employee who holds the "HR" role
-                // Querying ASP.NET Identity tables through _db context
                 var hrRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "HR");
                 if (hrRole != null)
                 {
@@ -1581,6 +1730,10 @@ namespace Humatrix_HRMS.Services.Assets
         /// Returns Available assets suitable as a replacement for a given request.
         /// Filters by same category as the original asset and respects dept compatibility.
         /// </summary>
+        /// <summary>
+        /// Returns Available assets suitable as a replacement for a given request.
+        /// STRICT FILTER: Filters out replacement choices originating from inactive departments.
+        /// </summary>
         public async Task<List<AssetListDto>> GetAvailableReplacementAssetsAsync(
             Guid organizationId,
             Guid assetRequestId,
@@ -1602,11 +1755,13 @@ namespace Humatrix_HRMS.Services.Assets
 
             var q = _db.Assets
                 .Include(a => a.CurrentEmployee)
+                .Include(a => a.Department) // Include Department model
                 .Where(a =>
                     a.OrganizationId == organizationId &&
                     a.Status == AssetStatus.Available &&
-                    a.AssetId != request.AssetId &&   // not the same asset
-                    a.Category == request.Asset.Category);  // same category
+                    a.AssetId != request.AssetId &&
+                    a.Category == request.Asset.Category &&
+                    (a.DepartmentId == null || a.Department.IsActive)); // STRICT FILTER: Department must be active
 
             // Department compatibility: include assets with no dept OR same dept as employee
             q = q.Where(a => a.DepartmentId == null || a.DepartmentId == employeeDeptId);
@@ -1617,7 +1772,7 @@ namespace Humatrix_HRMS.Services.Assets
 
             return await q
                 .OrderBy(a => a.Name)
-                .Select(a => new AssetListDto   
+                .Select(a => new AssetListDto
                 {
                     AssetId = a.AssetId,
                     Name = a.Name,
@@ -1744,15 +1899,20 @@ namespace Humatrix_HRMS.Services.Assets
         {
             if (!departmentId.HasValue) return;
 
-            var exists = await _db.Departments.AnyAsync(d =>
+            // Modified to fetch the full department record
+            var department = await _db.Departments.FirstOrDefaultAsync(d =>
                 d.DepartmentId == departmentId.Value &&
                 d.OrganizationId == organizationId);
 
-            if (!exists)
+            if (department == null)
                 throw new InvalidOperationException(
                     "The specified department does not exist in this organisation.");
-        }
 
+            // CRITICAL UPDATE: Block inactive departments from being used
+            if (!department.IsActive)
+                throw new InvalidOperationException(
+                    "The specified department is inactive. Operations cannot be processed for inactive departments.");
+        }
         private async Task<string> GetEmployeeNameAsync(Guid employeeId)
         {
             var emp = await _db.Employees.FindAsync(employeeId);
