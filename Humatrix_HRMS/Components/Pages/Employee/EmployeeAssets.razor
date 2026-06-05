@@ -68,7 +68,10 @@
                                     <div>
                                         <div class="d-flex align-items-start justify-content-between mb-2">
                                             <span class="badge bg-secondary-subtle text-secondary small">@item.Category</span>
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.75rem;">In Custody</span>
+                                            @* <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.75rem;">In Custody</span> *@
+                                            <span class="@GetAssetStatusBadge(item.Status)">
+                                                @item.Status
+                                            </span>
                                         </div>
                                         <h5 class="card-title fw-bold text-dark mb-1" style="font-size: 1.15rem;">@item.Name</h5>
                                         <div class="text-muted small font-monospace mb-3 bg-light p-1 px-2 rounded d-inline-block">@item.AssetCode</div>
@@ -84,7 +87,25 @@
                                             </div>
                                         </div>
                                     </div>
-
+                                    @{
+                                        var activeRequest = GetActiveRequest(item.AssetId);
+                                    }
+                                    @if (activeRequest != null)
+                                    {
+                                        <div class="alert alert-info small mb-0">
+                                            Active Request:
+                                            <strong>@activeRequest.RequestType</strong>
+                                            (@activeRequest.Status)
+                                        </div>
+                                    }
+                                    else if (item.Status == AssetStatus.InRepair)
+                                    {
+                                        <div class="alert alert-warning small mb-0">
+                                            This asset is currently under repair.
+                                        </div>
+                                    }
+                                    else
+                                    {
                                     <div class="mt-4 pt-3 border-top d-flex gap-2">
                                         <button class="btn btn-outline-warning btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
                                                 @onclick='() => OpenRequestModal(item, AssetRequestType.Repair)'>
@@ -99,6 +120,7 @@
                                             <i class="bi bi-arrow-left-right"></i> Return Item
                                         </button>
                                     </div>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -253,6 +275,7 @@
 
     private List<AssetDto> myAssets = new();
     private List<AssetRequestDto> myRequests = new();
+    private string currentUserRole = "Employee";
 
     private AssetDto? selectedAsset;
     private string targetRequestType = "";
@@ -278,23 +301,26 @@
                 currentUserId = empContext.UserId;
 
                 // Get active assignments
-                var assignments = await AssetService.GetEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
+                // var assignments = await AssetService.GetEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
                 
                 // Convert assignments to AssetDto list
-                myAssets = new List<AssetDto>();
-                foreach (var assignment in assignments)
-                {
-                    var asset = await AssetService.GetAssetByIdAsync(
-                        assignment.AssetId, 
-                        currentOrganizationId, 
-                        callerRole: "Employee", 
-                        callerDepartmentId: null
-                    );
-                    if (asset != null)
-                    {
-                        myAssets.Add(asset);
-                    }
-                }
+                // myAssets = new List<AssetDto>();
+                // foreach (var assignment in assignments)
+                // {
+                //     var asset = await AssetService.GetAssetByIdAsync(
+                //         assignment.AssetId, 
+                //         currentOrganizationId, 
+                //         callerRole: "Employee", 
+                //         callerDepartmentId: null
+                //     );
+                //     if (asset != null)
+                //     {
+                //         myAssets.Add(asset);
+                //     }
+                // }
+                myAssets = await AssetService.GetCurrentEmployeeAssetsAsync(
+     currentEmployeeId,
+     currentOrganizationId);
 
                 // Get employee's requests
                 myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
@@ -350,7 +376,8 @@
             await AssetService.CreateAssetRequestAsync(
                 organizationId: currentOrganizationId,
                 requestedByEmployeeId: currentEmployeeId,
-                requestorRole: AssetRequestorRole.Employee,
+                // requestorRole: AssetRequestorRole.Employee,
+                requestorRole: currentUserRole,
                 dto: createRequestModel,
                 callerDepartmentId: null
             );
@@ -372,6 +399,31 @@
         }
     }
 
+    private string GetAssetStatusBadge(string status) => status switch
+    {
+        AssetStatus.Assigned =>
+            "badge bg-success-subtle text-success border border-success-subtle",
+
+        AssetStatus.InRepair =>
+            "badge bg-warning-subtle text-warning border border-warning-subtle",
+
+        AssetStatus.Available =>
+            "badge bg-info-subtle text-info border border-info-subtle",
+
+        AssetStatus.Retired =>
+            "badge bg-secondary-subtle text-secondary border border-secondary-subtle",
+
+        _ =>
+            "badge bg-light text-dark border"
+    };
+
+    private AssetRequestDto? GetActiveRequest(Guid assetId)
+    {
+        return myRequests.FirstOrDefault(r =>
+            r.AssetId == assetId &&
+            (r.Status == AssetRequestStatus.Pending ||
+             r.Status == AssetRequestStatus.Approved));
+    }
     private string GetPlaceholderText() => targetRequestType switch
     {
         AssetRequestType.Repair => "Please describe the issue with this asset (e.g., screen cracked, battery not charging, keyboard malfunction)...",
