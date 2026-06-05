@@ -280,17 +280,11 @@
     List<Shift> shifts = new();
     EditEmployeeDto editModel = new();
     bool isEditOpen = false;
-    string? editingEmail;
-
+    bool isLoading = false;
+    string? editingEmail, message, error, HRDepartmentName, search = "";
     bool UserIsOrgAdmin = false;
     Guid? filterDepartmentId;
     int currentPage = 1, pageSize = 10, totalEmployees = 0;
-    int totalEmployees = 0;
-    int totalEmployees = 0;
-    int totalEmployees = 0;
-    int totalEmployees = 0;
-    int totalEmployees = 0;
-    int totalEmployees = 0;
     int totalPages => (int)Math.Ceiling((double)totalEmployees / pageSize);
 
     protected override async Task OnInitializedAsync()
@@ -314,22 +308,22 @@
     private async Task LoadEmployees()
     {
         isLoading = true;
+        var result = await EmployeeService.GetEmployeesForListAsync(search, filterDepartmentId, currentPage, pageSize);
+        totalEmployees = result.TotalCount;
+        employees = result.Items ?? new List<EmployeeListDto>();
+        isLoading = false;
+    }
+
     private async Task ToggleStatus(EmployeeListDto e)
     {
         e.IsActive = !e.IsActive; // Optimistic UI update
         try
-        else
+        {
             await EmployeeService.ToggleUserStatusAsync(e.Email, e.IsActive);
             message = $"Status updated successfully.";
             await LoadEmployees();
         }
         catch (Exception ex)
-        if (UserIsOrgAdmin)
-        if (UserIsOrgAdmin)
-    }
-    private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
-    {
-        if (UserIsOrgAdmin)
         {
             e.IsActive = !e.IsActive; // Revert
             error = ex.Message;
@@ -348,45 +342,21 @@
         editingEmail = e.Email;
         editModel = new EditEmployeeDto { FirstName = e.FirstName, LastName = e.LastName, DepartmentId = e.DepartmentId, DesignationId = e.DesignationId, ShiftId = e.ShiftId };
         editDesignations = e.DepartmentId.HasValue ? await DesignationService.GetByDepartmentAsync(e.DepartmentId.Value) : new();
-        editModel.DesignationId = null;
-        editDesignations = id.HasValue
-            ? await DesignationService.GetByDepartmentAsync(id.Value)
-            : new List<DesignationDto>();
+        isEditOpen = true;
     }
 
-    // Auto dismiss handler matching department layout logic
-    private async void TriggerAutoDismiss(bool isSuccess)
+    private async Task OnEditDepartmentChanged(Guid? id)
     {
-        await Task.Delay(4000);
-        if (isSuccess)
-        {
-            message = null;
-        }
-        else
-        {
-            error = null;
-        }
-        StateHasChanged();
-        }
-        StateHasChanged();
-        StateHasChanged();
-        StateHasChanged();
+        editModel.DepartmentId = id;
+        editModel.DesignationId = null; // Clear old designation when dept changes
+        editDesignations = id.HasValue ? await DesignationService.GetByDepartmentAsync(id.Value) : new();
+    }
+
+    private async Task SaveEdit()
+    {
         await EmployeeService.UpdateEmployeeAsync(editingEmail!, editModel);
         isEditOpen = false;
         message = "Changes saved.";
         await LoadEmployees();
-            Nav.NavigateTo("/hr/add-employee");
-        }
-        }
-        else
-        {
-            Nav.NavigateTo("/hr/add-employee");
-        }
-            Nav.NavigateTo("/org/add-employee");
-        }
-        else
-        {
-            Nav.NavigateTo("/hr/add-employee");
-        }
     }
 }
