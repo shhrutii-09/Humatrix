@@ -367,10 +367,10 @@ namespace Humatrix_HRMS.Data
             modelBuilder.ApplyConfiguration(new ProcurementRequestConfiguration());
 
 
-            // This automatically injects 'Where(e => e.IsActive)' into every single query across the system
-            modelBuilder.Entity<Employee>().HasQueryFilter(e => e.Status == "Active");
-            // This automatically injects 'Where(d => d.IsActive)' into every single department query across the system
-            modelBuilder.Entity<Department>().HasQueryFilter(d => d.IsActive);
+            //// This automatically injects 'Where(e => e.IsActive)' into every single query across the system
+            //modelBuilder.Entity<Employee>().HasQueryFilter(e => e.Status == "Active");
+            //// This automatically injects 'Where(d => d.IsActive)' into every single department query across the system
+            //modelBuilder.Entity<Department>().HasQueryFilter(d => d.IsActive);
 
             modelBuilder.Entity<Asset>()
     .HasOne(a => a.Department)
