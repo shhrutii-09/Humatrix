@@ -356,6 +356,11 @@ namespace Humatrix_HRMS.Data
                     x.OrganizationId
                 });
 
+            modelBuilder.Entity<AssetAssignment>()
+    .HasIndex(a => a.AssetId)
+    .HasFilter("[ReturnedAt] IS NULL")
+    .IsUnique();
+
             modelBuilder.ApplyConfiguration(new AssetConfiguration());
                 modelBuilder.ApplyConfiguration(new AssetAssignmentConfiguration());
             modelBuilder.ApplyConfiguration(new AssetRequestConfiguration());

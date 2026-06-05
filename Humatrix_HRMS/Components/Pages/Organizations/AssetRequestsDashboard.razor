@@ -263,8 +263,18 @@
         await LoadDashboardContextAsync();
     }
 
-    private void BackToList() => Nav.NavigateTo("/org/assets");
-
+    // private void BackToList() => Nav.NavigateTo("/org/assets");
+    private void BackToList()
+    {
+        if (isOrgAdmin)
+        {
+            Nav.NavigateTo("/org/assets");
+        }
+        else
+        {
+            Nav.NavigateTo("/hr/assets");
+        }
+    }
 
     private async Task LoadDashboardContextAsync()
     {
@@ -284,9 +294,13 @@
                     currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
                     using var db = await DbContextFactory.CreateDbContextAsync();
-                    var orgs = await db.Organizations.ToListAsync();
-                    currentOrgId = orgs.FirstOrDefault()?.OrganizationId ?? Guid.Empty;
+                    // var orgs = await db.Organizations.ToListAsync();
+                    // currentOrgId = orgs.FirstOrDefault()?.OrganizationId ?? Guid.Empty;
+                    var appUser = await db.Users
+    .AsNoTracking()
+    .FirstOrDefaultAsync(x => x.Id == currentUserId);
 
+                    currentOrgId = appUser?.OrganizationId ?? Guid.Empty;
                     Console.WriteLine($"OrgAdmin Login - OrgId: {currentOrgId}, UserId: {currentUserId}");
                 }
                 else
