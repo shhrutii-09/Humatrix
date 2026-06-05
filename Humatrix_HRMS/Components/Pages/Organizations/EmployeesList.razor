@@ -398,7 +398,6 @@
     bool UserIsOrgAdmin = false;
     string HRDepartmentName = "";
 
-    // Toast strings matching department style
     private string? message;
     private string? error;
 
@@ -465,16 +464,17 @@
 
         if (result.Items != null)
         {
-            // Use EmployeeId as the sorting fallback variable
-            employees = result.Items
-                .OrderByDescending(e => e.EmployeeId)
-                .ToList();
+            // Since EmployeeListDto has no timestamp properties, we utilize an alternate approach:
+            // Chaining AsEnumerable().Reverse() effectively flips the backend SQL sequencing order
+            // completely on the client UI framework level without breaking compilation.
+            employees = result.Items.AsEnumerable().Reverse().ToList();
         }
         else
         {
             employees = new List<EmployeeListDto>();
         }
     }
+
     private async Task OnDepartmentFilterChanged(ChangeEventArgs e)
     {
         if (UserIsOrgAdmin)
@@ -515,7 +515,6 @@
             : new List<DesignationDto>();
     }
 
-    // Auto dismiss handler matching department layout logic
     private async void TriggerAutoDismiss(bool isSuccess)
     {
         await Task.Delay(4000);
@@ -554,7 +553,7 @@
     private async Task ToggleStatus(EmployeeListDto e)
     {
         var nextStatus = !e.IsActive;
-        e.IsActive = nextStatus; // optimistically reflect locally
+        e.IsActive = nextStatus;
 
         try
         {
@@ -568,7 +567,7 @@
         }
         catch (Exception ex)
         {
-            e.IsActive = !nextStatus; // Revert fallback state change locally on errors
+            e.IsActive = !nextStatus;
             error = $"Failed to change employee status: {ex.Message}";
             message = null;
             TriggerAutoDismiss(false);
