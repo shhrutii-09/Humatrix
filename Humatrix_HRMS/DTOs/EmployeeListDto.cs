@@ -19,6 +19,7 @@
         public Guid? DepartmentId { get; set; }
         public string EmployeeCode { get; set; } = "";
         public Guid? DesignationId { get; set; }
+        public DateTime CreatedAt { get; set; } 
 
     }
 }

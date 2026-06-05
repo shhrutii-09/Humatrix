@@ -9,13 +9,16 @@ namespace Humatrix_HRMS.Services
     {
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
+        private readonly EmployeeService _employeeService; // New Injection
 
         public DesignationService(
             IDbContextFactory<ApplicationDbContext> contextFactory,
-            CurrentUserService currentUser)
+            CurrentUserService currentUser,
+            EmployeeService employeeService) // Added to constructor
         {
             _contextFactory = contextFactory;
             _currentUser = currentUser;
+            _employeeService = employeeService;
         }
 
         private async Task<ApplicationUser> GetCurrentUserAsync()
@@ -77,7 +80,7 @@ namespace Humatrix_HRMS.Services
                 DepartmentId = dto.DepartmentId,
                 OrganizationId = user.OrganizationId.Value,
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow // Explicit baseline safety
+                CreatedAt = DateTime.UtcNow
             };
 
             _context.Designations.Add(designation);
@@ -111,15 +114,11 @@ namespace Humatrix_HRMS.Services
             await _context.SaveChangesAsync();
         }
 
-        // ========================================================
-        // 🔴 FIXED: STRICT DATABASE LIFO ORDERING BY CREATEDAT
-        // ========================================================
         public async Task<List<DesignationDto>> GetAllAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
             var user = await GetCurrentUserAsync();
 
-            // Yahan OrderByDescending ko query level par inject kiya gaya hai
             return await (
                 from d in _context.Designations.OrderByDescending(x => x.CreatedAt)
                 join dep in _context.Departments on d.DepartmentId equals dep.DepartmentId
@@ -135,9 +134,6 @@ namespace Humatrix_HRMS.Services
             ).ToListAsync();
         }
 
-        // ========================================================
-        // 🔴 FIXED: STRICT DROPDOWN STREAM LIFO ORDERING
-        // ========================================================
         public async Task<List<DesignationDto>> GetByDepartmentAsync(Guid departmentId)
         {
             using var _context = _contextFactory.CreateDbContext();
@@ -145,9 +141,9 @@ namespace Humatrix_HRMS.Services
 
             return await _context.Designations
                 .Where(d => d.OrganizationId == user.OrganizationId
-                         && d.DepartmentId == departmentId
-                         && d.IsActive)
-                .OrderByDescending(d => d.CreatedAt) // Database handles sequential alignment
+                          && d.DepartmentId == departmentId
+                          && d.IsActive)
+                .OrderByDescending(d => d.CreatedAt)
                 .Select(d => new DesignationDto
                 {
                     DesignationId = d.DesignationId,
@@ -183,6 +179,12 @@ namespace Humatrix_HRMS.Services
 
             designation.IsActive = isActive;
             await _context.SaveChangesAsync();
+
+            // Cascade Deactivation to Employees
+            if (!isActive)
+            {
+                await _employeeService.BulkInactivateByDesignationAsync(id, user.OrganizationId.Value);
+            }
         }
     }
 }

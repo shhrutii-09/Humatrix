@@ -10,17 +10,20 @@ namespace Humatrix_HRMS.Services
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
         private readonly DesignationService _designationService;
-        private readonly DepartmentEventService _eventService; // Inject Event Service
+        private readonly EmployeeService _employeeService; // New Injection
+        private readonly DepartmentEventService _eventService;
 
         public DepartmentService(
             IDbContextFactory<ApplicationDbContext> contextFactory,
             CurrentUserService currentUser,
             DesignationService designationService,
-            DepartmentEventService eventService) // Add to constructor
+            EmployeeService employeeService, // Added to constructor
+            DepartmentEventService eventService)
         {
             _contextFactory = contextFactory;
             _currentUser = currentUser;
             _designationService = designationService;
+            _employeeService = employeeService;
             _eventService = eventService;
         }
 
@@ -116,12 +119,17 @@ namespace Humatrix_HRMS.Services
             department.IsActive = isActive;
             await _context.SaveChangesAsync();
 
+            // Cascade Deactivation Logic
             if (!isActive)
             {
+                // 1. Inactivate all Designations under this Department
                 await _designationService.BulkInactivateByDepartmentAsync(id, user.OrganizationId.Value);
+
+                // 2. Inactivate all Employees under this Department
+                await _employeeService.BulkInactivateByDepartmentAsync(id, user.OrganizationId.Value);
             }
 
-            _eventService.NotifyStateChanged(); // Trigger UI Refresh
+            _eventService.NotifyStateChanged();
         }
 
         public async Task CreateAsync(CreateDepartmentDto dto)
@@ -197,9 +205,9 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Department name already exists.");
 
             department.Name = name.Trim();
-            department.Description = description; // Description Update logic
+            department.Description = description;
             await context.SaveChangesAsync();
-            _eventService.NotifyStateChanged(); // Trigger UI Refresh
+            _eventService.NotifyStateChanged();
         }
     }
 }
