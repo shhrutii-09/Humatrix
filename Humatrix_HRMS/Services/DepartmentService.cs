@@ -10,14 +10,14 @@ namespace Humatrix_HRMS.Services
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly CurrentUserService _currentUser;
         private readonly DesignationService _designationService;
-        private readonly EmployeeService _employeeService; // New Injection
+        private readonly EmployeeService _employeeService;
         private readonly DepartmentEventService _eventService;
 
         public DepartmentService(
             IDbContextFactory<ApplicationDbContext> contextFactory,
             CurrentUserService currentUser,
             DesignationService designationService,
-            EmployeeService employeeService, // Added to constructor
+            EmployeeService employeeService,
             DepartmentEventService eventService)
         {
             _contextFactory = contextFactory;
@@ -119,13 +119,9 @@ namespace Humatrix_HRMS.Services
             department.IsActive = isActive;
             await _context.SaveChangesAsync();
 
-            // Cascade Deactivation Logic
             if (!isActive)
             {
-                // 1. Inactivate all Designations under this Department
                 await _designationService.BulkInactivateByDepartmentAsync(id, user.OrganizationId.Value);
-
-                // 2. Inactivate all Employees under this Department
                 await _employeeService.BulkInactivateByDepartmentAsync(id, user.OrganizationId.Value);
             }
 
@@ -149,6 +145,7 @@ namespace Humatrix_HRMS.Services
             var department = new Department
             {
                 Name = dto.Name.Trim(),
+                Description = dto.Description.Trim(), // ✅ Description saved
                 OrganizationId = user.OrganizationId.Value,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
