@@ -17,6 +17,10 @@ public interface IEmployeeDocumentService
     Task<EmployeeDocument?> GetDocumentAsync(
         Guid documentId);
 
+    Task<EmployeeDocumentDashboardDto> GetEmployeeDocumentDashboardAsync(
+       Guid employeeId,
+       Guid organizationId);
+
     Task<bool> DeleteDocumentAsync(
         Guid documentId,
         string userId);
@@ -28,4 +32,11 @@ public interface IEmployeeDocumentService
     Task<int> GetProfileCompletionPercentageAsync(
         Guid employeeId,
         Guid organizationId);
+    // Add to IEmployeeDocumentService.cs
+    Task<List<EmployeeDocument>> GetAllEmployeeDocumentsWithHistoryAsync(Guid employeeId);
+
+    Task<CompanyComplianceDto> GetCompanyComplianceDashboardAsync(Guid organizationId);
+
+
+
 }

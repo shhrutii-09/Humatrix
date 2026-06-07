@@ -1,0 +1,678 @@
+﻿@page "/hr/documents"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.DTOs.Dashboard
+@using Humatrix_HRMS.DTOs.Documents
+@using Humatrix_HRMS.Models.Documents
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Documents
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@using Humatrix_HRMS.Models
+@using System.Security.Claims
+
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@inject IDocumentVerificationService VerificationService
+@inject IDocumentTypeService DocumentTypeService
+@inject EmployeeService EmployeeService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject IJSRuntime JsRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Document Review | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h2 class="fw-bold">📋 Document Verification Center</h2>
+            <p class="text-muted small mb-0">
+                Review and verify documents uploaded by employees
+                @if (!isOrgAdmin && departmentName != "N/A")
+                {
+                    <span>in <strong>@departmentName</strong> department</span>
+                }
+            </p>
+        </div>
+        <button class="btn btn-secondary" @onclick="GoBack">
+            Dashboard
+        </button>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-warning bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Pending Verification</h6>
+                            <h2 class="mb-0 fw-bold">@pendingCount</h2>
+                        </div>
+                        <div class="fs-1 text-warning">⏳</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-success bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Verified</h6>
+                            <h2 class="mb-0 fw-bold">@verifiedCount</h2>
+                        </div>
+                        <div class="fs-1 text-success">✓</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-danger bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Rejected</h6>
+                            <h2 class="mb-0 fw-bold">@rejectedCount</h2>
+                        </div>
+                        <div class="fs-1 text-danger">✗</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 bg-primary bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Documents</h6>
+                            <h2 class="mb-0 fw-bold">@totalCount</h2>
+                        </div>
+                        <div class="fs-1 text-primary">📄</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold mb-1">Status Filter</label>
+                    <select class="form-select" @bind="StatusFilter">
+                        <option value="all">All Documents</option>
+                        <option value="pending">Pending Verification</option>
+                        <option value="verified">Verified</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold mb-1">Search</label>
+                    <input type="text" class="form-control"
+                           placeholder="Search by employee name or document type..."
+                           @bind="SearchText" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold mb-1">Document Type</label>
+                    <select class="form-select" @bind="DocumentTypeFilter">
+                        <option value="">All Types</option>
+                        @foreach (var type in documentTypes)
+                        {
+                            <option value="@type.DocumentTypeId">@type.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold mb-1">&nbsp;</label>
+                    <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">
+                        Clear Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-0 pt-3">
+            <h5 class="mb-0">Documents Review Queue</h5>
+        </div>
+        <div class="card-body">
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading documents...</p>
+                </div>
+            }
+            else if (filteredDocuments.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Employee</th>
+                                <th>Department</th>
+                                <th>Document Type</th>
+                                <th>Status</th>
+                                <th>Uploaded Date</th>
+                                <th>Version</th>
+                                <th style="width: 200px">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var doc in filteredDocuments)
+                            {
+                                <tr>
+                                    @* <td>
+                                        <div class="fw-bold">@doc.EmployeeName</div>
+                                        <small class="text-muted">@doc.EmployeeCode</small>
+                                    </td> *@
+                                    <td>
+                                        <a href="/hr/employees/@doc.EmployeeId/documents" class="text-decoration-none fw-bold text-primary">
+                                            @doc.EmployeeName
+                                        </a>
+                                        <div>
+                                            <small class="text-muted">@doc.EmployeeCode</small>
+                                        </div>
+                                    </td>
+                                    <td>@doc.DepartmentName</td>
+                                    <td>
+                                        <div>@doc.DocumentTypeName</div>
+                                        @if (doc.IsMandatory)
+                                        {
+                                            <span class="badge bg-danger">Required</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(doc.Status)">
+                                            @GetStatusIcon(doc.Status) @doc.Status
+                                        </span>
+                                        @if (doc.Status == "Rejected" && !string.IsNullOrEmpty(doc.RejectionRemarks))
+                                        {
+                                            <small class="d-block text-danger mt-1" title="@doc.RejectionRemarks">
+                                                Reason: @(doc.RejectionRemarks.Length > 50 ? doc.RejectionRemarks[..50] + "..." : doc.RejectionRemarks)
+                                            </small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span title="@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")">
+                                            @doc.UploadedAt.ToString("dd MMM yyyy")
+                                        </span>
+                                        <small class="d-block text-muted">
+                                            by @doc.UploadedByName
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">v@(doc.Version)</span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-primary" @onclick="() => ViewDocument(doc)">
+                                                👁️ View
+                                            </button>
+                                            @if (doc.Status == "Pending")
+                                            {
+                                                <button class="btn btn-outline-success" @onclick="() => OpenVerifyModal(doc)">
+                                                    ✓ Verify
+                                                </button>
+                                                <button class="btn btn-outline-danger" @onclick="() => OpenRejectModal(doc)">
+                                                    ✗ Reject
+                                                </button>
+                                            }
+                                            else if (doc.Status == "Rejected")
+                                            {
+                                                <button class="btn btn-outline-warning" @onclick="() => OpenVerifyModal(doc)">
+                                                    Review Again
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <div class="text-muted">
+                        <div class="fs-1 mb-3">📭</div>
+                        <h5>No documents found</h5>
+                        <p>No documents match your filter criteria</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="verifyModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">✓ Verify Document</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to verify this document?</p>
+                <div class="alert alert-info">
+                    <strong>Employee:</strong> @selectedDocument?.EmployeeName<br />
+                    <strong>Document:</strong> @selectedDocument?.DocumentTypeName
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Remarks (Optional)</label>
+                    <textarea class="form-control" @bind="verifyRemarks" rows="3"
+                              placeholder="Add any verification notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" @onclick="ConfirmVerify" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <span>Processing...</span>
+                    }
+                    else
+                    {
+                        <span>✓ Verify Document</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rejectModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">✗ Reject Document</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Please provide a reason for rejection:</p>
+                <div class="alert alert-warning">
+                    <strong>Employee:</strong> @selectedDocument?.EmployeeName<br />
+                    <strong>Document:</strong> @selectedDocument?.DocumentTypeName
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-danger">Rejection Reason *</label>
+                    <textarea class="form-control" @bind="rejectReason" rows="3"
+                              placeholder="e.g., Document is blurry, Invalid document, Expired, etc."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="ConfirmReject" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <span>Processing...</span>
+                    }
+                    else
+                    {
+                        <span>✗ Reject Document</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="viewModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">📄 Document Preview</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                @if (selectedDocument != null)
+                {
+                    <div class="mb-3">
+                        <strong>Employee:</strong> @selectedDocument.EmployeeName<br />
+                        <strong>Document Type:</strong> @selectedDocument.DocumentTypeName<br />
+                        <strong>Uploaded:</strong> @selectedDocument.UploadedAt.ToString("dd MMM yyyy HH:mm")<br />
+                        <strong>Original File:</strong> @selectedDocument.OriginalFileName
+                    </div>
+                    <hr />
+                    <div class="text-center">
+                        <a href="@($"api/documents/download/{selectedDocument.DocumentId}")" target="_blank" class="btn btn-primary">
+                            📥 Download Document
+                        </a>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@code {
+    private List<DocumentReviewDto> allDocuments = new();
+    private List<DocumentReviewDto> filteredDocuments = new();
+    private List<DocumentType> documentTypes = new();
+
+    private string statusFilter = "pending";
+    private string stringSearchText = "";
+    private string docTypeFilter = "";
+
+    private string StatusFilter
+    {
+        get => statusFilter;
+        set { if (statusFilter != value) { statusFilter = value; ApplyFilters(); } }
+    }
+
+    private string SearchText
+    {
+        get => stringSearchText;
+        set { if (stringSearchText != value) { stringSearchText = value; ApplyFilters(); } }
+    }
+
+    private string DocumentTypeFilter
+    {
+        get => docTypeFilter;
+        set { if (docTypeFilter != value) { docTypeFilter = value; ApplyFilters(); } }
+    }
+
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private int pendingCount = 0;
+    private int verifiedCount = 0;
+    private int rejectedCount = 0;
+    private int totalCount = 0;
+    private bool isOrgAdmin = false;
+    private string departmentName = "N/A";
+    private Guid? userDepartmentId = null;
+    private Guid? currentEmployeeId = null;
+    private Guid organizationId;
+
+    private DocumentReviewDto? selectedDocument;
+    private string verifyRemarks = "";
+    private string rejectReason = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isOrgAdmin = authState.User.IsInRole("OrgAdmin");
+
+        var user = await CurrentUserService.GetUserAsync();
+        if (user?.OrganizationId == null)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        organizationId = user.OrganizationId.Value;
+
+        var employeeContext = await CurrentUserService.GetEmployeeDashboardContextAsync();
+        if (employeeContext != null)
+        {
+            userDepartmentId = employeeContext.DepartmentId;
+            departmentName = employeeContext.DepartmentName;
+            currentEmployeeId = employeeContext.EmployeeId;
+        }
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            await LoadDocumentTypes();
+            await LoadAllDocuments();
+            ApplyFilters();
+            UpdateStatistics();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDocumentTypes()
+    {
+        var docTypes = await DocumentTypeService.GetOrganizationDocumentTypesAsync(organizationId);
+        documentTypes = docTypes.Where(x => x.IsActive).ToList();
+    }
+
+    private async Task LoadAllDocuments()
+    {
+        allDocuments.Clear();
+
+        var allPending = await VerificationService.GetPendingDocumentsAsync(organizationId);
+        var allRejected = await VerificationService.GetRejectedDocumentsAsync(organizationId);
+        
+        // FIX: Added retrieval of Verified documents so they appear on "All" filter and register in statistics counters
+        var allVerified = await VerificationService.GetVerifiedDocumentsAsync(organizationId);
+
+        // Combine all lists together safely
+        var allDocs = allPending.Concat(allRejected).Concat(allVerified).ToList();
+
+        var employeeIds = allDocs.Select(d => d.EmployeeId).Distinct().ToList();
+        var employees = new Dictionary<Guid, Employee>();
+        foreach (var empId in employeeIds)
+        {
+            var employee = await EmployeeService.GetEmployeeByIdAsync(empId);
+            if (employee != null)
+            {
+                employees[empId] = employee;
+            }
+        }
+
+        foreach (var doc in allDocs)
+        {
+            var employee = employees.GetValueOrDefault(doc.EmployeeId);
+
+            if (!isOrgAdmin && userDepartmentId.HasValue)
+            {
+                if (employee?.DepartmentId != userDepartmentId.Value)
+                {
+                    continue;
+                }
+
+                if (currentEmployeeId.HasValue && doc.EmployeeId == currentEmployeeId.Value)
+                {
+                    continue;
+                }
+            }
+
+            var reviewDto = new DocumentReviewDto
+            {
+                DocumentId = doc.DocumentId,
+                EmployeeId = doc.EmployeeId,
+                EmployeeName = employee != null ? $"{employee.FirstName} {employee.LastName}" : "Unknown",
+                EmployeeCode = employee?.EmployeeCode ?? "N/A",
+                DepartmentName = employee?.Department?.Name ?? "N/A",
+                DepartmentId = employee?.DepartmentId ?? Guid.Empty,
+                DocumentTypeId = doc.DocumentTypeId,
+                DocumentTypeName = doc.DocumentType?.Name ?? "Unknown",
+                IsMandatory = doc.DocumentType?.IsMandatory ?? false,
+                Status = doc.Status,
+                RejectionRemarks = doc.RejectionRemarks,
+                Version = doc.Version,
+                UploadedAt = doc.UploadedAt,
+                UploadedByName = doc.UploadedByUserId ?? "System",
+                OriginalFileName = doc.OriginalFileName,
+                FilePath = doc.FilePath
+            };
+
+            allDocuments.Add(reviewDto);
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = allDocuments.AsEnumerable();
+
+        if (statusFilter != "all")
+        {
+            query = query.Where(x => x.Status.Equals(statusFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(stringSearchText))
+        {
+            var search = stringSearchText.ToLower().Trim();
+            query = query.Where(x =>
+                (x.EmployeeName?.ToLower().Contains(search) ?? false) ||
+                (x.DocumentTypeName?.ToLower().Contains(search) ?? false) ||
+                (x.EmployeeCode?.ToLower().Contains(search) ?? false));
+        }
+
+        if (!string.IsNullOrWhiteSpace(docTypeFilter) && Guid.TryParse(docTypeFilter, out var typeId))
+        {
+            query = query.Where(x => x.DocumentTypeId == typeId);
+        }
+
+        filteredDocuments = query.OrderByDescending(x => x.UploadedAt).ToList();
+        StateHasChanged();
+    }
+
+    private void UpdateStatistics()
+    {
+        pendingCount = allDocuments.Count(x => x.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase));
+        verifiedCount = allDocuments.Count(x => x.Status.Equals("Verified", StringComparison.OrdinalIgnoreCase));
+        rejectedCount = allDocuments.Count(x => x.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase));
+        totalCount = allDocuments.Count;
+    }
+
+    private void ClearFilters()
+    {
+        statusFilter = "all";
+        stringSearchText = "";
+        docTypeFilter = "";
+        ApplyFilters();
+    }
+
+    private async Task ViewDocument(DocumentReviewDto document)
+    {
+        selectedDocument = document;
+        await JsRuntime.InvokeVoidAsync("showModal", "viewModal");
+    }
+
+    private async Task OpenVerifyModal(DocumentReviewDto document)
+    {
+        selectedDocument = document;
+        verifyRemarks = "";
+        await JsRuntime.InvokeVoidAsync("showModal", "verifyModal");
+    }
+
+    private async Task ConfirmVerify()
+    {
+        if (selectedDocument == null) return;
+
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var currentUser = await CurrentUserService.GetUserAsync();
+            if (currentUser == null) throw new Exception("User not found");
+
+            await VerificationService.VerifyDocumentAsync(
+                selectedDocument.DocumentId,
+                currentUser.Id,
+                isOrgAdmin ? "OrgAdmin" : "HR",
+                verifyRemarks);
+
+            await JsRuntime.InvokeVoidAsync("hideModal", "verifyModal");
+            await LoadData();
+            await JsRuntime.InvokeVoidAsync("alert", "Document verified successfully!");
+        }
+        catch (Exception ex)
+        {
+            await JsRuntime.InvokeVoidAsync("alert", $"Error: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenRejectModal(DocumentReviewDto document)
+    {
+        selectedDocument = document;
+        rejectReason = "";
+        await JsRuntime.InvokeVoidAsync("showModal", "rejectModal");
+    }
+
+    private async Task ConfirmReject()
+    {
+        if (selectedDocument == null) return;
+
+        if (string.IsNullOrWhiteSpace(rejectReason))
+        {
+            await JsRuntime.InvokeVoidAsync("alert", "Please provide a rejection reason");
+            return;
+        }
+
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var currentUser = await CurrentUserService.GetUserAsync();
+            if (currentUser == null) throw new Exception("User not found");
+
+            await VerificationService.RejectDocumentAsync(
+                selectedDocument.DocumentId,
+                currentUser.Id,
+                isOrgAdmin ? "OrgAdmin" : "HR",
+                rejectReason);
+
+            await JsRuntime.InvokeVoidAsync("hideModal", "rejectModal");
+            await LoadData();
+            await JsRuntime.InvokeVoidAsync("alert", "Document rejected successfully!");
+        }
+        catch (Exception ex)
+        {
+            await JsRuntime.InvokeVoidAsync("alert", $"Error: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        "Verified" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "Rejected" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusIcon(string status) => status switch
+    {
+        "Verified" => "✓",
+        "Pending" => "⏳",
+        "Rejected" => "✗",
+        _ => "📄"
+    };
+
+    private void GoBack()
+    {
+        if (isOrgAdmin)
+            Nav.NavigateTo("/org/dashboard");
+        else
+            Nav.NavigateTo("/hr/dashboard");
+    }
+}

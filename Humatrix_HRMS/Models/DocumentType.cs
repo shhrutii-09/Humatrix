@@ -35,6 +35,8 @@ namespace Humatrix_HRMS.Models.Documents
         public bool IsHRUploadAllowed { get; set; } = true;
         public bool IsActive { get; set; } = true;
         public int DisplayOrder { get; set; }
+        public bool IsOrganizationGenerated { get; set; } = false;
+
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string? CreatedByUserId { get; set; }

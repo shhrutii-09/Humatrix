@@ -65,7 +65,7 @@ namespace Humatrix_HRMS.Data
         public DbSet<DocumentHistory> DocumentHistories { get; set; }
         public DbSet<DocumentExpiryAlert> DocumentExpiryAlerts { get; set; }
 
-
+        public DbSet<OrgGeneratedDocument> OrgGeneratedDocuments => Set<OrgGeneratedDocument>();
         // In OnModelCreating
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
@@ -406,6 +406,7 @@ namespace Humatrix_HRMS.Data
 
             modelBuilder.ApplyConfiguration(new DocumentExpiryAlertConfiguration());
 
+            modelBuilder.ApplyConfiguration(new OrgGeneratedDocumentConfiguration());
 
 
         }

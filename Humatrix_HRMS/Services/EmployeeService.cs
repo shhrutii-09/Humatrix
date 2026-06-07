@@ -677,7 +677,7 @@ namespace Humatrix_HRMS.Services
 
             var result = await _userManager.ChangePasswordAsync(
               user,
-              dto.CurrentPassword,
+              dto.CurrentPassword,  
               dto.NewPassword);
 
             if (!result.Succeeded)
@@ -696,6 +696,47 @@ namespace Humatrix_HRMS.Services
             return await context.Employees
               .AsNoTracking()
               .FirstOrDefaultAsync(e => e.UserId == userId);
+        }
+
+        public async Task<Employee?> GetEmployeeByIdAsync(Guid employeeId)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+
+            return await context.Employees
+                .Include(e => e.Department)
+                .Include(e => e.Designation)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
+        }
+
+        public async Task<List<Employee>> GetEmployeesByOrganizationAsync(
+                Guid organizationId,
+                Guid? departmentId = null)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+
+            var query = context.Employees
+                .Where(e => e.OrganizationId == organizationId && e.Status == "Active");
+
+            if (departmentId.HasValue)
+                query = query.Where(e => e.DepartmentId == departmentId.Value);
+
+            return await query
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .AsNoTracking() // Recommended for read-only listings
+                .ToListAsync();
+        }
+
+        public async Task<List<Department>> GetDepartmentsByOrganizationAsync(Guid organizationId)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+
+            return await context.Departments
+                .Where(d => d.OrganizationId == organizationId)
+                .OrderBy(d => d.Name)
+                .AsNoTracking() // Recommended for read-only listings
+                .ToListAsync();
         }
     }
 }

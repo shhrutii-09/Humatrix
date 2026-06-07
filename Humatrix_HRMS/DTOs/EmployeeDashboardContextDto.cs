@@ -9,6 +9,7 @@
         public Guid OrganizationId { get; set; }
 
         public Guid DepartmentId { get; set; }
+        public string DepartmentName { get; set; } = default!;  // Add this property
 
         public string FullName { get; set; } = default!;
         public string Role { get; set; } = default!;

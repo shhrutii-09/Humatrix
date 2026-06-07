@@ -128,4 +128,26 @@ public class DocumentTypeService : IDocumentTypeService
 
         return true;
     }
+
+    // Add these methods to DocumentTypeService class
+
+    public async Task<List<DocumentType>> GetMandatoryDocumentTypesAsync(Guid organizationId)
+    {
+        return await _db.DocumentTypes
+            .Where(x => x.OrganizationId == organizationId
+                        && x.IsMandatory
+                        && x.IsActive)
+            .OrderBy(x => x.DisplayOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
+    }
+
+    public async Task<List<DocumentType>> GetDocumentTypesForEmployeeAsync(Guid organizationId)
+    {
+        return await _db.DocumentTypes
+            .Where(x => x.OrganizationId == organizationId && x.IsActive)
+            .OrderBy(x => x.DisplayOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
+    }
 }

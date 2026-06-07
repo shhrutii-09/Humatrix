@@ -24,4 +24,8 @@ public interface IDocumentTypeService
     Task<bool> DeleteAsync(
         Guid documentTypeId,
         Guid organizationId);
+
+    // Add these methods to IDocumentTypeService interface
+    Task<List<DocumentType>> GetMandatoryDocumentTypesAsync(Guid organizationId);
+    Task<List<DocumentType>> GetDocumentTypesForEmployeeAsync(Guid organizationId);
 }

@@ -21,6 +21,12 @@ namespace Humatrix_HRMS.Configuration.Documents
                    .WithMany()
                    .HasForeignKey(x => x.OrganizationId)
                    .OnDelete(DeleteBehavior.Restrict);
+
+            // In DocumentTypeConfiguration.cs, add:
+            builder.Property(x => x.IsOrganizationGenerated).HasDefaultValue(false);
+
+            // In EmployeeDocumentConfiguration.cs, add:
+            //builder.Property(x => x.Description).HasMaxLength(500);
         }
     }
 
@@ -34,6 +40,10 @@ namespace Humatrix_HRMS.Configuration.Documents
             builder.Property(x => x.FileName).HasMaxLength(500).IsRequired();
             builder.Property(x => x.FilePath).HasMaxLength(1000).IsRequired();
             builder.Property(x => x.MimeType).HasMaxLength(200).IsRequired();
+
+
+            builder.Property(x => x.Description).HasMaxLength(500); // Add this line
+            builder.Property(x => x.EffectiveDate);
 
             builder.HasQueryFilter(x => !x.IsDeleted);
 

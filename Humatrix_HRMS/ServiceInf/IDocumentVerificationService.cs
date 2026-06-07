@@ -21,4 +21,7 @@ public interface IDocumentVerificationService
 
     Task<List<EmployeeDocument>> GetRejectedDocumentsAsync(
         Guid organizationId);
+    // Add to IDocumentVerificationService interface
+Task<List<EmployeeDocument>> GetVerifiedDocumentsAsync(Guid organizationId);
+
 }

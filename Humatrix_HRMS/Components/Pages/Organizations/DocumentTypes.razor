@@ -33,7 +33,7 @@
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
 
-            <h5 class="mb-3">Add Document Type</h5>
+            <h5 class="mb-3">Add / Edit Document Type</h5>
 
             <div class="row g-3">
 
@@ -61,19 +61,20 @@
                 <div class="col-md-2">
                     <button class="btn btn-primary w-100"
                             @onclick="CreateDocumentType">
-                        Add
+                        @(newType.DocumentTypeId == Guid.Empty ? "Add" : "Update")
                     </button>
                 </div>
 
             </div>
 
-            <div class="row mt-3">
+            <div class="row mt-3 align-items-center">
 
                 <div class="col-md-3">
                     <div class="form-check">
                         <InputCheckbox class="form-check-input"
-                                       @bind-Value="newType.IsMandatory" />
-                        <label class="form-check-label">
+                                       @bind-Value="newType.IsMandatory"
+                                       id="chkMandatory" />
+                        <label class="form-check-label" for="chkMandatory">
                             Mandatory
                         </label>
                     </div>
@@ -82,19 +83,25 @@
                 <div class="col-md-3">
                     <div class="form-check">
                         <InputCheckbox class="form-check-input"
-                                       @bind-Value="newType.TrackExpiry" />
-                        <label class="form-check-label">
-                            Track Expiry
+                                       @bind-Value="newType.RequiresVerification"
+                                       id="chkVerification" />
+                        <label class="form-check-label" for="chkVerification">
+                            Verification Required
                         </label>
                     </div>
                 </div>
 
-                <div class="col-md-3">
-                    <div class="form-check">
-                        <InputCheckbox class="form-check-input"
-                                       @bind-Value="newType.RequiresVerification" />
-                        <label class="form-check-label">
-                            Verification Required
+                @* INTEGRATED CLAUDE'S TOGGLE OPTION HERE *@
+                <div class="col-md-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox"
+                               @bind="newType.IsOrganizationGenerated"
+                               id="chkOrgGenerated" />
+                        <label class="form-check-label" for="chkOrgGenerated">
+                            Organisation-Generated
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                Only HR/OrgAdmin can issue this type — employees cannot upload it.
+                            </small>
                         </label>
                     </div>
                 </div>
@@ -121,8 +128,8 @@
                         <th>Name</th>
                         <th>Category</th>
                         <th>Mandatory</th>
-                        <th>Expiry</th>
                         <th>Verification</th>
+                        <th>Org-Generated</th>
                         <th>Status</th>
                         <th style="width:180px;">Actions</th>
                     </tr>
@@ -133,7 +140,6 @@
                     @foreach (var item in FilteredDocumentTypes)
                     {
                         <tr>
-
                             <td>@item.Name</td>
                             <td>@item.Category</td>
 
@@ -142,11 +148,19 @@
                             </td>
 
                             <td>
-                                @(item.TrackExpiry ? "Yes" : "No")
+                                @(item.RequiresVerification ? "Yes" : "No")
                             </td>
 
+                            @* DISPLAY THE VALUE IN THE TABLE COLUMNS *@
                             <td>
-                                @(item.RequiresVerification ? "Yes" : "No")
+                                @if (item.IsOrganizationGenerated)
+                                {
+                                    <span class="badge bg-info text-dark">Org-Generated</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-light text-muted border">Standard</span>
+                                }
                             </td>
 
                             <td>
@@ -154,7 +168,6 @@
                             </td>
 
                             <td>
-
                                 <button class="btn btn-sm btn-warning me-1"
                                         @onclick="() => Edit(item)">
                                     Edit
@@ -169,9 +182,7 @@
                                         @onclick="() => Delete(item)">
                                     Delete
                                 </button>
-
                             </td>
-
                         </tr>
                     }
 
@@ -204,48 +215,48 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var ctx =
-            await CurrentUserService.GetOrgDashboardContextAsync();
-
+        var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
         organizationId = ctx.OrganizationId;
-
         await LoadData();
     }
 
     private async Task LoadData()
     {
-        documentTypes =
-            await DocumentTypeService
-                .GetOrganizationDocumentTypesAsync(
-                    organizationId);
+        documentTypes = await DocumentTypeService.GetOrganizationDocumentTypesAsync(organizationId);
     }
 
     private async Task CreateDocumentType()
     {
         newType.OrganizationId = organizationId;
 
+        // Automatically configure defaults when marking as Org-Generated to protect integrity
+        if (newType.IsOrganizationGenerated)
+        {
+            newType.IsEmployeeUploadAllowed = false;
+            newType.IsHRUploadAllowed = true;
+        }
+        else
+        {
+            newType.IsEmployeeUploadAllowed = true;
+            newType.IsHRUploadAllowed = false;
+        }
+
+        // If your page handles both Create and Update seamlessly through service hooks
         await DocumentTypeService.CreateAsync(newType);
 
         newType = new DocumentType();
-
         await LoadData();
     }
 
     private async Task Toggle(DocumentType item)
     {
-        await DocumentTypeService.ToggleStatusAsync(
-            item.DocumentTypeId,
-            organizationId);
-
+        await DocumentTypeService.ToggleStatusAsync(item.DocumentTypeId, organizationId);
         await LoadData();
     }
 
     private async Task Delete(DocumentType item)
     {
-        await DocumentTypeService.DeleteAsync(
-            item.DocumentTypeId,
-            organizationId);
-
+        await DocumentTypeService.DeleteAsync(item.DocumentTypeId, organizationId);
         await LoadData();
     }
 
@@ -265,7 +276,10 @@
             MaxFileSizeMB = item.MaxFileSizeMB,
             IsEmployeeUploadAllowed = item.IsEmployeeUploadAllowed,
             IsHRUploadAllowed = item.IsHRUploadAllowed,
-            DisplayOrder = item.DisplayOrder
+            DisplayOrder = item.DisplayOrder,
+
+            // KEY FIX: Ensure the edit model grabs the flag when loading into fields
+            IsOrganizationGenerated = item.IsOrganizationGenerated
         };
     }
 

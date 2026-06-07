@@ -107,6 +107,7 @@ namespace Humatrix_HRMS.Services
             using var context = _contextFactory.CreateDbContext();
 
             var employee = await context.Employees
+                        .Include(e => e.Department)  // Add this to get Department
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
@@ -119,6 +120,7 @@ namespace Humatrix_HRMS.Services
                 EmployeeId = employee.EmployeeId,
                 OrganizationId = employee.OrganizationId,
                 DepartmentId = employee.DepartmentId,
+                DepartmentName = employee.Department?.Name ?? "N/A",  // Add this line
                 FullName = $"{employee.FirstName} {employee.LastName}",
                 Email = user.Email ?? "",
 

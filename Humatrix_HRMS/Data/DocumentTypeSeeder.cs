@@ -9,22 +9,29 @@ public static class DocumentTypeSeeder
         ApplicationDbContext ctx,
         Guid orgId)
     {
+        // Unified array including your original types and the structural flags from Claude
         var defaults = new[]
-            {
-        new { Name="Aadhaar Card",           Cat="Personal",      Mand=true,  Exp=false, EmpUp=true,  HrUp=false },
-        new { Name="PAN Card",               Cat="Personal",      Mand=true,  Exp=false, EmpUp=true,  HrUp=false },
-        new { Name="Resume",                 Cat="Personal",      Mand=true,  Exp=false, EmpUp=true,  HrUp=true  },
-        new { Name="Degree Certificate",     Cat="Personal",      Mand=false, Exp=false, EmpUp=true,  HrUp=false },
-        new { Name="Passport",               Cat="Personal",      Mand=false, Exp=true,  EmpUp=true,  HrUp=false },
-        new { Name="Offer Letter",           Cat="Organization",  Mand=false, Exp=false, EmpUp=false, HrUp=true  },
-        new { Name="Appointment Letter",     Cat="Organization",  Mand=false, Exp=false, EmpUp=false, HrUp=true  },
-        new { Name="Experience Letter",      Cat="Organization",  Mand=false, Exp=false, EmpUp=false, HrUp=true  },
-        new { Name="Relieving Letter",       Cat="Organization",  Mand=false, Exp=false, EmpUp=false, HrUp=true  },
-        new { Name="Bank Passbook / Cheque", Cat="Personal",      Mand=false, Exp=false, EmpUp=true,  HrUp=false },
-    };
+        {
+            // --- PERSONAL DOCUMENTS (Employee Uploaded) ---
+            new { Name="Aadhaar Card",           Cat="Personal",     Mand=true,  Exp=false, EmpUp=true,  HrUp=false, IsOrgGen=false, ReqVer=true,  Files=".pdf,.jpg,.jpeg,.png", Size=10 },
+            new { Name="PAN Card",               Cat="Personal",     Mand=true,  Exp=false, EmpUp=true,  HrUp=false, IsOrgGen=false, ReqVer=true,  Files=".pdf,.jpg,.jpeg,.png", Size=10 },
+            new { Name="Resume",                 Cat="Personal",     Mand=true,  Exp=false, EmpUp=true,  HrUp=true,  IsOrgGen=false, ReqVer=true,  Files=".pdf,.jpg,.jpeg,.png", Size=10 },
+            new { Name="Degree Certificate",     Cat="Personal",     Mand=false, Exp=false, EmpUp=true,  HrUp=false, IsOrgGen=false, ReqVer=true,  Files=".pdf,.jpg,.jpeg,.png", Size=10 },
+            new { Name="Passport",               Cat="Personal",     Mand=false, Exp=true,  EmpUp=true,  HrUp=false, IsOrgGen=false, ReqVer=true,  Files=".pdf,.jpg,.jpeg,.png", Size=10 },
+            new { Name="Bank Passbook / Cheque", Cat="Personal",     Mand=false, Exp=false, EmpUp=true,  HrUp=false, IsOrgGen=false, ReqVer=true,  Files=".pdf,.jpg,.jpeg,.png", Size=10 },
+
+            // --- ORGANIZATION GENERATED DOCUMENTS (HR Issued) ---
+            new { Name="Offer Letter",           Cat="Organization", Mand=false, Exp=false, EmpUp=false, HrUp=true,  IsOrgGen=true,  ReqVer=false, Files=".pdf,.docx",           Size=20 },
+            new { Name="Appointment Letter",     Cat="Organization", Mand=false, Exp=false, EmpUp=false, HrUp=true,  IsOrgGen=true,  ReqVer=false, Files=".pdf,.docx",           Size=20 },
+            new { Name="Experience Letter",      Cat="Organization", Mand=false, Exp=false, EmpUp=false, HrUp=true,  IsOrgGen=true,  ReqVer=false, Files=".pdf,.docx",           Size=30 }, // Fixed typo or expanded
+            new { Name="Relieving Letter",        Cat="Organization", Mand=false, Exp=false, EmpUp=false, HrUp=true,  IsOrgGen=true,  ReqVer=false, Files=".pdf,.docx",           Size=20 },
+            new { Name="Salary Slip",            Cat="Organization", Mand=false, Exp=false, EmpUp=false, HrUp=true,  IsOrgGen=true,  ReqVer=false, Files=".pdf",                 Size=5  },
+            new { Name="Warning Letter",           Cat="Compliance",   Mand=false, Exp=false, EmpUp=false, HrUp=true,  IsOrgGen=true,  ReqVer=false, Files=".pdf,.docx",           Size=10 }
+        };
 
         foreach (var d in defaults)
         {
+            // Check if this DocumentType already exists for the specific organization
             if (!await ctx.Set<DocumentType>()
                 .AnyAsync(dt => dt.OrganizationId == orgId && dt.Name == d.Name))
             {
@@ -37,9 +44,12 @@ public static class DocumentTypeSeeder
                     TrackExpiry = d.Exp,
                     IsEmployeeUploadAllowed = d.EmpUp,
                     IsHRUploadAllowed = d.HrUp,
-                    RequiresVerification = true,
-                    AllowedFileTypes = ".pdf,.jpg,.jpeg,.png",
-                    MaxFileSizeMB = 10
+
+                    // Newly mapped configuration items from the updated array:
+                    IsOrganizationGenerated = d.IsOrgGen,
+                    RequiresVerification = d.ReqVer,
+                    AllowedFileTypes = d.Files,
+                    MaxFileSizeMB = d.Size
                 });
             }
         }

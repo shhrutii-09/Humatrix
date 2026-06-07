@@ -2,9 +2,13 @@
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+@using Humatrix_HRMS.Services.Documents
+@using Humatrix_HRMS.DTOs.Documents
+@using System.Linq
 
 @attribute [Authorize(Roles = "OrgAdmin,HR")]
 @inject EmployeeService EmployeeService
+@inject IEmployeeDocumentService EmployeeDocumentService
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -34,134 +38,143 @@
     }
     else
     {
-        <!-- YOUR UI EXACT SAME -->
-        <div class="card shadow-sm border-0 p-4 mb-4">
-            <div class="d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center">
-                    <div class="avatar-lg bg-primary text-white d-flex align-items-center justify-content-center rounded-circle fw-bold me-4"
-                         style="width: 80px; height: 80px; font-size: 2rem;">
-                        @data.Initial
-                    </div>
-                    <div>
-                        <h3 class="fw-bold mb-1">@data.FullName</h3>
-                        <p class="text-muted mb-0">@data.DesignationName — @data.DepartmentName</p>
-                    </div>
-                </div>
-                <span class="badge @(data.Status == "Active" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-2">
-                    @data.Status
-                </span>
-            </div>
-        </div>
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "profile" ? "active fw-bold" : "")"
+                   @onclick='() => SetActiveTab("profile")'
+                   href="javascript:void(0)">
+                    <i class="bi bi-person-circle me-1"></i> Profile
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(activeTab == "documents" ? "active fw-bold" : "")"
+                   @onclick='() => SetActiveTab("documents")'
+                   href="javascript:void(0)">
+                    <i class="bi bi-file-earmark-text me-1"></i> Documents
+                    @if (missingDocumentsCount > 0)
+                    {
+                        <span class="badge bg-danger ms-1">@missingDocumentsCount</span>
+                    }
+                </a>
+            </li>
+        </ul>
 
-        <div class="row g-4">
-            <div class="col-md-8">
-                <div class="card shadow-sm border-0 p-4 h-100">
-                    <h5 class="fw-bold mb-4 border-bottom pb-2">Employment Details</h5>
-                    <div class="row g-3">
-                        <div class="d-flex align-items-center">
-                            <div>
-                                <h3 class="fw-bold mb-1">@data.FullName</h3>
-                                <p class="text-muted mb-0">
-                                    @data.DesignationName — @data.DepartmentName
-                                    <span class="badge bg-info-subtle text-info ms-2">@data.Role</span>
-                                </p>
+        @if (activeTab == "profile")
+        {
+            <div class="card shadow-sm border-0 p-4 mb-4">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-lg bg-primary text-white d-flex align-items-center justify-content-center rounded-circle fw-bold me-4"
+                             style="width: 80px; height: 80px; font-size: 2rem;">
+                            @data.Initial
+                        </div>
+                        <div>
+                            <h3 class="fw-bold mb-1">@data.FullName</h3>
+                            <p class="text-muted mb-0">
+                                @data.DesignationName — @data.DepartmentName
+                                <span class="badge bg-info-subtle text-info ms-2">@data.Role</span>
+                            </p>
+                        </div>
+                    </div>
+                    <span class="badge @(data.Status == "Active" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger") px-3 py-2">
+                        @data.Status
+                    </span>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-8">
+                    <div class="card shadow-sm border-0 p-4 h-100">
+                        <h5 class="fw-bold mb-4 border-bottom pb-2">Employment Details</h5>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="small text-muted d-block">Employee Code</label>
+                                <span class="fw-bold">@data.EmployeeCode</span>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="small text-muted d-block">Joining Date</label>
+                                <span class="fw-bold">@data.JoiningDate.ToString("MMMM dd, yyyy")</span>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="small text-muted d-block">Email Address</label>
+                                <span class="fw-bold">@data.Email</span>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="small text-muted d-block">Work Shift</label>
+                                <span class="fw-bold text-primary">@data.ShiftName</span>
                             </div>
                         </div>
-                        <div class="col-sm-6">
-                            <label class="small text-muted d-block">Employee Code</label>
-                            <span class="fw-bold">@data.EmployeeCode</span>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card shadow-sm border-0 p-4 h-100 text-center d-flex flex-column justify-content-center align-items-center">
+                        <h5 class="fw-bold mb-3 text-muted small text-uppercase">Attendance Summary</h5>
+                        <div class="display-5 fw-bold text-primary">
+                            @data.AttendancePercentage.ToString("0")%
                         </div>
-                        <div class="col-sm-6">
-                            <label class="small text-muted d-block">Joining Date</label>
-                            <span class="fw-bold">@data.JoiningDate.ToString("MMMM dd, yyyy")</span>
-                        </div>
-                        <div class="col-sm-6">
-                            <label class="small text-muted d-block">Email Address</label>
-                            <span class="fw-bold">@data.Email</span>
-                        </div>
-                        <div class="col-sm-6">
-                            <label class="small text-muted d-block">Work Shift</label>
-                            <span class="fw-bold text-primary">@data.ShiftName</span>
-                        </div>
+                        <p class="text-muted small mt-2 mb-0">
+                            @data.PresentDays / @data.TotalDays days present
+                        </p>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-4">
-                <div class="display-6 fw-bold">
-                    @data.AttendancePercentage.ToString("0")%
-                </div>
-                <p class="text-muted small mt-2">
-                    @data.PresentDays / @data.TotalDays days present
-                </p>
-
-                @* <div class="d-grid gap-2">
-                    <button class="btn btn-outline-primary">
-                        <i class="bi bi-pencil me-2"></i> Edit Profile
-                    </button>
-                    <button class="btn btn-outline-secondary">
-                        <i class="bi bi-file-earmark-text me-2"></i> View History
-                    </button>
-                </div> *@
-            </div>
-
-            <div class="card shadow-sm border-0 p-4 mt-4">
+            <div class="card shadow-sm border-0 p-4 mb-4">
                 <h5 class="fw-bold mb-3 border-bottom pb-2">Recent Attendance</h5>
-
-                @if (!data.RecentAttendance.Any())
+                @if (data.RecentAttendance == null || !data.RecentAttendance.Any())
                 {
                     <p class="text-muted">No attendance records found.</p>
                 }
                 else
                 {
-                    <table class="table table-sm align-middle">
-                        <thead>
-                            <tr class="text-muted small">
-                                <th>Date</th>
-                                <th>Check-In</th>
-                                <th>Check-Out</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var a in data.RecentAttendance)
-                            {
-                                <tr>
-                                    <td>@a.Date.ToString("dd MMM yyyy")</td>
-                                    <td>@(a.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "-")</td>
-                                    <td>@(a.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "-")</td>
-                                    <td>
-                                        <span class="badge @(a.Status == "Present" ? "bg-success" : "bg-danger")">
-                                            @a.Status
-                                        </span>
-                                    </td>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr class="text-muted small">
+                                    <th>Date</th>
+                                    <th>Check-In</th>
+                                    <th>Check-Out</th>
+                                    <th>Status</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in data.RecentAttendance)
+                                {
+                                    <tr>
+                                        <td>@a.Date.ToString("dd MMM yyyy")</td>
+                                        <td>@(a.CheckIn?.ToLocalTime().ToString("hh:mm tt") ?? "-")</td>
+                                        <td>@(a.CheckOut?.ToLocalTime().ToString("hh:mm tt") ?? "-")</td>
+                                        <td>
+                                            <span class="badge @(a.Status == "Present" ? "bg-success" : "bg-danger")">
+                                                @a.Status
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h6 class="fw-bold mt-4 mb-3">Last 7 Days Overview</h6>
+                    <div class="d-flex gap-2">
+                        @foreach (var a in data.RecentAttendance.OrderBy(x => x.Date))
+                        {
+                            <div class="text-center">
+                                <div style="width: 35px; height: 60px;"
+                                     class="@(a.Status == "Present" ? "bg-success" : "bg-danger") rounded mb-1"
+                                     title="@a.Date.ToString("dd MMM yyyy"): @a.Status">
+                                </div>
+                                <small class="text-muted d-block" style="font-size: 0.75rem;">@a.Date.ToString("dd")</small>
+                            </div>
+                        }
+                    </div>
                 }
             </div>
 
             <div class="card shadow-sm border-0 p-4 mb-4">
-                <h6 class="fw-bold mb-3">Last 7 Days Overview</h6>
-
-                <div class="d-flex gap-2">
-                    @foreach (var a in data.RecentAttendance.OrderBy(x => x.Date))
-                    {
-                        <div class="text-center">
-                            <div style="width: 30px; height: 60px;"
-                                 class="@(a.Status == "Present" ? "bg-success" : "bg-danger") rounded">
-                            </div>
-                            <small class="text-muted">@a.Date.ToString("dd")</small>
-                        </div>
-                    }
-                </div>
-            </div>
-
-            <div class="card shadow-sm border-0 p-4 mt-4">
                 <h5 class="fw-bold mb-3 border-bottom pb-2">Recent Leaves</h5>
-
-                @if (!data.Leaves.Any())
+                @if (data.Leaves == null || !data.Leaves.Any())
                 {
                     <p class="text-muted">No leave records.</p>
                 }
@@ -170,24 +183,120 @@
                     <ul class="list-group list-group-flush">
                         @foreach (var l in data.Leaves)
                         {
-                            <li class="list-group-item d-flex justify-content-between">
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                 <span>@l.Type</span>
-                                <span class="text-muted">@l.Date.ToString("dd MMM yyyy")</span>
+                                <span class="text-muted small">@l.Date.ToString("dd MMM yyyy")</span>
                             </li>
                         }
                     </ul>
                 }
             </div>
-        </div>
+        }
+
+        @if (activeTab == "documents")
+        {
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white border-0 pt-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold">Employee Documents</h5>
+                        <button class="btn btn-primary btn-sm" @onclick="NavigateToDocumentsPage">
+                            <i class="bi bi-folder2-open me-1"></i> View Documents profile
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (isDocumentsLoading)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                            <span class="ms-2 text-muted">Loading documents...</span>
+                        </div>
+                    }
+                    else if (documentSummary?.Documents != null && documentSummary.Documents.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Document Type</th>
+                                        <th>Status</th>
+                                        <th>Version</th>
+                                        <th>Uploaded Date</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var doc in documentSummary.Documents.Take(5))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-bold">@doc.DocumentTypeName</div>
+                                                @if (doc.IsMandatory)
+                                                {
+                                                    <span class="badge bg-danger bg-opacity-10 text-danger small">Required</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge @doc.StatusBadgeClass">
+                                                    @doc.StatusIcon @doc.Status
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-light text-dark border">v@(doc.Version)</span>
+                                            </td>
+                                            <td>
+                                                @if (doc.UploadedAt == DateTime.MinValue || doc.Status == "NotUploaded")
+                                                {
+                                                    <span>-</span>
+                                                }
+                                                else
+                                                {
+                                                    @doc.UploadedAt.ToString("dd MMM yyyy")
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-primary"
+                                                        @onclick="() => DownloadDocument(doc.DocumentId)">
+                                                    <i class="bi bi-download"></i> View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if (documentSummary.Documents.Count > 5)
+                        {
+                            <div class="text-center mt-3">
+                                <button class="btn btn-link text-decoration-none" @onclick="NavigateToDocumentsPage">
+                                    View all @documentSummary.Documents.Count documents →
+                                </button>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-file-earmark-text fs-1 d-block mb-2"></i>
+                            <p class="mb-0">No documents uploaded yet.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     }
 </div>
 
 @code {
     [Parameter] public Guid id { get; set; }
 
-    // private EmployeeDashboardDto? data;
     private EmployeeDetailsDto? data;
     private bool isLoading = true;
+    private bool isDocumentsLoading = false;
+    private string activeTab = "profile";
+    private int missingDocumentsCount = 0;
+    private EmployeeDocumentSummaryDto? documentSummary;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -201,11 +310,86 @@
 
         data = await EmployeeService.GetEmployeeDetailsByIdAsync(id);
 
+        if (data != null)
+        {
+            await LoadDocumentSummary();
+        }
+
         isLoading = false;
 
         if (data == null)
         {
             Nav.NavigateTo("/employees");
         }
+    }
+
+    private async Task LoadDocumentSummary()
+    {
+        isDocumentsLoading = true;
+        try
+        {
+            var dashboard = await EmployeeDocumentService.GetEmployeeDocumentDashboardAsync(id, data!.OrganizationId);
+
+            documentSummary = new EmployeeDocumentSummaryDto
+            {
+                EmployeeId = id,
+                EmployeeName = data!.FullName,
+                EmployeeCode = data!.EmployeeCode,
+                DepartmentName = data!.DepartmentName,
+                DesignationName = data!.DesignationName,
+                ProfileCompletionPercentage = dashboard.ProfileCompletionPercentage,
+                TotalRequired = dashboard.TotalRequiredDocuments,
+                VerifiedCount = dashboard.VerifiedDocuments,
+                PendingCount = dashboard.PendingDocuments,
+                RejectedCount = dashboard.RejectedDocuments,
+                MissingCount = dashboard.MissingMandatoryCount,
+                Documents = dashboard.Documents.Select(doc => new EmployeeDocumentDetailDto
+                {
+                    DocumentId = doc.DocumentId,
+                    DocumentTypeId = doc.DocumentTypeId,
+                    DocumentTypeName = doc.DocumentTypeName,
+                    Category = doc.Category,
+                    IsMandatory = doc.IsMandatory,
+                    RequiresVerification = doc.RequiresVerification,
+                    OriginalFileName = doc.OriginalFileName,
+                    FilePath = doc.FilePath,
+                    Status = doc.Status,
+                    RejectionRemarks = doc.RejectionRemarks,
+                    Version = doc.Version,
+                    UploadedAt = doc.UploadedAt ?? DateTime.MinValue,
+                    UploadedByName = "Employee",
+                    UploadedByRole = "Employee",
+                    VerifiedAt = doc.VerifiedAt,
+                    VerifiedByName = doc.VerifiedByName
+                }).ToList()
+            };
+
+            missingDocumentsCount = dashboard.MissingMandatoryCount;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading documents: {ex.Message}");
+        }
+        finally
+        {
+            isDocumentsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    private void NavigateToDocumentsPage()
+    {
+        Nav.NavigateTo($"/hr/employees/{id}/documents");
+    }
+
+    private async Task DownloadDocument(Guid documentId)
+    {
+        Nav.NavigateTo($"api/documents/download/{documentId}", forceLoad: true);
     }
 }

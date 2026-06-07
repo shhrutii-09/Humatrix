@@ -29,6 +29,13 @@ namespace Humatrix_HRMS.Models.Documents
 
         public long FileSize { get; set; }
 
+        // Add these properties to the EmployeeDocument class (add them near the other properties, around line 50-60)
+
+        [MaxLength(500)]
+        public string? Description { get; set; }
+
+        public DateTime? EffectiveDate { get; set; }
+
         [Required, MaxLength(200)]
         public string MimeType { get; set; } = default!;
 

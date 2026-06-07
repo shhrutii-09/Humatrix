@@ -1,0 +1,310 @@
+﻿@page "/org/compliance"
+@using Humatrix_HRMS.DTOs.Documents
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Documents
+@using Humatrix_HRMS.Models.Documents
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+@inject IEmployeeDocumentService EmployeeDocumentService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Organization Document Compliance Dashboard | Humatrix</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h2 class="fw-bold text-dark">Organization Compliance Dashboard</h2>
+            <p class="text-muted small mb-0">Monitor document audits and mandatory requirement tracking corporate-wide.</p>
+        </div>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm shadow-sm" @onclick="RefreshDataAsync">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh Metrics
+            </button>
+            <button class="btn btn-success btn-sm shadow-sm ms-2" @onclick="ExportComplianceReport">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export Excel
+            </button>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (complianceData == null)
+    {
+        <div class="alert alert-warning text-center">Failed to compute matrix calculations.</div>
+    }
+    else if (!complianceData.IsConfigured)
+    {
+        <!-- PRODUCTION READY EMPTY STATE -->
+        <div class="card shadow-sm border-0 my-5 py-5 text-center bg-white mx-auto" style="max-width: 600px;">
+            <div class="card-body">
+                <div class="mb-4">
+                    <i class="bi bi-file-earmark-text text-muted" style="font-size: 4rem;"></i>
+                </div>
+                <h4 class="fw-bold text-dark">Compliance Tracking Not Configured</h4>
+                <p class="text-muted px-4">
+                    Your organization hasn't set up any mandatory document requirements yet.
+                    Configure your required document types (e.g., ID Proof, Contracts, Certifications) to begin tracking employee compliance health.
+                </p>
+                <a href="/org/document-types" class="btn btn-primary shadow-sm mt-3">
+                    <i class="bi bi-gear-fill me-2"></i> Configure Document Types
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card shadow-sm border-0 p-3 bg-white h-100 border-start border-primary border-4">
+                    <div class="text-muted small fw-bold text-uppercase">Overall Health</div>
+                    <div class="d-flex align-items-baseline gap-2 mt-2">
+                        <span class="fs-2 fw-bold text-dark">@complianceData.OverallCompliancePercentage%</span>
+                    </div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div class="progress-bar bg-primary" style="width: @complianceData.OverallCompliancePercentage%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-0 p-3 bg-white h-100 border-start border-success border-4">
+                    <div class="text-muted small fw-bold text-uppercase">Compliant Staff</div>
+                    <div class="d-flex align-items-baseline gap-2 mt-2">
+                        <span class="fs-2 fw-bold text-success">@complianceData.FullyCompliantEmployeesCount</span>
+                        <span class="text-muted small">/ @complianceData.TotalActiveEmployees Total</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-0 p-3 bg-white h-100 border-start border-warning border-4">
+                    <div class="text-muted small fw-bold text-uppercase">Pending Verifications</div>
+                    <div class="d-flex align-items-baseline gap-2 mt-2">
+                        <span class="fs-2 fw-bold text-warning">@complianceData.TotalPendingVerificationsCount</span>
+                        <span class="text-muted small">Items Awaiting Audit</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-0 p-3 bg-white h-100 border-start border-danger border-4">
+                    <div class="text-muted small fw-bold text-uppercase">Expiring / Expired Docs</div>
+                    <div class="d-flex align-items-baseline gap-2 mt-2">
+                        <span class="fs-2 fw-bold text-danger">@complianceData.ExpiringDocuments.Count</span>
+                        <span class="text-muted small">(@complianceData.TotalExpiredDocumentsCount Critical Past Due)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white border-bottom py-3">
+                        <h5 class="mb-0 fw-bold text-secondary">Department Status</h5>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var dept in complianceData.DepartmentStats)
+                        {
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span class="fw-semibold text-dark">@dept.DepartmentName</span>
+                                    <span class="text-muted">@dept.CompliantEmployees/@dept.TotalEmployees (@dept.CompliancePercentage%)</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar @(dept.CompliancePercentage >= 80 ? "bg-success" : dept.CompliancePercentage >= 50 ? "bg-warning" : "bg-danger")"
+                                         style="width: @dept.CompliancePercentage%"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-header bg-white border-bottom p-0">
+                        <ul class="nav nav-tabs card-header-tabs m-0 border-bottom-0" id="complianceTabs" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link py-3 px-4 active fw-bold @(activeTab == "missing" ? "text-primary border-bottom border-primary" : "text-muted")"
+                                        @onclick='() => SetActiveTab("missing")'>
+                                    Missing Documents (@complianceData.NonCompliantEmployeesCount)
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link py-3 px-4 fw-bold @(activeTab == "pending" ? "text-primary border-bottom border-primary" : "text-muted")"
+                                        @onclick='() => SetActiveTab("pending")'>
+                                    <!-- UPDATE 1B: Directly reading from the list for the tab header text -->
+                                    Pending Audit (@complianceData.PendingVerifications.Count)
+                                </button>
+                            </li>
+                            @* <li class="nav-item">
+                                <button class="nav-link py-3 px-4 fw-bold @(activeTab == "expiring" ? "text-primary border-bottom border-primary" : "text-muted")"
+                                        @onclick='() => SetActiveTab("expiring")'>
+                                    Expiring Soon (@complianceData.ExpiringDocuments.Count)
+                                </button>
+                            </li> *@
+                        </ul>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (activeTab == "missing")
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light text-muted small text-uppercase">
+                                        <tr>
+                                            <th class="ps-4">Employee</th>
+                                            <th>Department</th>
+                                            <th>Missing Count</th>
+                                            <th class="pe-4">Missing Requirements</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!complianceData.NonCompliantEmployees.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center py-4 text-muted">All active staff are fully compliant.</td>
+                                            </tr>
+                                        }
+                                        @foreach (var emp in complianceData.NonCompliantEmployees)
+                                        {
+                                            <tr>
+                                                <td class="ps-4">
+                                                    <a href="/hr/employees/@emp.EmployeeId/documents" class="fw-bold text-primary text-decoration-none">@emp.FullName</a>
+                                                    <div class="text-muted small">@emp.EmployeeCode</div>
+                                                </td>
+                                                <td><span class="badge bg-light text-dark text-capitalize border">@emp.DepartmentName</span></td>
+                                                <td><span class="badge bg-danger bg-opacity-10 text-danger fw-bold px-2 py-1">@emp.MissingMandatoryCount Out</span></td>
+                                                <td class="pe-4 text-wrap"><span class="small text-muted">@string.Join(", ", emp.MissingDocumentTypeNames)</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else if (activeTab == "pending")
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light text-muted small text-uppercase">
+                                        <tr>
+                                            <th class="ps-4">Employee</th>
+                                            <th>Document Requirement</th>
+                                            <th>Upload Date</th>
+                                            <th class="text-end pe-4">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!complianceData.PendingVerifications.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center py-4 text-muted">No pending verifications found in verification pipeline.</td>
+                                            </tr>
+                                        }
+                                        @foreach (var pnd in complianceData.PendingVerifications)
+                                        {
+                                            <tr>
+                                                <td class="ps-4 fw-semibold text-dark">@pnd.EmployeeName</td>
+                                                <td><span class="fw-bold">@pnd.DocumentTypeName</span></td>
+                                                <td><span class="text-muted small">@pnd.UploadedAt?.ToString("dd MMM yyyy HH:mm")</span></td>
+                                                <td class="text-end pe-4">
+                                                    <a href="/hr/documents" class="btn btn-sm btn-primary">
+                                                        <i class="bi bi-shield-check me-1"></i> Audit File
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else if (activeTab == "expiring")
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light text-muted small text-uppercase">
+                                        <tr>
+                                            <th class="ps-4">Employee</th>
+                                            <th>Document Requirement</th>
+                                            <th>Expiry Date</th>
+                                            <th class="pe-4">Horizon Tracking</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (!complianceData.ExpiringDocuments.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center py-4 text-muted">No monitored documents are expiring within 30 days.</td>
+                                            </tr>
+                                        }
+                                        @foreach (var exp in complianceData.ExpiringDocuments)
+                                        {
+                                            <tr>
+                                                <td class="ps-4 fw-semibold text-dark">@exp.EmployeeName</td>
+                                                <td><span class="fw-bold">@exp.DocumentTypeName</span></td>
+                                                <td><span class="text-danger small fw-bold">@exp.ExpiryDate?.ToString("dd MMM yyyy")</span></td>
+                                                <td class="pe-4">
+                                                    <span class="badge bg-warning bg-opacity-10 text-warning fw-bold">Expires in @exp.DaysRemaining Days</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private CompanyComplianceDto? complianceData;
+    private bool isLoading = true;
+    private string activeTab = "missing";
+    private Guid organizationId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
+            organizationId = ctx.OrganizationId;
+            await RefreshDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error mapping administrative session data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        if (organizationId != Guid.Empty)
+        {
+            complianceData = await EmployeeDocumentService.GetCompanyComplianceDashboardAsync(organizationId);
+        }
+    }
+
+    private void SetActiveTab(string tabName)
+    {
+        activeTab = tabName;
+    }
+
+    private async Task ExportComplianceReport()
+    {
+        // Placeholder strategy for report extraction processing loops.
+        // Usually references an exported memory stream or triggers a custom API download link endpoint.
+        await JS.InvokeVoidAsync("alert", "Exporting file generated from latest aggregate context data...");
+    }
+}

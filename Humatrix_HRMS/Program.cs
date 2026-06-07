@@ -112,6 +112,9 @@ builder.Services.AddScoped<ApprovalWorkflowService>();
 builder.Services.AddScoped<ActivityLogService>();
 builder.Services.AddScoped<DashboardBroadcastService>();
 // Services
+
+builder.Services.AddScoped<IOrgGeneratedDocumentService, OrgGeneratedDocumentService>();
+
 builder.Services.AddScoped<IDocumentTypeService,
     DocumentTypeService>();
 builder.Services.AddScoped<IEmployeeDocumentService,

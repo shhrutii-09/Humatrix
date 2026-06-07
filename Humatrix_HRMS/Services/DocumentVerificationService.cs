@@ -130,4 +130,18 @@ public class DocumentVerificationService
             .OrderByDescending(x => x.RejectedAt)
             .ToListAsync();
     }
+
+    // Add to DocumentVerificationService class
+    public async Task<List<EmployeeDocument>> GetVerifiedDocumentsAsync(Guid organizationId)
+    {
+        return await _db.EmployeeDocuments
+            .Include(x => x.Employee)
+            .Include(x => x.DocumentType)
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.Status == DocumentStatus.Verified &&
+                x.IsLatestVersion)
+            .OrderByDescending(x => x.VerifiedAt)
+            .ToListAsync();
+    }
 }
