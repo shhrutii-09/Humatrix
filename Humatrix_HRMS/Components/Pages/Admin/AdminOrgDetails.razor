@@ -82,51 +82,44 @@
                 </div>
             </div>
         </div>
+<div class="card shadow-sm border-0 p-4">
+    <h5 class="fw-bold mb-3">Change Organization Admin</h5>
 
-        <div class="card shadow-sm border-0 p-4">
-            <h5 class="fw-bold mb-3">Change Organization Admin</h5>
+    <div class="admin-section mb-4 p-3 rounded-3 border">
+        <label class="form-label small fw-bold text-primary tracking-wider mb-2">ASSIGN NEW ADMIN YOPMAIL</label>
+        <InputText @bind-Value="newAdminEmail" type="email" class="form-control premium-form-input" placeholder="admin@yopmail.com" disabled="@isAdminChanging" />
+        <small class="text-muted d-block mt-2" style="font-size: 0.75rem;">*Admin will receive activation mail on Yopmail.</small>
+    </div>
 
-            @if (!org.IsActive)
-            {
-                <div class="alert alert-warning border-0 small mb-3 py-2">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i> Admin changes are disabled because this organization is currently inactive.
-                </div>
-            }
+    <button class="btn btn-action-save w-100"
+            @onclick="() => showConfirmModal = true"
+            disabled="@(isAdminChanging || string.IsNullOrWhiteSpace(newAdminEmail))">
+        @if (isAdminChanging)
+        {
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            <span>Updating...</span>
+        }
+        else
+        {
+            <span>CHANGE ADMIN</span>
+        }
+    </button>
 
-            <div class="admin-section mb-4 p-3 rounded-3 border">
-                <label class="form-label small fw-bold text-primary tracking-wider mb-2">ASSIGN NEW ADMIN YOPMAIL</label>
-                <InputText @bind-Value="newAdminEmail" type="email" class="form-control premium-form-input" placeholder="admin@yopmail.com" disabled="@(!org.IsActive || isAdminChanging)" />
-                <small class="text-muted d-block mt-2" style="font-size: 0.75rem;">*Admin will receive activation mail on Yopmail.</small>
-            </div>
-
-            <button class="btn btn-action-save w-100"
-                    @onclick="() => showConfirmModal = true"
-                    disabled="@(!org.IsActive || isAdminChanging || string.IsNullOrWhiteSpace(newAdminEmail))">
-                @if (isAdminChanging)
-                {
-                    <span class="spinner-border spinner-border-sm me-2"></span>
-                    <span>Updating...</span>
-     }
-                else
-                {
-                    <span>CHANGE ADMIN</span>
-                }
-            </button>
-
-            @if (isAdminChangedSuccessfully)
-            {
-                <div class="alert alert-success mt-4 border-0 shadow-sm p-3">
-                    <i class="bi bi-check-circle-fill me-2"></i> Admin changed successfully!
-                </div>
-            }
-
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger mt-3 border-0 shadow-sm">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
-                </div>
-            }
+    @if (isAdminChangedSuccessfully)
+    {
+        <div class="alert alert-success mt-4 border-0 shadow-sm p-3">
+            <i class="bi bi-check-circle-fill me-2"></i> 
+            Admin changed successfully! An activation email has been sent to <strong>@newAdminEmailDisplay</strong>.
         </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mt-3 border-0 shadow-sm">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+        </div>
+    }
+</div>
     }
 </div>
 
@@ -233,7 +226,7 @@
     private Organization? org;
     private int employeeCount, hrCount, departmentCount;
     private string newAdminEmail = "";
-    private string? currentAdminEmail, errorMessage;
+    private string? currentAdminEmail, errorMessage, newAdminEmailDisplay;
     private bool isAdminChanging = false, isAdminChangedSuccessfully = false, showConfirmModal = false;
 
     protected override async Task OnInitializedAsync() => await LoadData();
@@ -260,17 +253,27 @@
 
     private async Task ChangeAdmin()
     {
-        if (string.IsNullOrWhiteSpace(newAdminEmail) || org == null || !org.IsActive) return;
-        isAdminChanging = true; errorMessage = null; isAdminChangedSuccessfully = false;
+        if (string.IsNullOrWhiteSpace(newAdminEmail) || org == null) return;
+
+        isAdminChanging = true;
+        errorMessage = null;
+        isAdminChangedSuccessfully = false;
+
         try
         {
             await OrgService.ChangeOrganizationAdminAsync(id, newAdminEmail);
-            isAdminChangedSuccessfully = true; currentAdminEmail = newAdminEmail; newAdminEmail = "";
+            newAdminEmailDisplay = newAdminEmail;
+            isAdminChangedSuccessfully = true;
+            currentAdminEmail = newAdminEmail;
+            newAdminEmail = "";
         }
         catch (Exception ex)
         {
             errorMessage = ex.Message.Contains("already used") ? "This email is already in use." : ex.Message;
         }
-        finally { isAdminChanging = false; }
+        finally
+        {
+            isAdminChanging = false;
+        }
     }
 }

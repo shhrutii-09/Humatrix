@@ -357,9 +357,13 @@ namespace Humatrix_HRMS.Services
             foreach (var u in users)
             {
                 var userRoles = await _userManager.GetRolesAsync(u);
-                var role = userRoles.FirstOrDefault() ?? "Employee";
 
-                if (isHR && !isOrgAdmin && (role == "HR" || role == "OrgAdmin"))
+                // FIX: ONLY include users who have the "Employee" role
+                if (!userRoles.Contains("Employee"))
+                    continue;
+
+                // Skip if HR is viewing and this is not their department
+                if (isHR && !isOrgAdmin && u.DepartmentId != currentUser.DepartmentId)
                     continue;
 
                 var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
@@ -374,7 +378,7 @@ namespace Humatrix_HRMS.Services
                     EmployeeCode = profile?.EmployeeCode ?? "",
                     LastName = u.LastName,
                     Name = $"{u.FirstName} {u.LastName}",
-                    Role = role,
+                    Role = "Employee",
                     Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
                     Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
                     DepartmentId = u.DepartmentId,
@@ -386,7 +390,6 @@ namespace Humatrix_HRMS.Services
                     IsActive = u.IsActive
                 });
             }
-
             if (!string.IsNullOrWhiteSpace(search))
             {
                 search = search.ToLower();
@@ -413,33 +416,39 @@ namespace Humatrix_HRMS.Services
         {
             using var context = await _contextFactory.CreateDbContextAsync();
 
+            // Get ALL users first
             var users = await _userManager.Users
-              .Where(u => u.OrganizationId == organizationId)
-              .AsNoTracking()
-              .ToListAsync();
+                .Where(u => u.OrganizationId == organizationId)
+                .AsNoTracking()
+                .ToListAsync();
 
             var depts = await context.Departments
-              .Where(d => d.OrganizationId == organizationId)
-              .AsNoTracking().ToListAsync();
+                .Where(d => d.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
 
             var desigs = await context.Designations
-              .Where(d => d.OrganizationId == organizationId)
-              .AsNoTracking().ToListAsync();
+                .Where(d => d.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
 
             var shifts = await context.Shifts
-              .Where(s => s.OrganizationId == organizationId)
-              .AsNoTracking().ToListAsync();
+                .Where(s => s.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
 
             var profiles = await context.Employees
-              .Where(e => e.OrganizationId == organizationId)
-              .AsNoTracking().ToListAsync();
+                .Where(e => e.OrganizationId == organizationId)
+                .AsNoTracking().ToListAsync();
 
             var resultList = new List<EmployeeListDto>();
 
             foreach (var u in users)
             {
                 var userRoles = await _userManager.GetRolesAsync(u);
-                var role = userRoles.FirstOrDefault() ?? "Employee";
+
+                // FIX: ONLY include users who have the "Employee" role
+                // Users with NO roles or other roles should NOT appear
+                if (!userRoles.Contains("Employee"))
+                    continue;
+
                 var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
 
                 resultList.Add(new EmployeeListDto
@@ -449,7 +458,7 @@ namespace Humatrix_HRMS.Services
                     FirstName = u.FirstName,
                     LastName = u.LastName,
                     Name = $"{u.FirstName} {u.LastName}",
-                    Role = role,
+                    Role = "Employee",
                     EmployeeCode = profile?.EmployeeCode ?? "",
                     Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
                     Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
