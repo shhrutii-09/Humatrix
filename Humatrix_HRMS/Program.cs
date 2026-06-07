@@ -155,18 +155,33 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
-// 🔥 Seed Roles + SuperAdmin
+//// 🔥 Seed Roles + SuperAdmin
+//using (var scope = app.Services.CreateScope())
+//{
+//    var services = scope.ServiceProvider;
+
+//    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+//    await RoleSeeder.SeedRoles(roleManager);
+
+//    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+//    await SuperAdminSeeder.SeedSuperAdmin(userManager);
+//}
+// 🔥 Seed Roles, SuperAdmin and Migrations
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
 
+    // 1. DATABASE MIGRATION: Yeh line automatic update karegi
+    var db = services.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+
+    // 2. SEEDING: Yeh pehle se tha
     var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
     await RoleSeeder.SeedRoles(roleManager);
 
     var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
     await SuperAdminSeeder.SeedSuperAdmin(userManager);
 }
-
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
 {

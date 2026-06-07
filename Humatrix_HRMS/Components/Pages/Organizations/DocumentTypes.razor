@@ -11,6 +11,7 @@
 @inject IDocumentTypeService DocumentTypeService
 @inject CurrentUserService CurrentUserService
 @inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Document Types | Humatrix HRMS</PageTitle>
 
@@ -33,207 +34,317 @@
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
 
-            <h5 class="mb-3">Add / Edit Document Type</h5>
+            <h5 class="mb-3">@(isEditing ? "Edit" : "Add") Document Type</h5>
 
-            <div class="row g-3">
+            <EditForm Model="newType" OnValidSubmit="SaveDocumentType">
+                <div class="row g-3">
 
-                <div class="col-md-4">
-                    <InputText class="form-control"
-                               @bind-Value="newType.Name"
-                               placeholder="Document Name" />
-                </div>
-
-                <div class="col-md-3">
-                    <InputSelect class="form-select"
-                                 @bind-Value="newType.Category">
-                        <option value="Personal">Personal</option>
-                        <option value="Organization">Organization</option>
-                        <option value="Compliance">Compliance</option>
-                    </InputSelect>
-                </div>
-
-                <div class="col-md-3">
-                    <InputText class="form-control"
-                               @bind-Value="newType.Description"
-                               placeholder="Description" />
-                </div>
-
-                <div class="col-md-2">
-                    <button class="btn btn-primary w-100"
-                            @onclick="CreateDocumentType">
-                        @(newType.DocumentTypeId == Guid.Empty ? "Add" : "Update")
-                    </button>
-                </div>
-
-            </div>
-
-            <div class="row mt-3 align-items-center">
-
-                <div class="col-md-3">
-                    <div class="form-check">
-                        <InputCheckbox class="form-check-input"
-                                       @bind-Value="newType.IsMandatory"
-                                       id="chkMandatory" />
-                        <label class="form-check-label" for="chkMandatory">
-                            Mandatory
-                        </label>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">Document Name</label>
+                        <InputText class="form-control"
+                                   @bind-Value="newType.Name"
+                                   placeholder="Document Name" />
                     </div>
-                </div>
 
-                <div class="col-md-3">
-                    <div class="form-check">
-                        <InputCheckbox class="form-check-input"
-                                       @bind-Value="newType.RequiresVerification"
-                                       id="chkVerification" />
-                        <label class="form-check-label" for="chkVerification">
-                            Verification Required
-                        </label>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Category</label>
+                        <InputSelect class="form-select"
+                                     @bind-Value="newType.Category">
+                            <option value="Personal">Personal</option>
+                            <option value="Organization">Organization</option>
+                            <option value="Compliance">Compliance</option>
+                        </InputSelect>
                     </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">Description</label>
+                        <InputText class="form-control"
+                                   @bind-Value="newType.Description"
+                                   placeholder="Description (Optional)" />
+                    </div>
+
+                    <div class="col-md-2 d-flex flex-column justify-content-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            @(isEditing ? "Update" : "Add")
+                        </button>
+                        @if (isEditing)
+                        {
+                            <button type="button" class="btn btn-secondary w-100 mt-2"
+                                    @onclick="CancelEdit">
+                                Cancel
+                            </button>
+                        }
+                    </div>
+
                 </div>
 
-                @* INTEGRATED CLAUDE'S TOGGLE OPTION HERE *@
-                <div class="col-md-4">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox"
-                               @bind="newType.IsOrganizationGenerated"
-                               id="chkOrgGenerated" />
-                        <label class="form-check-label" for="chkOrgGenerated">
-                            Organisation-Generated
+                <div class="row mt-3 align-items-center">
+
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input"
+                                           @bind-Value="newType.IsMandatory"
+                                           id="chkMandatory" />
+                            <label class="form-check-label" for="chkMandatory">
+                                Mandatory
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input"
+                                           @bind-Value="newType.RequiresVerification"
+                                           id="chkVerification" />
+                            <label class="form-check-label" for="chkVerification">
+                                Requires Verification
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input"
+                                           @bind-Value="newType.IsOrganizationGenerated"
+                                           id="chkOrgGenerated" />
+                            <label class="form-check-label" for="chkOrgGenerated">
+                                Organization Generated Document
+                            </label>
                             <small class="text-muted d-block" style="font-size: 0.75rem;">
-                                Only HR/OrgAdmin can issue this type — employees cannot upload it.
+                                Only HR/OrgAdmin can upload - employees cannot upload this type
                             </small>
-                        </label>
+                        </div>
                     </div>
+
                 </div>
 
-            </div>
+                @* <div class="row mt-2">
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input"
+                                           @bind-Value="newType.TrackExpiry"
+                                           id="chkExpiry" />
+                            <label class="form-check-label" for="chkExpiry">
+                                Track Expiry Date
+                            </label>
+                        </div>
+                    </div>
+                </div> *@
+            </EditForm>
 
         </div>
     </div>
 
     <div class="mb-3">
-        <input class="form-control"
-               placeholder="Search document type..."
-               @bind="SearchText" />
+        <div class="row">
+            <div class="col-md-6">
+                <input class="form-control"
+                       placeholder="Search document type..."
+                       @bind="SearchText"
+                       @bind:event="oninput" />
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-outline-secondary" @onclick="ClearSearch">
+                    Clear Search
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="card shadow-sm border-0">
-
+        <div class="card-header bg-white border-0 pt-3">
+            <h5 class="mb-0">Document Types List</h5>
+        </div>
         <div class="table-responsive">
-
-            <table class="table table-hover align-middle">
-
-                <thead>
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
                     <tr>
                         <th>Name</th>
                         <th>Category</th>
                         <th>Mandatory</th>
                         <th>Verification</th>
                         <th>Org-Generated</th>
+                        @* <th>Expiry Track</th> *@
                         <th>Status</th>
                         <th style="width:180px;">Actions</th>
                     </tr>
                 </thead>
-
                 <tbody>
-
-                    @foreach (var item in FilteredDocumentTypes)
+                    @if (isLoading)
                     {
                         <tr>
-                            <td>@item.Name</td>
-                            <td>@item.Category</td>
-
-                            <td>
-                                @(item.IsMandatory ? "Yes" : "No")
-                            </td>
-
-                            <td>
-                                @(item.RequiresVerification ? "Yes" : "No")
-                            </td>
-
-                            @* DISPLAY THE VALUE IN THE TABLE COLUMNS *@
-                            <td>
-                                @if (item.IsOrganizationGenerated)
-                                {
-                                    <span class="badge bg-info text-dark">Org-Generated</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-light text-muted border">Standard</span>
-                                }
-                            </td>
-
-                            <td>
-                                @(item.IsActive ? "Active" : "Inactive")
-                            </td>
-
-                            <td>
-                                <button class="btn btn-sm btn-warning me-1"
-                                        @onclick="() => Edit(item)">
-                                    Edit
-                                </button>
-
-                                <button class="btn btn-sm btn-secondary me-1"
-                                        @onclick="() => Toggle(item)">
-                                    Toggle
-                                </button>
-
-                                <button class="btn btn-sm btn-danger"
-                                        @onclick="() => Delete(item)">
-                                    Delete
-                                </button>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Loading document types...</p>
                             </td>
                         </tr>
                     }
-
+                    else if (!FilteredDocumentTypes.Any())
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <i class="bi bi-folder-x fs-1 d-block mb-2"></i>
+                                <p class="mb-0">No document types found</p>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in FilteredDocumentTypes)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-bold">@item.Name</div>
+                                    @if (!string.IsNullOrEmpty(item.Description))
+                                    {
+                                        <small class="text-muted">@item.Description</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @GetCategoryBadgeClass(item.Category)">
+                                        @item.Category
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (item.IsMandatory)
+                                    {
+                                        <span class="badge bg-danger">Required</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-muted border">Optional</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.RequiresVerification)
+                                    {
+                                        <span class="badge bg-warning text-dark">Required</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-muted border">Not Required</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.IsOrganizationGenerated)
+                                    {
+                                        <span class="badge bg-info text-dark">Organization Generated</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-muted border">Employee Upload</span>
+                                    }
+                                </td>
+                                @* <td>
+                                    @if (item.TrackExpiry)
+                                    {
+                                        <span class="badge bg-info">Tracked</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-muted border">Not Tracked</span>
+                                    }
+                                </td> *@
+                                <td>
+                                    <span class="badge @(item.IsActive ? "bg-success" : "bg-secondary")">
+                                        @(item.IsActive ? "Active" : "Inactive")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-primary"
+                                                @onclick="() => Edit(item)"
+                                                title="Edit">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                @onclick="() => Toggle(item)"
+                                                title="@(item.IsActive ? "Deactivate" : "Activate")">
+                                            <i class="bi @(item.IsActive ? "bi-pause-circle" : "bi-play-circle")"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger"
+                                                @onclick="() => Delete(item)"
+                                                title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
                 </tbody>
-
             </table>
-
         </div>
-
     </div>
-
 </div>
 
 @code {
-
     private Guid organizationId;
-
     private List<DocumentType> documentTypes = new();
-
     private string SearchText = "";
-
-    private DocumentType newType = new();
+    private DocumentType newType = new() { Category = "Personal" }; // Fixed selection issue defaulting to structural Category text
+    private bool isLoading = true;
+    private bool isEditing = false;
 
     private IEnumerable<DocumentType> FilteredDocumentTypes =>
         string.IsNullOrWhiteSpace(SearchText)
             ? documentTypes
             : documentTypes.Where(x =>
-                x.Name.Contains(SearchText,
-                    StringComparison.OrdinalIgnoreCase));
+                (x.Name != null && x.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase)) ||
+                (x.Description != null && x.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase)) ||
+                (x.Category != null && x.Category.Contains(SearchText, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnInitializedAsync()
     {
-        var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
-        organizationId = ctx.OrganizationId;
-        await LoadData();
+        try
+        {
+            var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
+            if (ctx == null)
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+            organizationId = ctx.OrganizationId;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage($"Error initializing: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private async Task LoadData()
     {
-        documentTypes = await DocumentTypeService.GetOrganizationDocumentTypesAsync(organizationId);
+        var data = await DocumentTypeService.GetOrganizationDocumentTypesAsync(organizationId);
+        if (data != null)
+        {
+            documentTypes = data.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name).ToList();
+        }
     }
 
-    private async Task CreateDocumentType()
+    private async Task SaveDocumentType()
     {
+        if (string.IsNullOrWhiteSpace(newType.Name))
+        {
+            await ShowMessage("Document name is required", "error");
+            return;
+        }
+
         newType.OrganizationId = organizationId;
 
-        // Automatically configure defaults when marking as Org-Generated to protect integrity
+        // Auto-configure permissions based on document type
         if (newType.IsOrganizationGenerated)
         {
             newType.IsEmployeeUploadAllowed = false;
             newType.IsHRUploadAllowed = true;
+            newType.RequiresVerification = false; // Org-generated docs are auto-verified
         }
         else
         {
@@ -241,27 +352,31 @@
             newType.IsHRUploadAllowed = false;
         }
 
-        // If your page handles both Create and Update seamlessly through service hooks
-        await DocumentTypeService.CreateAsync(newType);
+        try
+        {
+            if (isEditing)
+            {
+                await DocumentTypeService.UpdateAsync(newType);
+                await ShowMessage("Document type updated successfully", "success");
+            }
+            else
+            {
+                await DocumentTypeService.CreateAsync(newType);
+                await ShowMessage("Document type created successfully", "success");
+            }
 
-        newType = new DocumentType();
-        await LoadData();
-    }
-
-    private async Task Toggle(DocumentType item)
-    {
-        await DocumentTypeService.ToggleStatusAsync(item.DocumentTypeId, organizationId);
-        await LoadData();
-    }
-
-    private async Task Delete(DocumentType item)
-    {
-        await DocumentTypeService.DeleteAsync(item.DocumentTypeId, organizationId);
-        await LoadData();
+            ResetForm();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage(ex.Message, "error");
+        }
     }
 
     private void Edit(DocumentType item)
     {
+        isEditing = true;
         newType = new DocumentType
         {
             DocumentTypeId = item.DocumentTypeId,
@@ -277,10 +392,73 @@
             IsEmployeeUploadAllowed = item.IsEmployeeUploadAllowed,
             IsHRUploadAllowed = item.IsHRUploadAllowed,
             DisplayOrder = item.DisplayOrder,
-
-            // KEY FIX: Ensure the edit model grabs the flag when loading into fields
-            IsOrganizationGenerated = item.IsOrganizationGenerated
+            IsOrganizationGenerated = item.IsOrganizationGenerated,
+            IsActive = item.IsActive
         };
+        StateHasChanged();
+    }
+
+    private void CancelEdit()
+    {
+        ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        isEditing = false;
+        newType = new DocumentType { Category = "Personal" };
+        StateHasChanged();
+    }
+
+    private async Task Toggle(DocumentType item)
+    {
+        try
+        {
+            await DocumentTypeService.ToggleStatusAsync(item.DocumentTypeId, organizationId);
+            await LoadData();
+            await ShowMessage($"Document type {(item.IsActive ? "deactivated" : "activated")} successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage(ex.Message, "error");
+        }
+    }
+
+    private async Task Delete(DocumentType item)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete '{item.Name}'? This action cannot be undone.");
+
+        if (!confirmed) return;
+
+        try
+        {
+            await DocumentTypeService.DeleteAsync(item.DocumentTypeId, organizationId);
+            await LoadData();
+            await ShowMessage("Document type deleted successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            await ShowMessage(ex.Message, "error");
+        }
+    }
+
+    private void ClearSearch()
+    {
+        SearchText = "";
+        StateHasChanged();
+    }
+
+    private string GetCategoryBadgeClass(string category) => category switch
+    {
+        "Personal" => "bg-primary",
+        "Organization" => "bg-info text-dark",
+        "Compliance" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private async Task ShowMessage(string message, string type)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"{type.ToUpper()}: {message}");
     }
 
     private void GoBack()

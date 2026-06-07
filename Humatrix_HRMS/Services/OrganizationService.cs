@@ -1,4 +1,5 @@
 ﻿using Humatrix_HRMS.Data;
+using Humatrix_HRMS.Data.Seeders;
 using Humatrix_HRMS.DTOs;
 using Humatrix_HRMS.Models;
 using Microsoft.AspNetCore.Identity;
@@ -83,6 +84,11 @@ namespace Humatrix_HRMS.Services
 
                 await transaction.CommitAsync();
 
+
+                using var seedingContext = _contextFactory.CreateDbContext();
+                await Humatrix_HRMS.Data.Seeders.DocumentTypeSeeder.SeedDocumentTypesAsync(seedingContext, org.OrganizationId); 
+                
+                
                 var baseUrl = "https://localhost:7057";
                 var setupLink = $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
 
