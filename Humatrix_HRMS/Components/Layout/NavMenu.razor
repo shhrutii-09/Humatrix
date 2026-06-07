@@ -40,6 +40,7 @@
                         <i class="bi bi-person-plus"></i>
                         <span>Add Employee</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/hr/assets">
                         <i class="bi bi-laptop"></i>
                         <span>Department Assets</span>
@@ -80,6 +81,7 @@
                         <i class="bi bi-person-gear"></i>
                         <span>Add HR</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/admin/leave-types">
                         <i class="bi bi-file-earmark-ruled"></i>
                         <span>Leave Types</span>
@@ -88,10 +90,12 @@
                         <i class="bi bi-calendar-event"></i>
                         <span>Holidays</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/org/workweeks">
                         <i class="bi bi-calendar-range"></i>
                         <span>Work Week</span>
                     </NavLink>
+                    
                 </AuthorizeView>
 
                 @* SHARED: ORG ADMIN & HR *@
@@ -100,10 +104,12 @@
                         <i class="bi bi-people"></i>
                         <span>Employee Directory</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/admin/attendance">
                         <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/hr/corrections">
                         <i class="bi bi-pencil-square"></i>
                         <span>Attendance Correction</span>
@@ -116,18 +122,22 @@
                         <i class="bi bi-house-door"></i>
                         <span>WFH Approvals</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/hr/overtime">
                         <i class="bi bi-clock-history"></i>
                         <span>Overtime Approvals</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/admin/tasks">
                         <i class="bi bi-list-task"></i>
                         <span>All Tasks</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/hr/assign-task">
                         <i class="bi bi-plus-circle"></i>
                         <span>Assign Tasks</span>
                     </NavLink>
+                 
                     <NavLink class="nav-item-custom" href="/hr/tasks">
                         <i class="bi bi-gear-wide-connected"></i>
                         <span>Manage Tasks</span>
@@ -140,34 +150,46 @@
                         <i class="bi bi-calendar-check"></i>
                         <span>My Attendance</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/assets">
                         <i class="bi bi-pc-display"></i>
                         <span>My Workspace</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/overtime">
                         <i class="bi bi-stopwatch"></i>
                         <span>My Overtime</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/my-tasks">
                         <i class="bi bi-check2-square"></i>
                         <span>My Tasks</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/holidays">
                         <i class="bi bi-calendar3"></i>
                         <span>Holidays</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/leaves">
                         <i class="bi bi-journal-text"></i>
                         <span>My Leaves</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/wfh">
                         <i class="bi bi-house-check"></i>
                         <span>WFH Request</span>
                     </NavLink>
+
                     <NavLink class="nav-item-custom" href="/employee/corrections">
                         <i class="bi bi-pencil"></i>
                         <span>Attendance Correction</span>
                     </NavLink>
+                    @* <NavLink class="nav-item-custom" href="/employee/asset-requests">
+                        <i class="bi bi-laptop"></i>
+                        <span>Assets Requesting </span>
+                    </NavLink> *@
+
                 </AuthorizeView>
 
                 <div class="sidebar-footer">
@@ -184,6 +206,12 @@
                             <span>Logout</span>
                         </button>
                     </form>
+
+                    <script>
+                        function confirmLogout() {
+                            return confirm("Are you sure you want to logout?");
+                        }
+                    </script>
                 </div>
 
             </Authorized>
