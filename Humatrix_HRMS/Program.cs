@@ -5,6 +5,7 @@ using Humatrix_HRMS.Hubs;
 using Humatrix_HRMS.Infrastructure.Services;
 using Humatrix_HRMS.Services;
 using Humatrix_HRMS.Services.Assets;
+using Humatrix_HRMS.Services.Documents;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -110,7 +111,33 @@ builder.Services.AddScoped<NotificationEngine>();
 builder.Services.AddScoped<ApprovalWorkflowService>();
 builder.Services.AddScoped<ActivityLogService>();
 builder.Services.AddScoped<DashboardBroadcastService>();
+// Services
+builder.Services.AddScoped<IDocumentTypeService,
+    DocumentTypeService>();
+builder.Services.AddScoped<IEmployeeDocumentService,
+    EmployeeDocumentService>();
 
+builder.Services.AddScoped<IDocumentHistoryService,
+                           DocumentHistoryService>();
+
+builder.Services.AddScoped<
+    IDocumentComplianceService,
+    DocumentComplianceService>();
+
+builder.Services.AddScoped<
+    IDocumentVerificationService,
+    DocumentVerificationService>();
+
+builder.Services.AddScoped<
+    IDocumentExpiryService,
+    DocumentExpiryService>();
+
+builder.Services.AddScoped<
+    IDocumentDashboardService,
+    DocumentDashboardService>();
+// Configuration
+// appsettings.json:
+// "DocumentStorage": { "BasePath": "D:/app-data/documents" }
 builder.Services.AddScoped<AssetService>();
 
 builder.Services.AddScoped<OfficeLocationService>();

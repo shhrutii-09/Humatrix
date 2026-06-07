@@ -1,5 +1,7 @@
 using Humatrix_HRMS.Configuration;
+using Humatrix_HRMS.Configuration.Documents;
 using Humatrix_HRMS.Models;
+using Humatrix_HRMS.Models.Documents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -57,10 +59,19 @@ namespace Humatrix_HRMS.Data
         public DbSet<AssetRequest> AssetRequests { get; set; }
         public DbSet<ProcurementRequest> ProcurementRequests { get; set; }
 
+        // In DbSet declarations
+        public DbSet<DocumentType> DocumentTypes { get; set; }
+        public DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
+        public DbSet<DocumentHistory> DocumentHistories { get; set; }
+        public DbSet<DocumentExpiryAlert> DocumentExpiryAlerts { get; set; }
+
+
+        // In OnModelCreating
+
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }
         //public DbSet<IdentityRole> Roles { get; set; }
 
-         protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
@@ -386,9 +397,20 @@ namespace Humatrix_HRMS.Data
        })
        .HasFilter("[SerialNumber] IS NOT NULL")
        .IsUnique();
+
+
+
+            modelBuilder.ApplyConfiguration(new DocumentTypeConfiguration());
+            modelBuilder.ApplyConfiguration(new EmployeeDocumentConfiguration());
+            modelBuilder.ApplyConfiguration(new DocumentHistoryConfiguration());
+
+            modelBuilder.ApplyConfiguration(new DocumentExpiryAlertConfiguration());
+
+
+
         }
 
-       
+
 
 
     }

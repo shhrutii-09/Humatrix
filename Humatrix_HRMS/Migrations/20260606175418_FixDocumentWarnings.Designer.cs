@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260606175418_FixDocumentWarnings")]
+    partial class FixDocumentWarnings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -897,10 +900,7 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<int>("DaysBeforeExpiry")
                         .HasColumnType("int");
 
-                    b.Property<Guid?>("DocumentId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("EmployeeDocumentDocumentId")
+                    b.Property<Guid>("DocumentId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("EmployeeId")
@@ -911,13 +911,10 @@ namespace Humatrix_HRMS.Migrations
 
                     b.HasKey("AlertId");
 
-                    b.HasIndex("EmployeeDocumentDocumentId");
-
                     b.HasIndex("EmployeeId");
 
                     b.HasIndex("DocumentId", "DaysBeforeExpiry")
-                        .IsUnique()
-                        .HasFilter("[DocumentId] IS NOT NULL");
+                        .IsUnique();
 
                     b.HasIndex("OrganizationId", "AlertSentAt");
 
@@ -1103,9 +1100,6 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsLatestVersion")
-                        .HasColumnType("bit");
-
                     b.Property<DateOnly?>("IssueDate")
                         .HasColumnType("date");
 
@@ -1178,13 +1172,13 @@ namespace Humatrix_HRMS.Migrations
 
                     b.HasIndex("PreviousDocumentId");
 
+                    b.HasIndex("EmployeeId", "DocumentTypeId")
+                        .HasFilter("[IsDeleted] = 0");
+
                     b.HasIndex("OrganizationId", "ExpiryDate")
                         .HasFilter("[ExpiryDate] IS NOT NULL AND [IsDeleted] = 0 AND [Status] = 'Verified'");
 
                     b.HasIndex("OrganizationId", "Status")
-                        .HasFilter("[IsDeleted] = 0");
-
-                    b.HasIndex("EmployeeId", "DocumentTypeId", "IsLatestVersion")
                         .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("EmployeeDocuments");
@@ -2300,10 +2294,6 @@ namespace Humatrix_HRMS.Migrations
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("Humatrix_HRMS.Models.Documents.EmployeeDocument", null)
-                        .WithMany("ExpiryAlerts")
-                        .HasForeignKey("EmployeeDocumentDocumentId");
-
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
@@ -2322,15 +2312,7 @@ namespace Humatrix_HRMS.Migrations
                         .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("Document");
-
-                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Documents.DocumentType", b =>
@@ -2353,7 +2335,7 @@ namespace Humatrix_HRMS.Migrations
                         .IsRequired();
 
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
-                        .WithMany("Documents")
+                        .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -2612,14 +2594,7 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Documents.EmployeeDocument", b =>
                 {
-                    b.Navigation("ExpiryAlerts");
-
                     b.Navigation("History");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.Employee", b =>
-                {
-                    b.Navigation("Documents");
                 });
 #pragma warning restore 612, 618
         }

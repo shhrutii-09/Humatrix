@@ -1,0 +1,276 @@
+﻿@page "/org/document-types"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models.Documents
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.Documents
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "OrgAdmin")]
+
+@inject IDocumentTypeService DocumentTypeService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+
+<PageTitle>Document Types | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+        <div>
+            <h2 class="fw-bold">Document Types</h2>
+            <p class="text-muted small mb-0">
+                Configure employee document requirements.
+            </p>
+        </div>
+
+        <button class="btn btn-secondary"
+                @onclick="GoBack">
+            Dashboard
+        </button>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+
+            <h5 class="mb-3">Add Document Type</h5>
+
+            <div class="row g-3">
+
+                <div class="col-md-4">
+                    <InputText class="form-control"
+                               @bind-Value="newType.Name"
+                               placeholder="Document Name" />
+                </div>
+
+                <div class="col-md-3">
+                    <InputSelect class="form-select"
+                                 @bind-Value="newType.Category">
+                        <option value="Personal">Personal</option>
+                        <option value="Organization">Organization</option>
+                        <option value="Compliance">Compliance</option>
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-3">
+                    <InputText class="form-control"
+                               @bind-Value="newType.Description"
+                               placeholder="Description" />
+                </div>
+
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100"
+                            @onclick="CreateDocumentType">
+                        Add
+                    </button>
+                </div>
+
+            </div>
+
+            <div class="row mt-3">
+
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <InputCheckbox class="form-check-input"
+                                       @bind-Value="newType.IsMandatory" />
+                        <label class="form-check-label">
+                            Mandatory
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <InputCheckbox class="form-check-input"
+                                       @bind-Value="newType.TrackExpiry" />
+                        <label class="form-check-label">
+                            Track Expiry
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="form-check">
+                        <InputCheckbox class="form-check-input"
+                                       @bind-Value="newType.RequiresVerification" />
+                        <label class="form-check-label">
+                            Verification Required
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <input class="form-control"
+               placeholder="Search document type..."
+               @bind="SearchText" />
+    </div>
+
+    <div class="card shadow-sm border-0">
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle">
+
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Mandatory</th>
+                        <th>Expiry</th>
+                        <th>Verification</th>
+                        <th>Status</th>
+                        <th style="width:180px;">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var item in FilteredDocumentTypes)
+                    {
+                        <tr>
+
+                            <td>@item.Name</td>
+                            <td>@item.Category</td>
+
+                            <td>
+                                @(item.IsMandatory ? "Yes" : "No")
+                            </td>
+
+                            <td>
+                                @(item.TrackExpiry ? "Yes" : "No")
+                            </td>
+
+                            <td>
+                                @(item.RequiresVerification ? "Yes" : "No")
+                            </td>
+
+                            <td>
+                                @(item.IsActive ? "Active" : "Inactive")
+                            </td>
+
+                            <td>
+
+                                <button class="btn btn-sm btn-warning me-1"
+                                        @onclick="() => Edit(item)">
+                                    Edit
+                                </button>
+
+                                <button class="btn btn-sm btn-secondary me-1"
+                                        @onclick="() => Toggle(item)">
+                                    Toggle
+                                </button>
+
+                                <button class="btn btn-sm btn-danger"
+                                        @onclick="() => Delete(item)">
+                                    Delete
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+
+    private Guid organizationId;
+
+    private List<DocumentType> documentTypes = new();
+
+    private string SearchText = "";
+
+    private DocumentType newType = new();
+
+    private IEnumerable<DocumentType> FilteredDocumentTypes =>
+        string.IsNullOrWhiteSpace(SearchText)
+            ? documentTypes
+            : documentTypes.Where(x =>
+                x.Name.Contains(SearchText,
+                    StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ctx =
+            await CurrentUserService.GetOrgDashboardContextAsync();
+
+        organizationId = ctx.OrganizationId;
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        documentTypes =
+            await DocumentTypeService
+                .GetOrganizationDocumentTypesAsync(
+                    organizationId);
+    }
+
+    private async Task CreateDocumentType()
+    {
+        newType.OrganizationId = organizationId;
+
+        await DocumentTypeService.CreateAsync(newType);
+
+        newType = new DocumentType();
+
+        await LoadData();
+    }
+
+    private async Task Toggle(DocumentType item)
+    {
+        await DocumentTypeService.ToggleStatusAsync(
+            item.DocumentTypeId,
+            organizationId);
+
+        await LoadData();
+    }
+
+    private async Task Delete(DocumentType item)
+    {
+        await DocumentTypeService.DeleteAsync(
+            item.DocumentTypeId,
+            organizationId);
+
+        await LoadData();
+    }
+
+    private void Edit(DocumentType item)
+    {
+        newType = new DocumentType
+        {
+            DocumentTypeId = item.DocumentTypeId,
+            OrganizationId = item.OrganizationId,
+            Name = item.Name,
+            Description = item.Description,
+            Category = item.Category,
+            IsMandatory = item.IsMandatory,
+            TrackExpiry = item.TrackExpiry,
+            RequiresVerification = item.RequiresVerification,
+            AllowedFileTypes = item.AllowedFileTypes,
+            MaxFileSizeMB = item.MaxFileSizeMB,
+            IsEmployeeUploadAllowed = item.IsEmployeeUploadAllowed,
+            IsHRUploadAllowed = item.IsHRUploadAllowed,
+            DisplayOrder = item.DisplayOrder
+        };
+    }
+
+    private void GoBack()
+    {
+        Nav.NavigateTo("/org/dashboard");
+    }
+}

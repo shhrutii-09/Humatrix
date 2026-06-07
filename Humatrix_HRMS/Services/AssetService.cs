@@ -4,6 +4,7 @@ using Humatrix_HRMS.Infrastructure.Constants;
 using Humatrix_HRMS.Infrastructure.Services;
 using Humatrix_HRMS.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace Humatrix_HRMS.Services.Assets
 {
@@ -235,13 +236,15 @@ namespace Humatrix_HRMS.Services.Assets
                 if (asset.Status != AssetStatus.Available)
                     throw new InvalidOperationException(
                         $"Asset '{asset.AssetCode}' is not available for assignment (current status: {asset.Status}).");
-
                 var employee = await _db.Employees
+                    .Include(e => e.Department)
                     .FirstOrDefaultAsync(e =>
                         e.EmployeeId == dto.EmployeeId &&
-                        e.OrganizationId == organizationId)
-                    ?? throw new KeyNotFoundException("Employee not found in this organisation.");
-
+                        e.OrganizationId == organizationId &&
+                        e.Status == "Active" &&
+                        (e.DepartmentId == null || e.Department.IsActive))
+                    ?? throw new KeyNotFoundException(
+                        "Active employee not found or employee belongs to an inactive department.");
                 // HR scope: can only assign to employees in their department
                 if (actorRole == "HR" && callerDepartmentId.HasValue &&
                     employee.DepartmentId != callerDepartmentId.Value)
@@ -672,7 +675,7 @@ namespace Humatrix_HRMS.Services.Assets
                     .Include(r => r.RequestedByEmployee)
                     .FirstOrDefaultAsync(r =>
                         r.AssetRequestId == dto.AssetRequestId &&
-                        r.OrganizationId == organizationId) 
+                        r.OrganizationId == organizationId)
                     ?? throw new KeyNotFoundException("Asset request not found.");
 
                 Console.WriteLine($"=== REVIEW START ===");
@@ -1286,12 +1289,21 @@ namespace Humatrix_HRMS.Services.Assets
             string? callerRole = null,
             Guid? callerDepartmentId = null)
         {
+            //var asset = await _db.Assets
+            //    .Include(a => a.CurrentEmployee)
+            //    .Include(a => a.Department)
+            //    .FirstOrDefaultAsync(a =>
+            //        a.AssetId == assetId && a.OrganizationId == organizationId)
+            //    ?? throw new KeyNotFoundException("Asset not found.");
             var asset = await _db.Assets
-                .Include(a => a.CurrentEmployee)
-                .Include(a => a.Department)
-                .FirstOrDefaultAsync(a =>
-                    a.AssetId == assetId && a.OrganizationId == organizationId)
-                ?? throw new KeyNotFoundException("Asset not found.");
+     .Include(a => a.CurrentEmployee)
+     .Include(a => a.Department)
+     .FirstOrDefaultAsync(a =>
+         a.AssetId == assetId &&
+         a.OrganizationId == organizationId &&
+         (a.DepartmentId == null || a.Department.IsActive) &&
+         (a.CurrentEmployeeId == null || a.CurrentEmployee.Status == "Active"))
+     ?? throw new KeyNotFoundException("Asset not found.");
 
             if (callerRole == "HR")
                 EnsureHRCanAccessAsset(asset, callerDepartmentId);
@@ -1321,6 +1333,8 @@ namespace Humatrix_HRMS.Services.Assets
                           join returner in _db.Users on a.ReturnedByUserId equals returner.Id into returnerJoin
                           from ret in returnerJoin.DefaultIfEmpty()
                           where a.AssetId == assetId
+                                && emp.Status == "Active"
+                                && (emp.DepartmentId == null || emp.Department.IsActive)
                           orderby a.AssignedAt descending
                           select new AssignmentDto
                           {
@@ -1362,12 +1376,16 @@ namespace Humatrix_HRMS.Services.Assets
             return await _db.AssetAssignments
                 .Include(a => a.Asset)
                 .Include(a => a.Employee)
-             .Where(a =>
+                .Include(a => a.Asset)
+    .ThenInclude(x => x.Department)
+            .Where(a =>
     a.EmployeeId == employeeId &&
+    a.Employee.Status == "Active" &&
     a.Asset.OrganizationId == organizationId &&
     a.ReturnedAt == null &&
     a.Asset.CurrentEmployeeId == employeeId &&
-    a.Asset.Status == AssetStatus.Assigned)
+    a.Asset.Status == AssetStatus.Assigned &&
+    (a.Asset.DepartmentId == null || a.Asset.Department.IsActive))
                 .Select(a => new AssignmentDto
                 {
                     AssetAssignmentId = a.AssetAssignmentId,
@@ -1396,19 +1414,22 @@ namespace Humatrix_HRMS.Services.Assets
                 join assignedBy in _db.Users
                     on a.AssignedByUserId equals assignedBy.Id into assignedJoin
                 from assignedBy in assignedJoin.DefaultIfEmpty()
-
+                join dept in _db.Departments
+    on asset.DepartmentId equals dept.DepartmentId into deptJoin
+                from dept in deptJoin.DefaultIfEmpty()
                     // Left Join for ReturnedBy
                 join returnedBy in _db.Users
                     on a.ReturnedByUserId equals returnedBy.Id into returnedJoin
                 from returnedBy in returnedJoin.DefaultIfEmpty()
 
                 where a.EmployeeId == employeeId
-                      && a.OrganizationId == organizationId
+       && a.OrganizationId == organizationId
+       && asset.Department.IsActive
 
                 orderby a.AssignedAt descending
 
                 select new
-                {
+                {   
                     a.AssetId,
                     AssetName = asset.Name,
                     asset.AssetCode,
@@ -1494,9 +1515,11 @@ namespace Humatrix_HRMS.Services.Assets
      Guid organizationId)
         {
             return await _db.Assets
-                .Where(a =>
-                    a.OrganizationId == organizationId &&
-                    a.CurrentEmployeeId == employeeId)
+                .Include(a => a.Department)
+               .Where(a =>
+    a.OrganizationId == organizationId &&
+    a.CurrentEmployeeId == employeeId &&
+    (a.DepartmentId == null || a.Department.IsActive))
                 .Select(a => new AssetDto
                 {
                     AssetId = a.AssetId,
@@ -1584,9 +1607,13 @@ namespace Humatrix_HRMS.Services.Assets
                 .Include(r => r.Asset)
                 .Include(r => r.RequestedByEmployee)
                 .Include(r => r.ReviewedByEmployee)
-                .Where(r =>
-                    r.RequestedByEmployeeId == employeeId &&
-                    r.OrganizationId == organizationId)
+    .ThenInclude(e => e.Department)
+               .Where(r =>
+    r.RequestedByEmployeeId == employeeId &&
+    r.OrganizationId == organizationId &&
+    r.RequestedByEmployee.Status == "Active" &&
+    (r.RequestedByEmployee.DepartmentId == null ||
+     r.RequestedByEmployee.Department.IsActive))
                 .OrderByDescending(r => r.RequestedAt)
                 .Select(r => MapAssetRequestDto(r))
                 .ToListAsync();
@@ -1634,6 +1661,7 @@ namespace Humatrix_HRMS.Services.Assets
         {
             return await _db.AssetAssignments
                 .Where(a => a.AssetId == assetId && a.OrganizationId == organizationId)
+                .Where(a => a.Employee.Status == "Active" && a.Employee.Department.IsActive)
                 .OrderByDescending(a => a.AssignedAt)
                 .Select(a => new AssetAssignmentHistoryDto
                 {
@@ -1820,7 +1848,7 @@ namespace Humatrix_HRMS.Services.Assets
             asset.UpdatedAt = DateTime.UtcNow;
             asset.UpdatedByUserId = actorUserId;
         }
-            
+
         /// <summary>
         /// Validates that an HR caller has access to the given asset.
         /// HR can only access assets that belong to their department or have no department (org-wide).
@@ -2040,6 +2068,24 @@ namespace Humatrix_HRMS.Services.Assets
             FulfilledAt = p.FulfilledAt
         };
 
+        private static Expression<Func<Employee, bool>> ActiveEmployee =>
+    e => e.Status == "Active";
 
+        private static Expression<Func<Department, bool>> ActiveDepartment =>
+            d => d.IsActive;
+        
+        private IQueryable<Employee> ActiveEmployees(IQueryable<Employee> q)
+        {
+            return q.Where(e =>
+                e.Status == "Active" &&
+                (e.DepartmentId == null || e.Department.IsActive));
+        }
+
+        private IQueryable<Asset> ActiveAssets(IQueryable<Asset> q)
+        {
+            return q.Where(a =>
+                (a.DepartmentId == null || a.Department.IsActive) &&
+                (a.CurrentEmployeeId == null || a.CurrentEmployee.Status == "Active"));
+        }
     }
 }

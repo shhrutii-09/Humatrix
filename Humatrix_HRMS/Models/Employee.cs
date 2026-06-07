@@ -1,5 +1,6 @@
 ﻿using Humatrix_HRMS.Data;
 using System.ComponentModel.DataAnnotations.Schema;
+using Humatrix_HRMS.Models.Documents;
 
 namespace Humatrix_HRMS.Models
 {
@@ -59,5 +60,8 @@ namespace Humatrix_HRMS.Models
         // ADD THIS SECTION BELOW
         [ForeignKey("DesignationId")]
         public Designation? Designation { get; set; }
+
+        public ICollection<EmployeeDocument> Documents { get; set; }
+    = new List<EmployeeDocument>();
     }
 }
