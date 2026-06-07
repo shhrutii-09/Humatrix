@@ -22,37 +22,40 @@ namespace Humatrix_HRMS.Services
         private readonly IConfiguration _config;
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
         private readonly EmailService _emailService;
+        private readonly EmployeeEventService _eventService; // Added for reactivity
 
         public EmployeeService(
           UserManager<ApplicationUser> userManager,
           CurrentUserService currentUser,
           IDbContextFactory<ApplicationDbContext> contextFactory,
           IConfiguration config,
-          EmailService emailService)
+          EmailService emailService,
+          EmployeeEventService eventService) // Injected here
         {
             _userManager = userManager;
             _currentUser = currentUser;
             _contextFactory = contextFactory;
             _config = config;
             _emailService = emailService;
+            _eventService = eventService;
         }
 
-        #region Cascade Deactivation Methods (For Department & Designation)
+        #region Cascade Deactivation Methods (For Department & Designation)
 
-        public async Task BulkInactivateByDepartmentAsync(Guid departmentId, Guid organizationId)
+        public async Task BulkInactivateByDepartmentAsync(Guid departmentId, Guid organizationId)
         {
             using var context = await _contextFactory.CreateDbContextAsync();
 
-            // Find all active employees in this department
-            var employees = await context.Employees
+            // Find all active employees in this department
+            var employees = await context.Employees
         .Where(e => e.DepartmentId == departmentId && e.OrganizationId == organizationId && e.Status == "Active")
         .ToListAsync();
 
             foreach (var emp in employees)
             {
                 emp.Status = "Inactive";
-                // Sync with ApplicationUser if necessary
-                var user = await _userManager.FindByIdAsync(emp.UserId);
+                // Sync with ApplicationUser if necessary
+                var user = await _userManager.FindByIdAsync(emp.UserId);
                 if (user != null)
                 {
                     user.IsActive = false;
@@ -60,6 +63,7 @@ namespace Humatrix_HRMS.Services
                 }
             }
             await context.SaveChangesAsync();
+            _eventService.NotifyStateChanged(); // Added to trigger refresh
         }
 
         public async Task BulkInactivateByDesignationAsync(Guid designationId, Guid organizationId)
@@ -81,13 +85,14 @@ namespace Humatrix_HRMS.Services
                 }
             }
             await context.SaveChangesAsync();
+            _eventService.NotifyStateChanged(); // Added to trigger refresh
         }
 
-        #endregion
+        #endregion
 
-        #region Dashboard Data
+        #region Dashboard Data
 
-        public async Task<EmployeeDashboardDto?> GetEmployeeDashboardDataAsync()
+        public async Task<EmployeeDashboardDto?> GetEmployeeDashboardDataAsync()
         {
             using var context = await _contextFactory.CreateDbContextAsync();
             var currentUser = await _currentUser.GetUserAsync();
@@ -118,11 +123,11 @@ namespace Humatrix_HRMS.Services
             ).AsNoTracking().FirstOrDefaultAsync();
         }
 
-        #endregion
+        #endregion
 
-        #region Employee Management
+        #region Employee Management
 
-        public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
+        public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
 
@@ -259,8 +264,7 @@ namespace Humatrix_HRMS.Services
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) throw new Exception("User not found");
 
-            // --- YE VALIDATION ADD KAREIN ---
-            if (isActive) // Sirf tab check karein jab user ko 'Active' kar rahe ho
+            if (isActive)
             {
                 var employee = await _context.Employees
                     .Include(e => e.Department)
@@ -269,16 +273,13 @@ namespace Humatrix_HRMS.Services
 
                 if (employee != null)
                 {
-                    // Check: Kya Department Inactive hai?
                     if (employee.Department != null && !employee.Department.IsActive)
                         throw new Exception($"Cannot activate: The Department '{employee.Department.Name}' is currently inactive.");
 
-                    // Check: Kya Designation Inactive hai?
                     if (employee.Designation != null && !employee.Designation.IsActive)
                         throw new Exception($"Cannot activate: The Designation '{employee.Designation.Name}' is currently inactive.");
                 }
             }
-            // --------------------------------
 
             user.IsActive = isActive;
             await _userManager.UpdateAsync(user);
@@ -291,13 +292,16 @@ namespace Humatrix_HRMS.Services
                 profile.Status = isActive ? "Active" : "Inactive";
                 await _context.SaveChangesAsync();
             }
+
+            // Notify other components of the change
+            _eventService.NotifyStateChanged();
         }
 
-        #endregion
+        #endregion
 
-        #region List Retrieval
+        #region List Retrieval
 
-        public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
+        public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
       string? search = null,
       Guid? departmentId = null,
       int pageNumber = 1,
@@ -460,11 +464,11 @@ namespace Humatrix_HRMS.Services
             return resultList.OrderBy(x => x.Name).ToList();
         }
 
-        #endregion
+        #endregion
 
-        #region Creation
+        #region Creation
 
-        public async Task<string> CreateEmployeeAsync(CreateEmployeeDto dto)
+        public async Task<string> CreateEmployeeAsync(CreateEmployeeDto dto)
         {
             var currentUser = await _currentUser.GetUserAsync();
             var inviterName = string.Join(" ", new[] { currentUser!.FirstName, currentUser.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
@@ -579,9 +583,9 @@ namespace Humatrix_HRMS.Services
 
             return $"EMP{value:D4}";
         }
-        #endregion
+        #endregion
 
-        public async Task<EmployeeDetailsDto?> GetEmployeeDetailsByIdAsync(Guid employeeId)
+        public async Task<EmployeeDetailsDto?> GetEmployeeDetailsByIdAsync(Guid employeeId)
         {
             using var context = _contextFactory.CreateDbContext();
 

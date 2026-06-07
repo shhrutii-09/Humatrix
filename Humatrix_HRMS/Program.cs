@@ -110,7 +110,7 @@ builder.Services.AddScoped<NotificationEngine>();
 builder.Services.AddScoped<ApprovalWorkflowService>();
 builder.Services.AddScoped<ActivityLogService>();
 builder.Services.AddScoped<DashboardBroadcastService>();
-
+builder.Services.AddScoped<EmployeeEventService>();
 builder.Services.AddScoped<AssetService>();
 
 builder.Services.AddScoped<OfficeLocationService>();
