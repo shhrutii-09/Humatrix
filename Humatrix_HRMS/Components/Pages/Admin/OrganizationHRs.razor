@@ -18,14 +18,9 @@
 <PageTitle>HR Personnel - @orgName</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-normal">HR Personnel - @orgName</h2>
-        </div>
-        <!-- Updated button styling to perfectly match the dashboard design -->
-        <button class="btn btn-interactive-back shadow-sm"
-                @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}")'>
+        <div><h2 class="fw-normal">HR Personnel - @orgName</h2></div>
+        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo($"/admin/organizations/{id}")'>
             <i class="bi bi-arrow-left me-1"></i> BACK TO DETAILS
         </button>
     </div>
@@ -42,17 +37,10 @@
         <div class="row g-3 mb-4 align-items-center">
             <div class="col-md-5">
                 <div class="input-group shadow-sm">
-                    <span class="input-group-text bg-white border-end-0 text-muted">
-                        <i class="bi bi-search"></i>
-                    </span>
-                    <input type="text"
-                           class="form-control border-start-0"
-                           placeholder="Search by name or email..."
-                           @bind="_searchQuery"
-                           @bind:event="oninput" />
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control border-start-0" placeholder="Search by name or email..." @bind="_searchQuery" @bind:event="oninput" />
                 </div>
             </div>
-
             <div class="col-md-4">
                 <select class="form-select shadow-sm" @bind="_selectedDepartment">
                     <option value="">All Departments</option>
@@ -62,7 +50,6 @@
                     }
                 </select>
             </div>
-
             @if (!string.IsNullOrWhiteSpace(_searchQuery) || !string.IsNullOrWhiteSpace(_selectedDepartment))
             {
                 <div class="col-md-3">
@@ -76,8 +63,7 @@
         @if (!GetFilteredHRs().Any())
         {
             <div class="alert alert-info text-center shadow-sm border-0 py-4">
-                <i class="bi bi-info-circle-fill fs-4 me-2 align-middle"></i>
-                No matching HR records found.
+                <i class="bi bi-info-circle-fill fs-4 me-2 align-middle"></i> No matching HR records found.
             </div>
         }
         else
@@ -101,21 +87,12 @@
                                 <tr>
                                     <td class="fw-bold ps-3">@hr.Name</td>
                                     <td class="text-muted">@hr.Email</td>
-                                    <td>
-                                        <span class="badge bg-secondary-subtle text-secondary px-2 py-1">
-                                            @(string.IsNullOrWhiteSpace(hr.Department) ? "N/A" : hr.Department)
-                                        </span>
-                                    </td>
+                                    <td><span class="badge bg-secondary-subtle text-secondary px-2 py-1">@(string.IsNullOrWhiteSpace(hr.Department) ? "N/A" : hr.Department)</span></td>
                                     <td>@hr.Designation</td>
-                                    <td>
-                                        <span class="badge bg-light text-dark border px-2 py-1">
-                                            @hr.Role
-                                        </span>
-                                    </td>
+                                    <td><span class="badge bg-light text-dark border px-2 py-1">@hr.Role</span></td>
                                     <td class="text-center">
                                         <span class="status-badge-compact @(hr.IsActive ? "active-badge" : "inactive-badge")">
-                                            <i class="bi @(hr.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
-                                            @(hr.IsActive ? "Active" : "Inactive")
+                                            <i class="bi @(hr.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i> @(hr.IsActive ? "Active" : "Inactive")
                                         </span>
                                     </td>
                                 </tr>
@@ -129,7 +106,6 @@
 </div>
 
 <style>
-    /* Injected exact matching clean back-button styles */
     .btn-interactive-back {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
@@ -190,13 +166,10 @@
 </style>
 
 @code {
-    [Parameter]
-    public Guid id { get; set; }
-
+    [Parameter] public Guid id { get; set; }
     private List<EmployeeListDto>? _allHRs;
     private List<string> _departments = new();
     private string orgName = "Loading...";
-
     private string _searchQuery = string.Empty;
     private string _selectedDepartment = string.Empty;
 
@@ -210,59 +183,34 @@
         try
         {
             var result = await OrgService.GetOrganizationDetailsAsync(id);
-            if (result.Organization == null)
-            {
-                Nav.NavigateTo("/admin/organizations");
-                return;
-            }
-
+            if (result.Organization == null) { Nav.NavigateTo("/admin/organizations"); return; }
             orgName = result.Organization.Name;
-
             var rawList = await EmpService.GetEmployeesByOrganizationIdAsync(id);
 
             _allHRs = rawList
                 .Where(x => x != null && string.Equals(x.Role, "HR", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.EmployeeId) // LIFO applied
                 .ToList();
 
             using var context = await DbFactory.CreateDbContextAsync();
-
-            _departments = await context.Departments
-                .Where(x => x.OrganizationId == id && x.IsActive)
-                .Select(x => x.Name.Trim())
-                .Distinct()
-                .OrderBy(x => x)
-                .ToListAsync();
+            _departments = await context.Departments.Where(x => x.OrganizationId == id && x.IsActive).Select(x => x.Name.Trim()).Distinct().OrderBy(x => x).ToListAsync();
         }
-        catch (Exception)
-        {
-            Nav.NavigateTo("/admin/organizations");
-        }
+        catch (Exception) { Nav.NavigateTo("/admin/organizations"); }
     }
 
     private IEnumerable<EmployeeListDto> GetFilteredHRs()
     {
         if (_allHRs == null) return Enumerable.Empty<EmployeeListDto>();
-
         var query = _allHRs.AsEnumerable();
-
         if (!string.IsNullOrWhiteSpace(_searchQuery))
         {
             var cleanSearch = _searchQuery.Trim().ToLower();
-            query = query.Where(x => (x.Name != null && x.Name.ToLower().Contains(cleanSearch)) ||
-                                     (x.Email != null && x.Email.ToLower().Contains(cleanSearch)));
+            query = query.Where(x => (x.Name != null && x.Name.ToLower().Contains(cleanSearch)) || (x.Email != null && x.Email.ToLower().Contains(cleanSearch)));
         }
-
         if (!string.IsNullOrWhiteSpace(_selectedDepartment))
-        {
             query = query.Where(x => string.Equals(x.Department?.Trim(), _selectedDepartment.Trim(), StringComparison.OrdinalIgnoreCase));
-        }
-
         return query;
     }
 
-    private void ClearFilters()
-    {
-        _searchQuery = string.Empty;
-        _selectedDepartment = string.Empty;
-    }
+    private void ClearFilters() { _searchQuery = string.Empty; _selectedDepartment = string.Empty; }
 }

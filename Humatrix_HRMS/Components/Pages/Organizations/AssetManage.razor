@@ -32,10 +32,15 @@
             </div>
         </div>
         <div class="am-header-actions">
-            <button class="am-btn am-btn-ghost" @onclick="RefreshAsync" disabled="@loading">
+            <!-- DASHBOARD BUTTON -->
+            <button class="am-btn am-btn-ghost" @onclick="GoToDashboard">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
+            </button>
+            @* <button class="am-btn am-btn-ghost" @onclick="RefreshAsync" disabled="@loading">
                 <i class="bi bi-arrow-clockwise @(loading ? "spin" : "")"></i>
                 <span>Refresh</span>
-            </button>
+            </button> *@
             <button class="am-btn am-btn-primary" @onclick="OpenCreateModal">
                 <i class="bi bi-plus-lg"></i>
                 <span>Add Asset</span>
@@ -126,20 +131,16 @@
             <div class="am-search-wrap">
                 <i class="bi bi-search am-search-icon"></i>
                 <input class="am-input am-input-search"
-                       placeholder="Name, code, serial, employee…"
+                       placeholder="    Name, code, serial, employee…"
                        @bind="searchText"
                        @bind:event="oninput"
                        @bind:after="ApplySearch" />
                 @if (!string.IsNullOrEmpty(searchText))
                 {
-                    @* <button class="am-search-clear" @onclick="() => { searchText = \"\"; ApplySearch(); }">
-                        <i class="bi bi-x"></i>
-                    </button> *@
                     <button class="am-search-clear"
                             @onclick="@(() => { searchText = string.Empty; ApplySearch(); })">
                         <i class="bi bi-x"></i>
                     </button>
-
                 }
             </div>
         </div>
@@ -318,9 +319,7 @@
 
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODAL: CREATE ASSET
-════════════════════════════════════════════════════════════════════════════ -->
+<!-- MODALS REMAIN UNCHANGED FOR BREVITY / STRUCTURAL INTEGRITY -->
 @if (showCreateModal)
 {
     <div class="am-overlay" @onclick="CloseModals"></div>
@@ -362,12 +361,7 @@
                         <InputText class="am-input" @bind-Value="createDto.SerialNumber" placeholder="e.g. SN-ABC-123456" />
                     </div>
                     <div class="am-form-col">
-                        <label class="am-label">
-                            Department
-                            <span class="am-hint" title="Restricts assignment to this department only">
-                                <i class="bi bi-info-circle"></i>
-                            </span>
-                        </label>
+                        <label class="am-label">Department <span class="am-hint" title="Restricts assignment to this department only"><i class="bi bi-info-circle"></i></span></label>
                         <select class="am-input am-select-input" @bind="createDto.DepartmentId">
                             <option value="">— Org-Wide (any department) —</option>
                             @foreach (var dept in departments)
@@ -412,7 +406,10 @@
                 <div class="am-modal-footer">
                     <button type="button" class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
                     <button type="submit" class="am-btn am-btn-primary" disabled="@submitting">
-                        @if (submitting) { <span class="am-spinner-sm"></span> }
+                        @if (submitting)
+                        {
+                            <span class="am-spinner-sm"></span>
+                        }
                         Create Asset
                     </button>
                 </div>
@@ -421,9 +418,6 @@
     </div>
 }
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODAL: EDIT ASSET
-════════════════════════════════════════════════════════════════════════════ -->
 @if (showEditModal && selectedAsset != null)
 {
     <div class="am-overlay" @onclick="CloseModals"></div>
@@ -459,80 +453,67 @@
                         <InputText class="am-input" @bind-Value="editDto.SerialNumber" />
                     </div>
                     <div class="am-form-col">
-                        <label class="am-label">
-                            Department
-                            @if (selectedAsset.Status == AssetStatus.Assigned)
-                            {
-                                <span class="am-badge am-badge-warning ms-1" title="Cannot change department of an assigned asset">
-                                    Locked
-                                </span>
-                            }
-                        </label>
-                        <select class="am-input am-select-input"
-                                @bind="editDto.DepartmentId"
-                                disabled="@(selectedAsset.Status == AssetStatus.Assigned)">
-                            <option value="">— Org-Wide —</option>
-                            @foreach (var dept in departments)
-                            {
-                                <option value="@dept.DepartmentId">@dept.Name</option>
-                            }
-                        </select>
-                        @if (selectedAsset.Status == AssetStatus.Assigned)
+                        <label class="am-label">Department @if (selectedAsset.Status == AssetStatus.Assigned){
+                        <span class="am-badge am-badge-warning ms-1" title="Cannot change department of an assigned asset">Locked</span>
+                    }
+</label>
+                    <select class="am-input am-select-input" @bind="editDto.DepartmentId" disabled="@(selectedAsset.Status == AssetStatus.Assigned)">
+                        <option value="">— Org-Wide —</option>
+                        @foreach (var dept in departments)
                         {
-                            <p class="am-field-hint am-field-hint-warn">
-                                <i class="bi bi-lock me-1"></i>
-                                Department cannot be changed while asset is assigned.
-                            </p>
+                            <option value="@dept.DepartmentId">@dept.Name</option>
                         }
-                        else if (editDto.DepartmentId.HasValue)
-                        {
-                            <p class="am-field-hint">
-                                <i class="bi bi-shield-check text-success me-1"></i>
-                                Only employees in <strong>@GetDepartmentName(editDto.DepartmentId)</strong> can be assigned.
-                            </p>
-                        }
-                    </div>
-                    <div class="am-form-col">
-                        <label class="am-label">Purchase Price</label>
-                        <div class="am-input-prefix-wrap">
-                            <span class="am-input-prefix">₹</span>
-                            <InputNumber class="am-input am-input-prefixed" @bind-Value="editDto.PurchasePrice" />
-                        </div>
-                    </div>
-                    <div class="am-form-col">
-                        <label class="am-label">Purchase Date</label>
-                        <InputDate class="am-input" @bind-Value="editDto.PurchaseDate" />
-                    </div>
-                    <div class="am-form-col">
-                        <label class="am-label">Warranty Expiry</label>
-                        <InputDate class="am-input" @bind-Value="editDto.WarrantyExpiryDate" />
-                    </div>
-                    <div class="am-form-col am-form-col-full">
-                        <label class="am-label">Notes</label>
-                        <InputTextArea class="am-input" @bind-Value="editDto.Notes" rows="2" />
+                    </select>
+                    @if (selectedAsset.Status == AssetStatus.Assigned)
+                    {
+                        <p class="am-field-hint am-field-hint-warn"><i class="bi bi-lock me-1"></i>Department cannot be changed while asset is assigned.</p>
+                    }
+                    else if (editDto.DepartmentId.HasValue)
+                    {
+                        <p class="am-field-hint"><i class="bi bi-shield-check text-success me-1"></i>Only employees in <strong>@GetDepartmentName(editDto.DepartmentId)</strong> can be assigned.</p>
+                    }
+                </div>
+                <div class="am-form-col">
+                    <label class="am-label">Purchase Price</label>
+                    <div class="am-input-prefix-wrap">
+                        <span class="am-input-prefix">₹</span>
+                        <InputNumber class="am-input am-input-prefixed" @bind-Value="editDto.PurchasePrice" />
                     </div>
                 </div>
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <div class="am-alert am-alert-danger mt-3">
-                        <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
-                    </div>
-                }
-                <div class="am-modal-footer">
-                    <button type="button" class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
-                    <button type="submit" class="am-btn am-btn-primary" disabled="@submitting">
-                        @if (submitting) { <span class="am-spinner-sm"></span> }
-                        Save Changes
-                    </button>
+                <div class="am-form-col">
+                    <label class="am-label">Purchase Date</label>
+                    <InputDate class="am-input" @bind-Value="editDto.PurchaseDate" />
                 </div>
-            </EditForm>
-        </div>
+                <div class="am-form-col">
+                    <label class="am-label">Warranty Expiry</label>
+                    <InputDate class="am-input" @bind-Value="editDto.WarrantyExpiryDate" />
+                </div>
+                <div class="am-form-col am-form-col-full">
+                    <label class="am-label">Notes</label>
+                    <InputTextArea class="am-input" @bind-Value="editDto.Notes" rows="2" />
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="am-alert am-alert-danger mt-3">
+                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
+                </div>
+            }
+            <div class="am-modal-footer">
+                <button type="button" class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
+                <button type="submit" class="am-btn am-btn-primary" disabled="@submitting">
+                    @if (submitting)
+                    {
+                        <span class="am-spinner-sm"></span>
+                    }
+                    Save Changes
+                </button>
+            </div>
+        </EditForm>
     </div>
+</div>
 }
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODAL: ASSIGN ASSET
-════════════════════════════════════════════════════════════════════════════ -->
 @if (showAssignModal && selectedAsset != null)
 {
     <div class="am-overlay" @onclick="CloseModals"></div>
@@ -548,7 +529,6 @@
             <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="am-modal-body">
-            <!-- Asset chip -->
             <div class="am-asset-chip">
                 <i class="bi bi-box-seam-fill am-chip-icon"></i>
                 <div class="am-chip-info">
@@ -557,9 +537,7 @@
                 </div>
                 @if (selectedAsset.DepartmentId.HasValue)
                 {
-                    <span class="am-chip-dept">
-                        <i class="bi bi-building me-1"></i>@GetDepartmentName(selectedAsset.DepartmentId)
-                    </span>
+                    <span class="am-chip-dept"><i class="bi bi-building me-1"></i>@GetDepartmentName(selectedAsset.DepartmentId)</span>
                 }
             </div>
 
@@ -567,10 +545,7 @@
             {
                 <div class="am-info-banner am-info-banner-blue">
                     <i class="bi bi-shield-lock-fill"></i>
-                    <span>
-                        This asset belongs to <strong>@GetDepartmentName(selectedAsset.DepartmentId)</strong>.
-                        Only employees from that department are listed below.
-                    </span>
+                    <span>This asset belongs to <strong>@GetDepartmentName(selectedAsset.DepartmentId)</strong>. Only employees from that department are listed below.</span>
                 </div>
             }
 
@@ -585,10 +560,7 @@
                 }
                 else if (!assignableEmployees.Any())
                 {
-                    <div class="am-alert am-alert-warning">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        No eligible employees found for this department.
-                    </div>
+                    <div class="am-alert am-alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>No eligible employees found for this department.</div>
                 }
                 else
                 {
@@ -607,15 +579,15 @@
             </div>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="am-alert am-alert-danger">
-                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
-                </div>
+                <div class="am-alert am-alert-danger"><i class="bi bi-exclamation-circle me-2"></i>@errorMessage</div>
             }
             <div class="am-modal-footer">
                 <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
-                <button class="am-btn am-btn-success" @onclick="SubmitAssignAsync"
-                        disabled="@(submitting || string.IsNullOrEmpty(assignEmployeeId) || !assignableEmployees.Any())">
-                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                <button class="am-btn am-btn-success" @onclick="SubmitAssignAsync" disabled="@(submitting || string.IsNullOrEmpty(assignEmployeeId) || !assignableEmployees.Any())">
+                    @if (submitting)
+                    {
+                        <span class="am-spinner-sm"></span>
+                    }
                     Assign Asset
                 </button>
             </div>
@@ -623,9 +595,6 @@
     </div>
 }
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODAL: RETURN ASSET
-════════════════════════════════════════════════════════════════════════════ -->
 @if (showReturnModal && selectedAsset != null)
 {
     <div class="am-overlay" @onclick="CloseModals"></div>
@@ -654,14 +623,15 @@
             </div>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="am-alert am-alert-danger">
-                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
-                </div>
+                <div class="am-alert am-alert-danger"><i class="bi bi-exclamation-circle me-2"></i>@errorMessage</div>
             }
             <div class="am-modal-footer">
                 <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
                 <button class="am-btn am-btn-warning" @onclick="SubmitReturnAsync" disabled="@submitting">
-                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                    @if (submitting)
+                    {
+                        <span class="am-spinner-sm"></span>
+                    }
                     Confirm Return
                 </button>
             </div>
@@ -684,21 +654,18 @@
             <button class="am-close-btn" @onclick="CloseModals"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="am-modal-body">
-            <p class="am-confirm-text">
-                Are you sure you want to retire <strong>@selectedAsset.Name</strong>
-                <code class="am-code">(@selectedAsset.AssetCode)</code>?
-                It will be permanently decommissioned and removed from active inventory.
-            </p>
+            <p class="am-confirm-text">Are you sure you want to retire <strong>@selectedAsset.Name</strong> <code class="am-code">(@selectedAsset.AssetCode)</code>? It will be permanently decommissioned and removed from active inventory.</p>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="am-alert am-alert-danger">
-                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
-                </div>
+                <div class="am-alert am-alert-danger"><i class="bi bi-exclamation-circle me-2"></i>@errorMessage</div>
             }
             <div class="am-modal-footer">
                 <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
                 <button class="am-btn am-btn-danger" @onclick="SubmitRetireAsync" disabled="@submitting">
-                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                    @if (submitting)
+                    {
+                        <span class="am-spinner-sm"></span>
+                    }
                     Yes, Retire Asset
                 </button>
             </div>
@@ -706,9 +673,6 @@
     </div>
 }
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     MODAL: COMPLETE REPAIR
-════════════════════════════════════════════════════════════════════════════ -->
 @if (showRepairCompleteModal && selectedAsset != null)
 {
     <div class="am-overlay" @onclick="CloseModals"></div>
@@ -741,14 +705,15 @@
             </div>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="am-alert am-alert-danger">
-                    <i class="bi bi-exclamation-circle me-2"></i>@errorMessage
-                </div>
+                <div class="am-alert am-alert-danger"><i class="bi bi-exclamation-circle me-2"></i>@errorMessage</div>
             }
             <div class="am-modal-footer">
                 <button class="am-btn am-btn-ghost" @onclick="CloseModals">Cancel</button>
                 <button class="am-btn am-btn-info" @onclick="SubmitRepairCompleteAsync" disabled="@submitting">
-                    @if (submitting) { <span class="am-spinner-sm"></span> }
+                    @if (submitting)
+                    {
+                        <span class="am-spinner-sm"></span>
+                    }
                     Mark Repaired
                 </button>
             </div>
@@ -756,16 +721,13 @@
     </div>
 }
 
-<!-- ── Toast notification ───────────────────────────────────────────────── -->
 @if (!string.IsNullOrEmpty(successMessage))
 {
-    <div class="am-toast am-toast-success">
-        <i class="bi bi-check-circle-fill me-2"></i>@successMessage
-    </div>
+    <div class="am-toast am-toast-success"><i class="bi bi-check-circle-fill me-2"></i>@successMessage</div>
 }
 
 <style>
-    /* ── Design tokens ──────────────────────────────────────────────────── */
+    /* STYLING CONFIGURATIONS REMAIN IDENTICAL FOR INTEGRITY */
     :root {
         --am-primary: #4f46e5;
         --am-primary-dark: #4338ca;
@@ -783,208 +745,1078 @@
         --am-shadow-lg: 0 10px 40px rgba(0,0,0,.12);
     }
 
-    /* ── Layout ─────────────────────────────────────────────────────────── */
-    .am-wrapper { padding: 1.75rem 1.5rem; max-width: 1600px; background: var(--am-bg); min-height: 100vh; }
+    .am-wrapper {
+        padding: 1.75rem 1.5rem;
+        max-width: 1600px;
+        background: var(--am-bg);
+        min-height: 100vh;
+    }
 
-    /* ── Header ─────────────────────────────────────────────────────────── */
-    .am-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap; }
-    .am-header-left { display: flex; align-items: center; gap: 1rem; }
-    .am-header-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--am-primary); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.25rem; }
-    .am-title { font-size: 1.5rem; font-weight: 800; color: var(--am-text); margin: 0; letter-spacing: -.02em; }
-    .am-subtitle { font-size: .825rem; color: var(--am-muted); margin: 0; }
-    .am-header-actions { display: flex; gap: .625rem; }
+    .am-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
 
-    /* ── KPI strip ──────────────────────────────────────────────────────── */
-    .am-kpi-row { display: grid; grid-template-columns: repeat(5,1fr); gap: .875rem; margin-bottom: 1.25rem; }
-    @@media(max-width:1100px){ .am-kpi-row { grid-template-columns: repeat(3,1fr); } }
-    @@media(max-width:640px){ .am-kpi-row { grid-template-columns: repeat(2,1fr); } }
-    .am-kpi-card { background: var(--am-surface); border-radius: var(--am-radius); box-shadow: var(--am-shadow); padding: .875rem 1rem; display: flex; align-items: center; gap: .75rem; border: 1px solid var(--am-border); }
-    .am-kpi-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
-    .am-kpi-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--am-muted); display: block; }
-    .am-kpi-value { font-size: 1.65rem; font-weight: 800; line-height: 1.1; color: var(--am-text); display: block; }
-    .am-kpi-total .am-kpi-icon { background: rgba(79,70,229,.1); color: var(--am-primary); }
-    .am-kpi-available .am-kpi-icon { background: rgba(5,150,105,.1); color: var(--am-success); }
-    .am-kpi-available .am-kpi-value { color: var(--am-success); }
-    .am-kpi-assigned .am-kpi-icon { background: rgba(8,145,178,.1); color: var(--am-info); }
-    .am-kpi-assigned .am-kpi-value { color: var(--am-info); }
-    .am-kpi-repair .am-kpi-icon { background: rgba(217,119,6,.1); color: var(--am-warning); }
-    .am-kpi-repair .am-kpi-value { color: var(--am-warning); }
-    .am-kpi-retired .am-kpi-icon { background: rgba(107,114,128,.1); color: var(--am-muted); }
+    .am-header-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
 
-    /* ── Filter bar ─────────────────────────────────────────────────────── */
-    .am-filter-bar { background: var(--am-surface); border: 1px solid var(--am-border); border-radius: var(--am-radius); padding: .875rem 1rem; margin-bottom: 1rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
-    .am-filter-group { display: flex; flex-direction: column; gap: .3rem; min-width: 140px; }
-    .am-filter-search { flex: 1; min-width: 220px; }
-    .am-filter-end { margin-left: auto; justify-content: flex-end; }
-    .am-filter-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--am-muted); }
-    .am-select, .am-input { height: 36px; padding: 0 .625rem; border: 1px solid var(--am-border); border-radius: 8px; font-size: .85rem; color: var(--am-text); background: var(--am-surface); outline: none; transition: border-color .15s; width: 100%; }
-    .am-select:focus, .am-input:focus { border-color: var(--am-primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
-    .am-search-wrap { position: relative; }
-    .am-search-icon { position: absolute; left: .625rem; top: 50%; transform: translateY(-50%); color: var(--am-muted); font-size: .8rem; pointer-events: none; }
-    .am-input-search { padding-left: 2rem; }
-    .am-search-clear { position: absolute; right: .5rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--am-muted); cursor: pointer; padding: 0; line-height: 1; }
+    .am-header-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: var(--am-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.25rem;
+    }
 
-    /* ── Table card ─────────────────────────────────────────────────────── */
-    .am-table-card { background: var(--am-surface); border: 1px solid var(--am-border); border-radius: var(--am-radius); box-shadow: var(--am-shadow); overflow: hidden; }
-    .am-table { width: 100%; border-collapse: collapse; }
-    .am-table thead tr { background: #f9fafb; border-bottom: 1px solid var(--am-border); }
-    .am-table th { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--am-muted); padding: .75rem 1rem; white-space: nowrap; }
-    .am-table td { padding: .75rem 1rem; font-size: .85rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
-    .am-row:hover td { background: #fafafa; }
-    .am-row-danger td { background: #fef2f2; }
-    .am-th-asset { padding-left: 1.25rem; }
-    .am-td-asset { padding-left: 1.25rem; }
-    .am-asset-name { font-weight: 600; color: var(--am-text); }
-    .am-asset-meta { font-size: .75rem; color: var(--am-muted); margin-top: 1px; }
-    .am-text-muted { color: var(--am-muted); }
-    .am-code { font-family: 'JetBrains Mono', monospace; font-size: .78rem; color: var(--am-muted); background: #f3f4f6; padding: .1rem .35rem; border-radius: 4px; }
-    .am-cat-badge { background: #f3f4f6; color: #374151; font-size: .72rem; font-weight: 600; padding: .2rem .55rem; border-radius: 20px; }
-    .am-dept-badge { background: rgba(79,70,229,.08); color: var(--am-primary); font-size: .72rem; font-weight: 600; padding: .2rem .55rem; border-radius: 20px; }
+    .am-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--am-text);
+        margin: 0;
+        letter-spacing: -.02em;
+    }
 
-    /* ── Status badges ──────────────────────────────────────────────────── */
-    .am-status { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 700; padding: .25rem .6rem; border-radius: 20px; }
-    .am-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-    .am-status-available { background: rgba(5,150,105,.1); color: #065f46; }
-    .am-status-available::before { background: var(--am-success); }
-    .am-status-assigned { background: rgba(8,145,178,.1); color: #155e75; }
-    .am-status-assigned::before { background: var(--am-info); }
-    .am-status-inrepair { background: rgba(217,119,6,.1); color: #92400e; }
-    .am-status-inrepair::before { background: var(--am-warning); }
-    .am-status-retired { background: rgba(107,114,128,.1); color: #374151; }
-    .am-status-retired::before { background: var(--am-muted); }
-    .am-status-lost { background: rgba(220,38,38,.1); color: #991b1b; }
-    .am-status-lost::before { background: var(--am-danger); }
+    .am-subtitle {
+        font-size: .825rem;
+        color: var(--am-muted);
+        margin: 0;
+    }
 
-    /* ── Badges ─────────────────────────────────────────────────────────── */
-    .am-badge { display: inline-block; font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 20px; }
-    .am-badge-warning { background: rgba(217,119,6,.1); color: #92400e; }
-    .am-badge-danger { background: rgba(220,38,38,.1); color: #991b1b; }
+    .am-header-actions {
+        display: flex;
+        gap: .625rem;
+    }
 
-    /* ── Assignee cell ──────────────────────────────────────────────────── */
-    .am-assignee { display: flex; align-items: center; gap: .5rem; }
-    .am-assignee-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--am-primary); color: #fff; font-size: .7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; text-transform: uppercase; flex-shrink: 0; }
+    .am-kpi-row {
+        display: grid;
+        grid-template-columns: repeat(5,1fr);
+        gap: .875rem;
+        margin-bottom: 1.25rem;
+    }
 
-    /* ── Action buttons ─────────────────────────────────────────────────── */
-    .am-actions { display: flex; gap: .3rem; justify-content: flex-end; }
-    .am-action-btn { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--am-border); background: var(--am-surface); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; cursor: pointer; transition: all .15s; color: var(--am-muted); }
-    .am-action-btn:hover { border-color: currentColor; }
-    .am-action-view:hover { color: var(--am-primary); background: rgba(79,70,229,.06); }
-    .am-action-edit:hover { color: #374151; background: #f3f4f6; }
-    .am-action-assign:hover { color: var(--am-success); background: rgba(5,150,105,.06); }
-    .am-action-return:hover { color: var(--am-warning); background: rgba(217,119,6,.06); }
-    .am-action-retire:hover { color: var(--am-danger); background: rgba(220,38,38,.06); }
-    .am-action-repair:hover { color: var(--am-info); background: rgba(8,145,178,.06); }
+    @@media(max-width:1100px) {
+        .am-kpi-row {
+            grid-template-columns: repeat(3,1fr);
+        }
+    }
 
-    /* ── Pagination ─────────────────────────────────────────────────────── */
-    .am-pagination { display: flex; justify-content: space-between; align-items: center; padding: .875rem 1rem; border-top: 1px solid var(--am-border); }
-    .am-pagination-info { font-size: .8rem; color: var(--am-muted); }
-    .am-pagination-pages { display: flex; gap: .3rem; }
-    .am-page-btn { width: 32px; height: 32px; border-radius: 7px; border: 1px solid var(--am-border); background: var(--am-surface); font-size: .82rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--am-text); transition: all .15s; }
-    .am-page-btn:hover:not(:disabled) { border-color: var(--am-primary); color: var(--am-primary); }
-    .am-page-btn.active { background: var(--am-primary); color: #fff; border-color: var(--am-primary); font-weight: 700; }
-    .am-page-btn:disabled { opacity: .4; cursor: not-allowed; }
+    @@media(max-width:640px) {
+        .am-kpi-row {
+            grid-template-columns: repeat(2,1fr);
+        }
+    }
 
-    /* ── State screens ──────────────────────────────────────────────────── */
-    .am-state-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; text-align: center; }
-    .am-empty-icon { font-size: 3rem; color: #d1d5db; margin-bottom: .75rem; }
-    .am-state-title { font-size: 1rem; font-weight: 600; color: var(--am-text); margin: 0; }
-    .am-state-sub { font-size: .85rem; color: var(--am-muted); margin: .25rem 0 0; }
-    .am-state-text { color: var(--am-muted); font-size: .85rem; margin-top: .75rem; }
-    .am-spinner { width: 36px; height: 36px; border: 3px solid #e5e7eb; border-top-color: var(--am-primary); border-radius: 50%; animation: spin .7s linear infinite; }
-    .am-spinner-sm { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin-right: .35rem; vertical-align: middle; }
-    @@keyframes spin { to { transform: rotate(360deg); } }
-    .spin { animation: spin .7s linear infinite; }
+    .am-kpi-card {
+        background: var(--am-surface);
+        border-radius: var(--am-radius);
+        box-shadow: var(--am-shadow);
+        padding: .875rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        border: 1px solid var(--am-border);
+    }
 
-    /* ── Buttons ────────────────────────────────────────────────────────── */
-    .am-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1rem; border-radius: 8px; font-size: .85rem; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all .15s; text-decoration: none; }
-    .am-btn-sm { padding: .35rem .75rem; font-size: .8rem; }
-    .am-btn-primary { background: var(--am-primary); color: #fff; border-color: var(--am-primary); }
-    .am-btn-primary:hover:not(:disabled) { background: var(--am-primary-dark); border-color: var(--am-primary-dark); }
-    .am-btn-success { background: var(--am-success); color: #fff; border-color: var(--am-success); }
-    .am-btn-success:hover:not(:disabled) { background: #047857; border-color: #047857; }
-    .am-btn-warning { background: var(--am-warning); color: #fff; border-color: var(--am-warning); }
-    .am-btn-warning:hover:not(:disabled) { background: #b45309; }
-    .am-btn-danger { background: var(--am-danger); color: #fff; border-color: var(--am-danger); }
-    .am-btn-danger:hover:not(:disabled) { background: #b91c1c; }
-    .am-btn-info { background: var(--am-info); color: #fff; border-color: var(--am-info); }
-    .am-btn-info:hover:not(:disabled) { background: #0e7490; }
-    .am-btn-ghost { background: var(--am-surface); color: var(--am-text); border-color: var(--am-border); }
-    .am-btn-ghost:hover:not(:disabled) { background: #f3f4f6; }
-    .am-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .am-kpi-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
 
-    /* ── Modals ─────────────────────────────────────────────────────────── */
-    .am-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1040; backdrop-filter: blur(3px); }
-    .am-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--am-surface); border-radius: 16px; box-shadow: var(--am-shadow-lg); z-index: 1050; display: flex; flex-direction: column; max-height: 92vh; }
-    .am-modal-xs { width: 420px; max-width: 95vw; }
-    .am-modal-sm { width: 500px; max-width: 95vw; }
-    .am-modal-lg { width: 680px; max-width: 95vw; }
-    .am-modal-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--am-border); flex-shrink: 0; }
-    .am-modal-title-group { display: flex; align-items: center; gap: .875rem; }
-    .am-modal-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
-    .am-modal-icon-primary { background: rgba(79,70,229,.1); color: var(--am-primary); }
-    .am-modal-icon-secondary { background: #f3f4f6; color: #374151; }
-    .am-modal-icon-success { background: rgba(5,150,105,.1); color: var(--am-success); }
-    .am-modal-icon-warning { background: rgba(217,119,6,.1); color: var(--am-warning); }
-    .am-modal-icon-danger { background: rgba(220,38,38,.1); color: var(--am-danger); }
-    .am-modal-icon-info { background: rgba(8,145,178,.1); color: var(--am-info); }
-    .am-modal-title { font-size: 1rem; font-weight: 700; color: var(--am-text); margin: 0; }
-    .am-modal-sub { font-size: .78rem; color: var(--am-muted); margin: .1rem 0 0; }
-    .am-modal-body { padding: 1.5rem; overflow-y: auto; }
-    .am-modal-footer { display: flex; justify-content: flex-end; gap: .625rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #f3f4f6; }
-    .am-close-btn { background: none; border: none; color: var(--am-muted); cursor: pointer; padding: .25rem; font-size: 1rem; border-radius: 6px; display: flex; align-items: center; }
-    .am-close-btn:hover { background: #f3f4f6; color: var(--am-text); }
+    .am-kpi-label {
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        color: var(--am-muted);
+        display: block;
+    }
 
-    /* ── Form elements in modals ────────────────────────────────────────── */
-    .am-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; }
-    .am-form-col { display: flex; flex-direction: column; gap: .35rem; }
-    .am-form-col-full { grid-column: 1 / -1; }
-    .am-label { font-size: .78rem; font-weight: 600; color: #374151; }
-    .am-required { color: var(--am-danger); }
-    .am-hint { color: var(--am-muted); cursor: help; margin-left: .25rem; }
-    .am-select-input { height: 38px; }
-    .am-input { border-radius: 8px; border: 1px solid var(--am-border); padding: .5rem .75rem; font-size: .85rem; color: var(--am-text); width: 100%; transition: border-color .15s; }
-    .am-input:focus { outline: none; border-color: var(--am-primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
-    textarea.am-input { height: auto; resize: vertical; }
-    .am-form-group { margin-bottom: .875rem; display: flex; flex-direction: column; gap: .35rem; }
-    .am-input-prefix-wrap { display: flex; }
-    .am-input-prefix { background: #f3f4f6; border: 1px solid var(--am-border); border-right: none; border-radius: 8px 0 0 8px; padding: 0 .625rem; font-size: .85rem; color: var(--am-muted); display: flex; align-items: center; }
-    .am-input-prefixed { border-radius: 0 8px 8px 0; }
-    .am-error { font-size: .75rem; color: var(--am-danger); margin-top: .2rem; }
-    .am-field-hint { font-size: .75rem; color: var(--am-muted); margin: .25rem 0 0; }
-    .am-field-hint-warn { color: var(--am-warning); }
+    .am-kpi-value {
+        font-size: 1.65rem;
+        font-weight: 800;
+        line-height: 1.1;
+        color: var(--am-text);
+        display: block;
+    }
 
-    /* ── Asset chip ─────────────────────────────────────────────────────── */
-    .am-asset-chip { background: #f8f9fc; border: 1px solid var(--am-border); border-radius: 10px; padding: .75rem 1rem; display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
-    .am-chip-icon { font-size: 1.25rem; color: var(--am-primary); flex-shrink: 0; }
-    .am-chip-info { flex: 1; display: flex; flex-direction: column; gap: .1rem; }
-    .am-chip-name { font-weight: 600; color: var(--am-text); font-size: .9rem; }
-    .am-chip-code { font-family: monospace; font-size: .78rem; color: var(--am-muted); }
-    .am-chip-meta { font-size: .78rem; color: var(--am-muted); }
-    .am-chip-dept { font-size: .72rem; font-weight: 600; background: rgba(79,70,229,.08); color: var(--am-primary); padding: .2rem .55rem; border-radius: 20px; flex-shrink: 0; }
+    .am-kpi-total .am-kpi-icon {
+        background: rgba(79,70,229,.1);
+        color: var(--am-primary);
+    }
 
-    /* ── Info banner ────────────────────────────────────────────────────── */
-    .am-info-banner { display: flex; align-items: flex-start; gap: .625rem; padding: .75rem 1rem; border-radius: 8px; font-size: .8rem; line-height: 1.5; margin-bottom: .875rem; }
-    .am-info-banner i { flex-shrink: 0; margin-top: .1rem; }
-    .am-info-banner-blue { background: rgba(8,145,178,.08); color: #155e75; border: 1px solid rgba(8,145,178,.2); }
+    .am-kpi-available .am-kpi-icon {
+        background: rgba(5,150,105,.1);
+        color: var(--am-success);
+    }
 
-    /* ── Alerts ─────────────────────────────────────────────────────────── */
-    .am-alert { display: flex; align-items: flex-start; gap: .5rem; padding: .625rem .875rem; border-radius: 8px; font-size: .82rem; line-height: 1.5; }
-    .am-alert-danger { background: rgba(220,38,38,.07); color: #991b1b; border: 1px solid rgba(220,38,38,.2); }
-    .am-alert-warning { background: rgba(217,119,6,.07); color: #92400e; border: 1px solid rgba(217,119,6,.2); }
+    .am-kpi-available .am-kpi-value {
+        color: var(--am-success);
+    }
 
-    /* ── Loading row ────────────────────────────────────────────────────── */
-    .am-loading-row { display: flex; align-items: center; gap: .625rem; padding: .5rem 0; }
+    .am-kpi-assigned .am-kpi-icon {
+        background: rgba(8,145,178,.1);
+        color: var(--am-info);
+    }
 
-    /* ── Confirm text ───────────────────────────────────────────────────── */
-    .am-confirm-text { font-size: .875rem; color: var(--am-text); line-height: 1.6; margin: 0; }
+    .am-kpi-assigned .am-kpi-value {
+        color: var(--am-info);
+    }
 
-    /* ── Toast ──────────────────────────────────────────────────────────── */
-    .am-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #1a1a2e; color: #fff; padding: .875rem 1.25rem; border-radius: 10px; font-size: .85rem; font-weight: 500; z-index: 9999; box-shadow: var(--am-shadow-lg); animation: slideUp .3s ease; }
-    .am-toast-success { background: #064e3b; border: 1px solid #065f46; }
-    @@keyframes slideUp { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .am-kpi-repair .am-kpi-icon {
+        background: rgba(217,119,6,.1);
+        color: var(--am-warning);
+    }
 
-    /* ── Responsive ─────────────────────────────────────────────────────── */
-    @@media(max-width:768px) { .am-form-grid { grid-template-columns: 1fr; } .am-actions { flex-wrap: wrap; } }
+    .am-kpi-repair .am-kpi-value {
+        color: var(--am-warning);
+    }
+
+    .am-kpi-retired .am-kpi-icon {
+        background: rgba(107,114,128,.1);
+        color: var(--am-muted);
+    }
+
+    .am-filter-bar {
+        background: var(--am-surface);
+        border: 1px solid var(--am-border);
+        border-radius: var(--am-radius);
+        padding: .875rem 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        gap: .75rem;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .am-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: .3rem;
+        min-width: 140px;
+    }
+
+    .am-filter-search {
+        flex: 1;
+        min-width: 220px;
+    }
+
+    .am-filter-end {
+        margin-left: auto;
+        justify-content: flex-end;
+    }
+
+    .am-filter-label {
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .7px;
+        color: var(--am-muted);
+    }
+
+    .am-select, .am-input {
+        height: 36px;
+        padding: 0 .625rem;
+        border: 1px solid var(--am-border);
+        border-radius: 8px;
+        font-size: .85rem;
+        color: var(--am-text);
+        background: var(--am-surface);
+        outline: none;
+        transition: border-color .15s;
+        width: 100%;
+    }
+
+        .am-select:focus, .am-input:focus {
+            border-color: var(--am-primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+        }
+
+    .am-search-wrap {
+        position: relative;
+    }
+
+    .am-search-icon {
+        position: absolute;
+        left: .625rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--am-muted);
+        font-size: .8rem;
+        pointer-events: none;
+    }
+
+    .am-input-search {
+        padding-left: 2rem;
+    }
+
+    .am-search-clear {
+        position: absolute;
+        right: .5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--am-muted);
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .am-table-card {
+        background: var(--am-surface);
+        border: 1px solid var(--am-border);
+        border-radius: var(--am-radius);
+        box-shadow: var(--am-shadow);
+        overflow: hidden;
+    }
+
+    .am-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .am-table thead tr {
+            background: #f9fafb;
+            border-bottom: 1px solid var(--am-border);
+        }
+
+        .am-table th {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            color: var(--am-muted);
+            padding: .75rem 1rem;
+            white-space: nowrap;
+        }
+
+        .am-table td {
+            padding: .75rem 1rem;
+            font-size: .85rem;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+        }
+
+    .am-row:hover td {
+        background: #fafafa;
+    }
+
+    .am-row-danger td {
+        background: #fef2f2;
+    }
+
+    .am-th-asset {
+        padding-left: 1.25rem;
+    }
+
+    .am-td-asset {
+        padding-left: 1.25rem;
+    }
+
+    .am-asset-name {
+        font-weight: 600;
+        color: var(--am-text);
+    }
+
+    .am-asset-meta {
+        font-size: .75rem;
+        color: var(--am-muted);
+        margin-top: 1px;
+    }
+
+    .am-text-muted {
+        color: var(--am-muted);
+    }
+
+    .am-code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: .78rem;
+        color: var(--am-muted);
+        background: #f3f4f6;
+        padding: .1rem .35rem;
+        border-radius: 4px;
+    }
+
+    .am-cat-badge {
+        background: #f3f4f6;
+        color: #374151;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .am-dept-badge {
+        background: rgba(79,70,229,.08);
+        color: var(--am-primary);
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+    }
+
+    .am-status {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        font-size: .72rem;
+        font-weight: 700;
+        padding: .25rem .6rem;
+        border-radius: 20px;
+    }
+
+        .am-status::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+    .am-status-available {
+        background: rgba(5,150,105,.1);
+        color: #065f46;
+    }
+
+        .am-status-available::before {
+            background: var(--am-success);
+        }
+
+    .am-status-assigned {
+        background: rgba(8,145,178,.1);
+        color: #155e75;
+    }
+
+        .am-status-assigned::before {
+            background: var(--am-info);
+        }
+
+    .am-status-inrepair {
+        background: rgba(217,119,6,.1);
+        color: #92400e;
+    }
+
+        .am-status-inrepair::before {
+            background: var(--am-warning);
+        }
+
+    .am-status-retired {
+        background: rgba(107,114,128,.1);
+        color: #374151;
+    }
+
+        .am-status-retired::before {
+            background: var(--am-muted);
+        }
+
+    .am-status-lost {
+        background: rgba(220,38,38,.1);
+        color: #991b1b;
+    }
+
+        .am-status-lost::before {
+            background: var(--am-danger);
+        }
+
+    .am-badge {
+        display: inline-block;
+        font-size: .7rem;
+        font-weight: 600;
+        padding: .15rem .5rem;
+        border-radius: 20px;
+    }
+
+    .am-badge-warning {
+        background: rgba(217,119,6,.1);
+        color: #92400e;
+    }
+
+    .am-badge-danger {
+        background: rgba(220,38,38,.1);
+        color: #991b1b;
+    }
+
+    .am-assignee {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .am-assignee-avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--am-primary);
+        color: #fff;
+        font-size: .7rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .am-actions {
+        display: flex;
+        gap: .3rem;
+        justify-content: flex-end;
+    }
+
+    .am-action-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        border: 1px solid var(--am-border);
+        background: var(--am-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .8rem;
+        cursor: pointer;
+        transition: all .15s;
+        color: var(--am-muted);
+    }
+
+        .am-action-btn:hover {
+            border-color: currentColor;
+        }
+
+    .am-action-view:hover {
+        color: var(--am-primary);
+        background: rgba(79,70,229,.06);
+    }
+
+    .am-action-edit:hover {
+        color: #374151;
+        background: #f3f4f6;
+    }
+
+    .am-action-assign:hover {
+        color: var(--am-success);
+        background: rgba(5,150,105,.06);
+    }
+
+    .am-action-return:hover {
+        color: var(--am-warning);
+        background: rgba(217,119,6,.06);
+    }
+
+    .am-action-retire:hover {
+        color: var(--am-danger);
+        background: rgba(220,38,38,.06);
+    }
+
+    .am-action-repair:hover {
+        color: var(--am-info);
+        background: rgba(8,145,178,.06);
+    }
+
+    .am-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: .875rem 1rem;
+        border-top: 1px solid var(--am-border);
+    }
+
+    .am-pagination-info {
+        font-size: .8rem;
+        color: var(--am-muted);
+    }
+
+    .am-pagination-pages {
+        display: flex;
+        gap: .3rem;
+    }
+
+    .am-page-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 7px;
+        border: 1px solid var(--am-border);
+        background: var(--am-surface);
+        font-size: .82rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--am-text);
+        transition: all .15s;
+    }
+
+        .am-page-btn:hover:not(:disabled) {
+            border-color: var(--am-primary);
+            color: var(--am-primary);
+        }
+
+        .am-page-btn.active {
+            background: var(--am-primary);
+            color: #fff;
+            border-color: var(--am-primary);
+            font-weight: 700;
+        }
+
+        .am-page-btn:disabled {
+            opacity: .4;
+            cursor: not-allowed;
+        }
+
+    .am-state-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+
+    .am-empty-icon {
+        font-size: 3rem;
+        color: #d1d5db;
+        margin-bottom: .75rem;
+    }
+
+    .am-state-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--am-text);
+        margin: 0;
+    }
+
+    .am-state-sub {
+        font-size: .85rem;
+        color: var(--am-muted);
+        margin: .25rem 0 0;
+    }
+
+    .am-state-text {
+        color: var(--am-muted);
+        font-size: .85rem;
+        margin-top: .75rem;
+    }
+
+    .am-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #e5e7eb;
+        border-top-color: var(--am-primary);
+        border-radius: 50%;
+        animation: spin .7s linear infinite;
+    }
+
+    .am-spinner-sm {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255,255,255,.4);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin .7s linear infinite;
+        margin-right: .35rem;
+        vertical-align: middle;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .spin {
+        animation: spin .7s linear infinite;
+    }
+
+    .am-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .5rem 1rem;
+        border-radius: 8px;
+        font-size: .85rem;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all .15s;
+        text-decoration: none;
+    }
+
+    .am-btn-sm {
+        padding: .35rem .75rem;
+        font-size: .8rem;
+    }
+
+    .am-btn-primary {
+        background: var(--am-primary);
+        color: #fff;
+        border-color: var(--am-primary);
+    }
+
+        .am-btn-primary:hover:not(:disabled) {
+            background: var(--am-primary-dark);
+            border-color: var(--am-primary-dark);
+        }
+
+    .am-btn-success {
+        background: var(--am-success);
+        color: #fff;
+        border-color: var(--am-success);
+    }
+
+        .am-btn-success:hover:not(:disabled) {
+            background: #047857;
+            border-color: #047857;
+        }
+
+    .am-btn-warning {
+        background: var(--am-warning);
+        color: #fff;
+        border-color: var(--am-warning);
+    }
+
+        .am-btn-warning:hover:not(:disabled) {
+            background: #b45309;
+        }
+
+    .am-btn-danger {
+        background: var(--am-danger);
+        color: #fff;
+        border-color: var(--am-danger);
+    }
+
+        .am-btn-danger:hover:not(:disabled) {
+            background: #b91c1c;
+        }
+
+    .am-btn-info {
+        background: var(--am-info);
+        color: #fff;
+        border-color: var(--am-info);
+    }
+
+        .am-btn-info:hover:not(:disabled) {
+            background: #0e7490;
+        }
+
+    .am-btn-ghost {
+        background: var(--am-surface);
+        color: var(--am-text);
+        border-color: var(--am-border);
+    }
+
+        .am-btn-ghost:hover:not(:disabled) {
+            background: #f3f4f6;
+        }
+
+    .am-btn:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+    }
+
+    .am-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.45);
+        z-index: 1040;
+        backdrop-filter: blur(3px);
+    }
+
+    .am-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%,-50%);
+        background: var(--am-surface);
+        border-radius: 16px;
+        box-shadow: var(--am-shadow-lg);
+        z-index: 1050;
+        display: flex;
+        flex-direction: column;
+        max-height: 92vh;
+    }
+
+    .am-modal-xs {
+        width: 420px;
+        max-width: 95vw;
+    }
+
+    .am-modal-sm {
+        width: 500px;
+        max-width: 95vw;
+    }
+
+    .am-modal-lg {
+        width: 680px;
+        max-width: 95vw;
+    }
+
+    .am-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--am-border);
+        flex-shrink: 0;
+    }
+
+    .am-modal-title-group {
+        display: flex;
+        align-items: center;
+        gap: .875rem;
+    }
+
+    .am-modal-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .am-modal-icon-primary {
+        background: rgba(79,70,229,.1);
+        color: var(--am-primary);
+    }
+
+    .am-modal-icon-secondary {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    .am-modal-icon-success {
+        background: rgba(5,150,105,.1);
+        color: var(--am-success);
+    }
+
+    .am-modal-icon-warning {
+        background: rgba(217,119,6,.1);
+        color: var(--am-warning);
+    }
+
+    .am-modal-icon-danger {
+        background: rgba(220,38,38,.1);
+        color: var(--am-danger);
+    }
+
+    .am-modal-icon-info {
+        background: rgba(8,145,178,.1);
+        color: var(--am-info);
+    }
+
+    .am-modal-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--am-text);
+        margin: 0;
+    }
+
+    .am-modal-sub {
+        font-size: .78rem;
+        color: var(--am-muted);
+        margin: .1rem 0 0;
+    }
+
+    .am-modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+    }
+
+    .am-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: .625rem;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .am-close-btn {
+        background: none;
+        border: none;
+        color: var(--am-muted);
+        cursor: pointer;
+        padding: .25rem;
+        font-size: 1rem;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+    }
+
+        .am-close-btn:hover {
+            background: #f3f4f6;
+            color: var(--am-text);
+        }
+
+    .am-form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .875rem;
+    }
+
+    .am-form-col {
+        display: flex;
+        flex-direction: column;
+        gap: .35rem;
+    }
+
+    .am-form-col-full {
+        grid-column: 1 / -1;
+    }
+
+    .am-label {
+        font-size: .78rem;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .am-required {
+        color: var(--am-danger);
+    }
+
+    .am-hint {
+        color: var(--am-muted);
+        cursor: help;
+        margin-left: .25rem;
+    }
+
+    .am-select-input {
+        height: 38px;
+    }
+
+    .am-input {
+        border-radius: 8px;
+        border: 1px solid var(--am-border);
+        padding: .5rem .75rem;
+        font-size: .85rem;
+        color: var(--am-text);
+        width: 100%;
+        transition: border-color .15s;
+    }
+
+        .am-input:focus {
+            outline: none;
+            border-color: var(--am-primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,.1);
+        }
+
+    textarea.am-input {
+        height: auto;
+        resize: vertical;
+    }
+
+    .am-form-group {
+        margin-bottom: .875rem;
+        display: flex;
+        flex-direction: column;
+        gap: .35rem;
+    }
+
+    .am-input-prefix-wrap {
+        display: flex;
+    }
+
+    .am-input-prefix {
+        background: #f3f4f6;
+        border: 1px solid var(--am-border);
+        border-right: none;
+        border-radius: 8px 0 0 8px;
+        padding: 0 .625rem;
+        font-size: .85rem;
+        color: var(--am-muted);
+        display: flex;
+        align-items: center;
+    }
+
+    .am-input-prefixed {
+        border-radius: 0 8px 8px 0;
+    }
+
+    .am-error {
+        font-size: .75rem;
+        color: var(--am-danger);
+        margin-top: .2rem;
+    }
+
+    .am-field-hint {
+        font-size: .75rem;
+        color: var(--am-muted);
+        margin: .25rem 0 0;
+    }
+
+    .am-field-hint-warn {
+        color: var(--am-warning);
+    }
+
+    .am-asset-chip {
+        background: #f8f9fc;
+        border: 1px solid var(--am-border);
+        border-radius: 10px;
+        padding: .75rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+
+    .am-chip-icon {
+        font-size: 1.25rem;
+        color: var(--am-primary);
+        flex-shrink: 0;
+    }
+
+    .am-chip-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: .1rem;
+    }
+
+    .am-chip-name {
+        font-weight: 600;
+        color: var(--am-text);
+        font-size: .9rem;
+    }
+
+    .am-chip-code {
+        font-family: monospace;
+        font-size: .78rem;
+        color: var(--am-muted);
+    }
+
+    .am-chip-meta {
+        font-size: .78rem;
+        color: var(--am-muted);
+    }
+
+    .am-chip-dept {
+        font-size: .72rem;
+        font-weight: 600;
+        background: rgba(79,70,229,.08);
+        color: var(--am-primary);
+        padding: .2rem .55rem;
+        border-radius: 20px;
+        flex-shrink: 0;
+    }
+
+    .am-info-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: .625rem;
+        padding: .75rem 1rem;
+        border-radius: 8px;
+        font-size: .8rem;
+        line-height: 1.5;
+        margin-bottom: .875rem;
+    }
+
+        .am-info-banner i {
+            flex-shrink: 0;
+            margin-top: .1rem;
+        }
+
+    .am-info-banner-blue {
+        background: rgba(8,145,178,.08);
+        color: #155e75;
+        border: 1px solid rgba(8,145,178,.2);
+    }
+
+    .am-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: .5rem;
+        padding: .625rem .875rem;
+        border-radius: 8px;
+        font-size: .82rem;
+        line-height: 1.5;
+    }
+
+    .am-alert-danger {
+        background: rgba(220,38,38,.07);
+        color: #991b1b;
+        border: 1px solid rgba(220,38,38,.2);
+    }
+
+    .am-alert-warning {
+        background: rgba(217,119,6,.07);
+        color: #92400e;
+        border: 1px solid rgba(217,119,6,.2);
+    }
+
+    .am-loading-row {
+        display: flex;
+        align-items: center;
+        gap: .625rem;
+        padding: .5rem 0;
+    }
+
+    .am-confirm-text {
+        font-size: .875rem;
+        color: var(--am-text);
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .am-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        background: #1a1a2e;
+        color: #fff;
+        padding: .875rem 1.25rem;
+        border-radius: 10px;
+        font-size: .85rem;
+        font-weight: 500;
+        z-index: 9999;
+        box-shadow: var(--am-shadow-lg);
+        animation: slideUp .3s ease;
+    }
+
+    .am-toast-success {
+        background: #064e3b;
+        border: 1px solid #065f46;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(1rem);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @@media(max-width:768px) {
+        .am-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .am-actions {
+            flex-wrap: wrap;
+        }
+    }
 </style>
 
 @code {
@@ -1039,7 +1871,6 @@
         loading = true;
         StateHasChanged();
 
-        // Set department filter from the UI selector
         filter.DepartmentId = string.IsNullOrEmpty(selectedDepartmentId)
             ? null
             : Guid.Parse(selectedDepartmentId);
@@ -1049,7 +1880,6 @@
         totalCount = result.TotalCount;
         totalPages = result.TotalPages;
 
-        // Counts across ALL assets (not just current page)
         var allFilter = new AssetFilterDto
         {
             PageSize = 10000,
@@ -1093,13 +1923,14 @@
     {
         Nav.NavigateTo($"/org/assets/details/{assetId}");
     }
-    // ── CREATE ────────────────────────────────────────────────────────────────
-    private void OpenCreateModal() { createDto = new CreateAssetDto(); errorMessage = ""; showCreateModal = true; }
 
-
+    // ── NAVIGATION ACTIONS ───────────────────────────────────────────────────
+    private void GoToDashboard() => Nav.NavigateTo("/org/dashboard");
     private void AssetProcurement() => Nav.NavigateTo("/org/procurement");
     private void AssetRequest() => Nav.NavigateTo("/org/asset-requests");
 
+    // ── CREATE ────────────────────────────────────────────────────────────────
+    private void OpenCreateModal() { createDto = new CreateAssetDto(); errorMessage = ""; showCreateModal = true; }
 
     private async Task SubmitCreateAsync()
     {
@@ -1124,10 +1955,15 @@
         editingAssetId = full.AssetId;
         editDto = new UpdateAssetDto
         {
-            Name = full.Name, Brand = full.Brand, Model = full.Model,
-            SerialNumber = full.SerialNumber, PurchasePrice = full.PurchasePrice,
-            PurchaseDate = full.PurchaseDate, WarrantyExpiryDate = full.WarrantyExpiryDate,
-            Notes = full.Notes, DepartmentId = full.DepartmentId
+            Name = full.Name,
+            Brand = full.Brand,
+            Model = full.Model,
+            SerialNumber = full.SerialNumber,
+            PurchasePrice = full.PurchasePrice,
+            PurchaseDate = full.PurchaseDate,
+            WarrantyExpiryDate = full.WarrantyExpiryDate,
+            Notes = full.Notes,
+            DepartmentId = full.DepartmentId
         };
         showEditModal = true;
     }
@@ -1154,34 +1990,21 @@
         assignNotes = "";
         errorMessage = "";
         showAssignModal = true;
-
         loadingEmployees = true;
-
         StateHasChanged();
 
         try
         {
-            Console.WriteLine("START LOADING EMPLOYEES");
-
-            assignableEmployees =
-                await AssetService.GetAssignableEmployeesAsync(
-                    orgId,
-                    asset.AssetId);
-
-            Console.WriteLine($"EMPLOYEE COUNT: {assignableEmployees.Count}");
+            assignableEmployees = await AssetService.GetAssignableEmployeesAsync(orgId, asset.AssetId);
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
-
             errorMessage = ex.Message;
-
             assignableEmployees = new();
         }
         finally
         {
             loadingEmployees = false;
-
             StateHasChanged();
         }
     }
@@ -1201,12 +2024,12 @@
         }
         catch (Exception ex)
         {
-            // 💡 EXTRACT THE REAL INNER EXCEPTION HERE:
             var realError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
             errorMessage = $"Save Failed: {realError}";
         }
         finally { submitting = false; }
     }
+
     // ── RETURN ────────────────────────────────────────────────────────────────
     private void OpenReturnModal(AssetListDto asset) { selectedAsset = asset; returnNotes = ""; errorMessage = ""; showReturnModal = true; }
 
@@ -1248,26 +2071,16 @@
 
     private async Task SubmitRepairCompleteAsync()
     {
-        Console.WriteLine($"Selected Asset: {selectedAsset?.AssetCode}");
-        Console.WriteLine($"Selected AssetId: {selectedAsset?.AssetId}");
         submitting = true; errorMessage = "";
         try
-        {
-
-        }
-        catch (Exception)
-        {
-            
-            throw;
-        }
         {
             await AssetService.CompleteRepairAsync(selectedAsset!.AssetId, orgId, userId, repairCompleteNotes);
             CloseModals();
             await LoadAsync();
             ShowSuccess("Repair marked complete successfully.");
         }
-        // catch (Exception ex) { errorMessage = ex.Message; }
-        // finally { submitting = false; }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1308,15 +2121,7 @@
             ? departments.FirstOrDefault(d => d.DepartmentId == deptId.Value)?.Name ?? "—"
             : "—";
 
-    private bool IsWarrantyExpiringSoon(AssetListDto asset)
-    {
-        // We only have this from AssetDto, so skip if not loaded - but we can add it to AssetListDto
-        return false; // See backend update note below
-    }
-
+    private bool IsWarrantyExpiringSoon(AssetListDto asset) => false;
     private bool IsWarrantyExpired(AssetListDto asset) => false;
-
-    private string GetBrandModel(AssetListDto asset) => ""; // AssetListDto doesn't have Brand/Model — see note
-
-
+    private string GetBrandModel(AssetListDto asset) => "";
 }

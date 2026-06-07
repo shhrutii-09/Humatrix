@@ -106,6 +106,7 @@ builder.Services.AddHostedService<AttendanceBackgroundService>();
 builder.Services.AddScoped<AttendanceCalculationService>();
 builder.Services.AddScoped<HRPolicyValidationService>();
 builder.Services.AddScoped<DepartmentEventService>();
+builder.Services.AddScoped<EmployeeEventService>();
 builder.Services.AddScoped<NotificationRecipientResolver>();
 builder.Services.AddScoped<NotificationEngine>();
 builder.Services.AddScoped<ApprovalWorkflowService>();
