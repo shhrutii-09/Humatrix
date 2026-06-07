@@ -185,48 +185,113 @@ namespace Humatrix_HRMS.Services
             if (org == null)
                 throw new Exception("Organization not found");
 
-            var user = await _userManager.FindByEmailAsync(newAdminEmail.ToLower());
+            // Get ONLY the emails of current admins (not the tracked entities)
+            var currentAdminEmails = await (from user in _context.Users.AsNoTracking()
+                                            join userRole in _context.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
+                                            join role in _context.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+                                            where user.OrganizationId == orgId && role.Name == "OrgAdmin"
+                                            select user.Email)
+                                             .ToListAsync();
 
-            if (user == null)
+            // Find or create the new admin user
+            var newAdminUser = await _userManager.FindByEmailAsync(newAdminEmail.ToLower());
+
+            if (newAdminUser == null)
             {
-                user = new ApplicationUser
+                // Create new user
+                newAdminUser = new ApplicationUser
                 {
                     UserName = newAdminEmail,
                     Email = newAdminEmail,
                     OrganizationId = orgId,
                     EmailConfirmed = true,
-                    IsActive = false
+                    IsActive = false,
+                    CreatedAt = DateTime.UtcNow
                 };
 
-                var result = await _userManager.CreateAsync(user);
-                if (!result.Succeeded)
-                    throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
+                var createResult = await _userManager.CreateAsync(newAdminUser);
+                if (!createResult.Succeeded)
+                    throw new Exception(string.Join(", ", createResult.Errors.Select(e => e.Description)));
+
+                // Re-fetch to ensure we have the user with ID
+                newAdminUser = await _userManager.FindByEmailAsync(newAdminEmail.ToLower());
             }
             else
             {
-                if (user.OrganizationId != orgId)
+                // User exists - check organization
+                if (newAdminUser.OrganizationId != null && newAdminUser.OrganizationId != orgId)
                 {
-                    throw new Exception("This user email is registered under another organization.");
+                    throw new Exception("This user email is already registered under another organization.");
+                }
+
+                // Update organization ID if needed
+                if (newAdminUser.OrganizationId == null)
+                {
+                    newAdminUser.OrganizationId = orgId;
+                    await _userManager.UpdateAsync(newAdminUser);
                 }
             }
 
-            //var token = await _userManager.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, "AdminInvite");
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var invite = new UserInvite
+            // Remove OrgAdmin role from ALL current admins (using their emails, not tracked entities)
+            foreach (var adminEmail in currentAdminEmails)
             {
-                Email = user.Email,
-                UserId = user.Id,
-                Token = token,
-                Role = "OrgAdmin",
-                OrganizationId = orgId,
-                IsUsed = false
-            };
+                var admin = await _userManager.FindByEmailAsync(adminEmail);
+                if (admin != null)
+                {
+                    if (await _userManager.IsInRoleAsync(admin, "OrgAdmin"))
+                    {
+                        await _userManager.RemoveFromRoleAsync(admin, "OrgAdmin");
+                    }
+                    admin.IsActive = false;
+                    await _userManager.UpdateAsync(admin);
+                }
+            }
 
-            _context.UserInvites.Add(invite);
-            await _context.SaveChangesAsync();
+            // Add OrgAdmin role to new admin
+            if (!await _userManager.IsInRoleAsync(newAdminUser, "OrgAdmin"))
+            {
+                await _userManager.AddToRoleAsync(newAdminUser, "OrgAdmin");
+            }
+
+            // Keep new admin inactive until they set their password
+            newAdminUser.IsActive = false;
+            await _userManager.UpdateAsync(newAdminUser);
+
+            // Generate password reset token
+            var token = await _userManager.GeneratePasswordResetTokenAsync(newAdminUser);
+
+            // Create or update invite (use a fresh context to avoid tracking issues)
+            using var inviteContext = _contextFactory.CreateDbContext();
+
+            var existingInvite = await inviteContext.UserInvites
+                .FirstOrDefaultAsync(x => x.UserId == newAdminUser.Id);
+
+            if (existingInvite != null)
+            {
+                existingInvite.Token = token;
+                existingInvite.IsUsed = false;
+                existingInvite.CreatedAt = DateTime.UtcNow;
+                inviteContext.UserInvites.Update(existingInvite);
+            }
+            else
+            {
+                var invite = new UserInvite
+                {
+                    Email = newAdminUser.Email,
+                    UserId = newAdminUser.Id,
+                    Token = token,
+                    Role = "OrgAdmin",
+                    OrganizationId = orgId,
+                    IsUsed = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await inviteContext.UserInvites.AddAsync(invite);
+            }
+
+            await inviteContext.SaveChangesAsync();
 
             var baseUrl = "https://localhost:7057";
-            var setupLink = $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+            var setupLink = $"{baseUrl}/setup-account?userId={newAdminUser.Id}&token={Uri.EscapeDataString(token)}";
 
             await _emailService.SendOrganizationInviteAsync(
                 newAdminEmail,
@@ -235,11 +300,36 @@ namespace Humatrix_HRMS.Services
 
             return setupLink;
         }
+        //public async Task<string?> GetOrganizationAdminEmailAsync(Guid orgId)
+        //{
+        //    using var _context = _contextFactory.CreateDbContext();
 
+        //    var admin = await (from user in _context.Users
+        //                       join userRole in _context.UserRoles on user.Id equals userRole.UserId
+        //                       join role in _context.Roles on userRole.RoleId equals role.Id
+        //                       where user.OrganizationId == orgId
+        //                             && role.Name == "OrgAdmin"
+        //                             && user.IsActive == true
+        //                       select user.Email)
+        //                       .FirstOrDefaultAsync();
+
+        //    if (string.IsNullOrEmpty(admin))
+        //    {
+        //        admin = await (from user in _context.Users
+        //                       join userRole in _context.UserRoles on user.Id equals userRole.UserId
+        //                       join role in _context.Roles on userRole.RoleId equals role.Id
+        //                       where user.OrganizationId == orgId && role.Name == "OrgAdmin"
+        //                       select user.Email)
+        //                       .FirstOrDefaultAsync();
+        //    }
+
+        //    return admin;
+        //}
         public async Task<string?> GetOrganizationAdminEmailAsync(Guid orgId)
         {
             using var _context = _contextFactory.CreateDbContext();
 
+            // First try to get the active admin
             var admin = await (from user in _context.Users
                                join userRole in _context.UserRoles on user.Id equals userRole.UserId
                                join role in _context.Roles on userRole.RoleId equals role.Id
@@ -249,19 +339,20 @@ namespace Humatrix_HRMS.Services
                                select user.Email)
                                .FirstOrDefaultAsync();
 
+            // If no active admin found, get the most recent OrgAdmin (the one that should be activated)
             if (string.IsNullOrEmpty(admin))
             {
                 admin = await (from user in _context.Users
                                join userRole in _context.UserRoles on user.Id equals userRole.UserId
                                join role in _context.Roles on userRole.RoleId equals role.Id
                                where user.OrganizationId == orgId && role.Name == "OrgAdmin"
+                               orderby user.CreatedAt descending
                                select user.Email)
                                .FirstOrDefaultAsync();
             }
 
             return admin;
         }
-
         public async Task<(int totalUsers, int totalEmployees, int totalHRs)> GetUserStatsAsync()
         {
             using var _context = _contextFactory.CreateDbContext();
@@ -292,5 +383,81 @@ namespace Humatrix_HRMS.Services
                 .OrderByDescending(i => i.CreatedAt)
                 .ToListAsync();
         }
+
+        public async Task ResendAdminActivationEmailAsync(Guid orgId, string adminEmail)
+        {
+            var user = await _userManager.FindByEmailAsync(adminEmail);
+            if (user == null)
+                throw new Exception("User not found");
+
+            using var _context = _contextFactory.CreateDbContext();
+
+            var org = await _context.Organizations.AsNoTracking().FirstOrDefaultAsync(x => x.OrganizationId == orgId);
+            if (org == null)
+                throw new Exception("Organization not found");
+
+            // Generate new token
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+
+            // Update or create invite
+            var invite = await _context.UserInvites.FirstOrDefaultAsync(x => x.UserId == user.Id);
+            if (invite != null)
+            {
+                invite.Token = token;
+                invite.IsUsed = false;
+                invite.CreatedAt = DateTime.UtcNow;
+                _context.UserInvites.Update(invite);
+            }
+            else
+            {
+                invite = new UserInvite
+                {
+                    Email = user.Email,
+                    UserId = user.Id,
+                    Token = token,
+                    Role = "OrgAdmin",
+                    OrganizationId = orgId,
+                    IsUsed = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.UserInvites.AddAsync(invite);
+            }
+
+            await _context.SaveChangesAsync();
+
+            var baseUrl = "https://localhost:7057";
+            var setupLink = $"{baseUrl}/setup-account?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+
+            await _emailService.SendOrganizationInviteAsync(adminEmail, org.Name, setupLink);
+        }
+        public async Task EnsureSingleActiveAdminAsync(Guid orgId)
+        {
+            using var _context = _contextFactory.CreateDbContext();
+
+            var activeAdmins = await (from user in _context.Users
+                                      join userRole in _context.UserRoles on user.Id equals userRole.UserId
+                                      join role in _context.Roles on userRole.RoleId equals role.Id
+                                      where user.OrganizationId == orgId
+                                            && role.Name == "OrgAdmin"
+                                            && user.IsActive == true
+                                      select user)
+                                      .ToListAsync();
+
+            if (activeAdmins.Count > 1)
+            {
+                // Keep the most recent one, deactivate others
+                var adminsOrdered = activeAdmins.OrderByDescending(u => u.CreatedAt).ToList();
+                var primaryAdmin = adminsOrdered.First();
+
+                foreach (var extraAdmin in adminsOrdered.Skip(1))
+                {
+                    await _userManager.RemoveFromRoleAsync(extraAdmin, "OrgAdmin");
+                    extraAdmin.IsActive = false;
+                    await _userManager.UpdateAsync(extraAdmin);
+                }
+            }
+        }
+
+
     }
 }

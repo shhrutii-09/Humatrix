@@ -159,6 +159,123 @@
 
     private void TogglePassword() => showPassword = !showPassword;
 
+    // private async Task SetPassword()
+    // {
+    //     try
+    //     {
+    //         isLoading = true;
+    //         error = null;
+    //         successMessage = null;
+
+    //         if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+    //         {
+    //             error = "Invalid activation link.";
+    //             return;
+    //         }
+
+    //         var user = await UserManager.FindByIdAsync(userId);
+
+    //         if (user == null)
+    //         {
+    //             error = "User not found.";
+    //             return;
+    //         }
+
+    //         var invite = await Db.UserInvites
+    //             .FirstOrDefaultAsync(x => x.UserId == userId);
+
+    //         if (invite == null || invite.IsUsed)
+    //         {
+    //             error = "Invalid or expired activation link.";
+    //             return;
+    //         }
+
+    //         Decode token from URL
+    //         var decodedToken = Uri.UnescapeDataString(token);
+
+    //         Set password using original token
+    //         var passwordResult = await UserManager.ResetPasswordAsync(
+    //             user,
+    //             decodedToken,
+    //             model.Password);
+
+    //         if (passwordResult.Succeeded)
+    //         {
+    //             using var transaction = await Db.Database.BeginTransactionAsync();
+
+    //             try
+    //             {
+    //                 Activate user
+    //                 user.IsActive = true;
+
+    //                 await UserManager.UpdateAsync(user);
+
+    //                 ONLY handle OrgAdmin replacement if user is OrgAdmin
+    //                 if (await UserManager.IsInRoleAsync(user, "OrgAdmin"))
+    //                 {
+    //                     var oldAdminIds = await (
+    //                         from u in Db.Users
+    //                         join ur in Db.UserRoles on u.Id equals ur.UserId
+    //                         join r in Db.Roles on ur.RoleId equals r.Id
+    //                         where u.OrganizationId == user.OrganizationId
+    //                               && r.Name == "OrgAdmin"
+    //                               && u.Id != user.Id
+    //                               && u.IsActive == true
+    //                         select u.Id
+    //                     ).ToListAsync();
+
+    //                     foreach (var oldAdminId in oldAdminIds)
+    //                     {
+    //                         var oldAdmin = await UserManager.FindByIdAsync(oldAdminId);
+
+    //                         if (oldAdmin != null)
+    //                         {
+    //                             await UserManager.RemoveFromRoleAsync(oldAdmin, "OrgAdmin");
+
+    //                             oldAdmin.IsActive = false;
+
+    //                             await UserManager.UpdateAsync(oldAdmin);
+    //                         }
+    //                     }
+    //                 }
+
+    //                 Mark invite used
+    //                 invite.IsUsed = true;
+
+    //                 await Db.SaveChangesAsync();
+
+    //                 await transaction.CommitAsync();
+    //             }
+    //             catch
+    //             {
+    //                 await transaction.RollbackAsync();
+    //                 throw;
+    //             }
+
+    //             successMessage = "Account activated successfully! Redirecting to login...";
+
+    //             StateHasChanged();
+
+    //             await Task.Delay(2000);
+
+    //             Nav.NavigateTo("/Account/Login", true);
+    //         }
+    //         else
+    //         {
+    //             error = string.Join(", ",
+    //                 passwordResult.Errors.Select(x => x.Description));
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         error = ex.Message;
+    //     }
+    //     finally
+    //     {
+    //         isLoading = false;
+    //     }
+    // }
+
     private async Task SetPassword()
     {
         try
@@ -182,9 +299,9 @@
             }
 
             var invite = await Db.UserInvites
-                .FirstOrDefaultAsync(x => x.UserId == userId);
+                .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsUsed);
 
-            if (invite == null || invite.IsUsed)
+            if (invite == null)
             {
                 error = "Invalid or expired activation link.";
                 return;
@@ -205,65 +322,60 @@
 
                 try
                 {
-                    // Activate user
+                    // IMPORTANT: Activate the user
                     user.IsActive = true;
+                    var updateResult = await UserManager.UpdateAsync(user);
 
-                    await UserManager.UpdateAsync(user);
+                    if (!updateResult.Succeeded)
+                    {
+                        throw new Exception(string.Join(", ", updateResult.Errors.Select(e => e.Description)));
+                    }
 
-                    // ONLY handle OrgAdmin replacement if user is OrgAdmin
+                    // Check if user is OrgAdmin
                     if (await UserManager.IsInRoleAsync(user, "OrgAdmin"))
                     {
-                        var oldAdminIds = await (
+                        // Find ANY other users with OrgAdmin role in same organization
+                        var otherAdmins = await (
                             from u in Db.Users
                             join ur in Db.UserRoles on u.Id equals ur.UserId
                             join r in Db.Roles on ur.RoleId equals r.Id
                             where u.OrganizationId == user.OrganizationId
                                   && r.Name == "OrgAdmin"
                                   && u.Id != user.Id
-                                  && u.IsActive == true
-                            select u.Id
+                            select u
                         ).ToListAsync();
 
-                        foreach (var oldAdminId in oldAdminIds)
+                        foreach (var oldAdmin in otherAdmins)
                         {
-                            var oldAdmin = await UserManager.FindByIdAsync(oldAdminId);
+                            // Remove role
+                            await UserManager.RemoveFromRoleAsync(oldAdmin, "OrgAdmin");
 
-                            if (oldAdmin != null)
-                            {
-                                await UserManager.RemoveFromRoleAsync(oldAdmin, "OrgAdmin");
-
-                                oldAdmin.IsActive = false;
-
-                                await UserManager.UpdateAsync(oldAdmin);
-                            }
+                            // Deactivate old admin
+                            oldAdmin.IsActive = false;
+                            await UserManager.UpdateAsync(oldAdmin);
                         }
                     }
 
-                    // Mark invite used
+                    // Mark invite as used
                     invite.IsUsed = true;
-
                     await Db.SaveChangesAsync();
 
                     await transaction.CommitAsync();
                 }
-                catch
+                catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
                     throw;
                 }
 
                 successMessage = "Account activated successfully! Redirecting to login...";
-
                 StateHasChanged();
-
                 await Task.Delay(2000);
-
                 Nav.NavigateTo("/Account/Login", true);
             }
             else
             {
-                error = string.Join(", ",
-                    passwordResult.Errors.Select(x => x.Description));
+                error = string.Join(", ", passwordResult.Errors.Select(x => x.Description));
             }
         }
         catch (Exception ex)
@@ -275,6 +387,8 @@
             isLoading = false;
         }
     }
+
+
 
     public class SetupModel
     {

@@ -14,176 +14,160 @@
         <AuthorizeView Context="mainContext">
             <Authorized>
 
+                @* SUPER ADMIN *@
                 <AuthorizeView Roles="SuperAdmin" Context="superContext">
                     <NavLink class="nav-item-custom" href="/admin/dashboard">
                         <i class="bi bi-speedometer2"></i>
                         <span>Dashboard</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/admin/create-organization">
                         <i class="bi bi-buildings"></i>
                         <span>Register Organizations</span>
                     </NavLink>
                 </AuthorizeView>
 
+                @* HR *@
                 <AuthorizeView Roles="HR" Context="hrContext">
                     <NavLink class="nav-item-custom" href="/hr/profile">
-                        <i class="bi bi-person-circle"></i>
+                        <i class="bi bi-person-badge"></i>
                         <span>My Profile</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/hr/dashboard">
-                        <i class="bi bi-speedometer2"></i>
-                        <span>Dashboard</span>
+                        <i class="bi bi-bar-chart-line"></i>
+                        <span>HR Dashboard</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/hr/add-employee">
                         <i class="bi bi-person-plus"></i>
                         <span>Add Employee</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/hr/assets">
-                        <i class="bi bi-person-plus"></i>
+                        <i class="bi bi-laptop"></i>
                         <span>Department Assets</span>
                     </NavLink>
-
                 </AuthorizeView>
 
+                @* EMPLOYEE *@
                 <AuthorizeView Roles="Employee" Context="empContext">
                     <NavLink class="nav-item-custom" href="/employee/profile">
-                        <i class="bi bi-person-badge"></i>
+                        <i class="bi bi-person-circle"></i>
                         <span>My Profile</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/employee/dashboard">
                         <i class="bi bi-grid"></i>
                         <span>Dashboard</span>
                     </NavLink>
-
                 </AuthorizeView>
 
+                @* ORG ADMIN *@
                 <AuthorizeView Roles="OrgAdmin" Context="orgContext">
                     <NavLink class="nav-item-custom" href="/org/departments">
                         <i class="bi bi-diagram-3"></i>
                         <span>Departments</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/org/designations">
                         <i class="bi bi-briefcase"></i>
                         <span>Designations</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/admin/shifts">
-                        <i class="bi bi-clock-history"></i>
+                        <i class="bi bi-clock"></i>
                         <span>Shifts</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/org/assets">
-                        <i class="bi bi-house-check"></i>
+                        <i class="bi bi-box-seam"></i>
                         <span>Manage Assets</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/org/add-hr">
-                        <i class="bi bi-person-plus"></i>
+                        <i class="bi bi-person-gear"></i>
                         <span>Add HR</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/admin/leave-types">
-                        <i class="bi bi-journal-x"></i>
-                        <span>Leave Type Manage</span>
+                        <i class="bi bi-file-earmark-ruled"></i>
+                        <span>Leave Types</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/org/holidays">
                         <i class="bi bi-calendar-event"></i>
-                        <span>Manage Holidays</span>
+                        <span>Holidays</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/org/workweeks">
                         <i class="bi bi-calendar-range"></i>
                         <span>Work Week</span>
                     </NavLink>
-                    
                 </AuthorizeView>
 
+                @* SHARED: ORG ADMIN & HR *@
                 <AuthorizeView Roles="OrgAdmin,HR" Context="commonContext">
                     <NavLink class="nav-item-custom" href="/employees">
                         <i class="bi bi-people"></i>
                         <span>Employee Directory</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/admin/attendance">
                         <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/hr/corrections">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>Attendance Correction Desk</span>
+                        <i class="bi bi-pencil-square"></i>
+                        <span>Attendance Correction</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/hr/leaves">
-                        <i class="bi bi-person-plus"></i>
+                        <i class="bi bi-envelope-open"></i>
                         <span>Leave Requests</span>
                     </NavLink>
-
                     <NavLink class="nav-item-custom" href="/hr/wfh">
-                        <i class="bi bi-house-check"></i>
+                        <i class="bi bi-house-door"></i>
                         <span>WFH Approvals</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/hr/overtime">
-                        <i class="bi bi-house-check"></i>
+                        <i class="bi bi-clock-history"></i>
                         <span>Overtime Approvals</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/admin/tasks">
-                        <i class="bi bi-house-check"></i>
+                        <i class="bi bi-list-task"></i>
                         <span>All Tasks</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/hr/assign-task">
-                        <i class="bi bi-house-check"></i>
+                        <i class="bi bi-plus-circle"></i>
                         <span>Assign Tasks</span>
                     </NavLink>
-                 
                     <NavLink class="nav-item-custom" href="/hr/tasks">
-                        <i class="bi bi-house-check"></i>
+                        <i class="bi bi-gear-wide-connected"></i>
                         <span>Manage Tasks</span>
                     </NavLink>
                 </AuthorizeView>
 
-
-                <AuthorizeView Roles="Employee , HR" Context="commonContext">
+                @* SHARED: EMPLOYEE & HR *@
+                <AuthorizeView Roles="Employee,HR" Context="empHrContext">
                     <NavLink class="nav-item-custom" href="/employee/attendance">
                         <i class="bi bi-calendar-check"></i>
                         <span>My Attendance</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/assets">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>My Workspace Assets</span>
+                        <i class="bi bi-pc-display"></i>
+                        <span>My Workspace</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/overtime">
-                        <i class="bi bi-calendar-check"></i>
+                        <i class="bi bi-stopwatch"></i>
                         <span>My Overtime</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/my-tasks">
-                        <i class="bi bi-calendar-check"></i>
+                        <i class="bi bi-check2-square"></i>
                         <span>My Tasks</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/holidays">
-                        <i class="bi bi-calendar3-event"></i>
+                        <i class="bi bi-calendar3"></i>
                         <span>Holidays</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/leaves">
-                        <i class="bi bi-calendar-x"></i>
+                        <i class="bi bi-journal-text"></i>
                         <span>My Leaves</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/wfh">
-                        <i class="bi bi-laptop"></i>
-                        <span>WFH</span>
+                        <i class="bi bi-house-check"></i>
+                        <span>WFH Request</span>
                     </NavLink>
                     <NavLink class="nav-item-custom" href="/employee/corrections">
-                        <i class="bi bi-laptop"></i>
-                        <span>Attendance Correction </span>
+                        <i class="bi bi-pencil"></i>
+                        <span>Attendance Correction</span>
                     </NavLink>
-                    @* <NavLink class="nav-item-custom" href="/employee/asset-requests">
-                        <i class="bi bi-laptop"></i>
-                        <span>Assets Requesting </span>
-                    </NavLink> *@
-
                 </AuthorizeView>
 
                 <div class="sidebar-footer">
@@ -200,12 +184,6 @@
                             <span>Logout</span>
                         </button>
                     </form>
-
-                    <script>
-                        function confirmLogout() {
-                            return confirm("Are you sure you want to logout?");
-                        }
-                    </script>
                 </div>
 
             </Authorized>
@@ -215,7 +193,6 @@
                     <i class="bi bi-house-door"></i>
                     <span>Home</span>
                 </NavLink>
-
                 <NavLink class="nav-item-custom" href="/Account/Login">
                     <i class="bi bi-box-arrow-in-right"></i>
                     <span>Login</span>
@@ -225,6 +202,12 @@
 
     </nav>
 </div>
+
+<script>
+    function confirmLogout() {
+        return confirm("Are you sure you want to logout?");
+    }
+</script>
 
 <style>
     /* SIDEBAR */
@@ -248,7 +231,7 @@
         padding-top: 10px;
     }
 
-    /* NAV ITEM (FIXED ALIGNMENT) */
+    /* NAV ITEM */
     .nav-item-custom {
         display: flex;
         align-items: center;
@@ -262,25 +245,21 @@
         transition: all 0.2s ease;
     }
 
-        /* ICON FIX */
         .nav-item-custom i {
             width: 22px;
             text-align: center;
             font-size: 1.2rem;
         }
 
-        /* TEXT */
         .nav-item-custom span {
             white-space: nowrap;
         }
 
-        /* HOVER */
         .nav-item-custom:hover {
             background: rgba(255,255,255,0.08);
             color: #fff;
         }
 
-        /* ACTIVE */
         .nav-item-custom.active {
             background: white;
             color: #5c4ac7 !important;
@@ -294,34 +273,21 @@
         border-top: 1px solid rgba(255,255,255,0.1);
     }
 
-    /* FIXED USER SECTION STYLE */
     .user-info-custom {
         display: flex;
         align-items: center;
         gap: 10px;
         font-size: 0.88rem;
         padding: 6px 10px;
-        color: #ffffff !important; /* Forced text white color */
-        background: transparent !important; /* Removes any selection background overlay */
-        background-color: transparent !important;
-        user-select: text;
+        color: #ffffff !important;
     }
-
-        .user-info-custom i {
-            color: #ffffff !important;
-            font-size: 1.1rem;
-        }
 
     .user-name-text {
         color: #ffffff !important;
-        background: transparent !important;
-        background-color: transparent !important;
         white-space: nowrap;
         overflow: hidden;
-        text-truncate: clip;
-        display: inline-block;
-        max-width: 170px;
         text-overflow: ellipsis;
+        max-width: 170px;
     }
 
     /* LOGOUT */
@@ -336,6 +302,7 @@
         padding: 10px;
         border-radius: 6px;
         transition: 0.2s;
+        cursor: pointer;
     }
 
         .logout-btn:hover {
