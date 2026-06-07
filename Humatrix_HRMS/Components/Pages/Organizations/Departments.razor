@@ -42,7 +42,6 @@
 
 <div class="container-fluid px-4 mt-4">
 
-    @* Header Section *@
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
             <h2 class="fw-bold tracking-tight text-dark mb-1">Departments</h2>
@@ -61,7 +60,6 @@
         </div>
     </div>
 
-    @* Summary Widgets *@
     <div class="row g-3 mb-4">
         <div class="col-md-3 col-sm-6">
             <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #5c4ac7 !important;">
@@ -91,7 +89,6 @@
         </div>
     </div>
 
-    @* Live Search Bar *@
     <div class="mb-3 position-relative search-wrapper">
         <i class="bi bi-search search-icon text-muted"></i>
         <input type="text"
@@ -107,7 +104,6 @@
         }
     </div>
 
-    @* Main Table View *@
     <div class="card border-0 shadow-sm panel-container-card">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -161,9 +157,9 @@
                                     }
                                     else
                                     {
-                                        <span class="text-muted row-description-text">
+                                        <div class="text-muted row-description-text" style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@d.Description">
                                             @(string.IsNullOrEmpty(d.Description) ? "—" : d.Description)
-                                        </span>
+                                        </div>
                                     }
                                 </td>
 
@@ -183,12 +179,8 @@
                                 <td class="text-end pe-4">
                                     @if (editId == d.DepartmentId)
                                     {
-                                        <button class="btn btn-sm btn-action-save me-1" @onclick="() => SaveEdit(d.DepartmentId)">
-                                            Save
-                                        </button>
-                                        <button class="btn btn-sm btn-action-cancel" @onclick="CancelEdit">
-                                            Cancel
-                                        </button>
+                                        <button class="btn btn-sm btn-action-save me-1" @onclick="() => SaveEdit(d.DepartmentId)">Save</button>
+                                        <button class="btn btn-sm btn-action-cancel" @onclick="CancelEdit">Cancel</button>
                                     }
                                     else
                                     {
@@ -204,26 +196,17 @@
             </table>
         </div>
 
-        @* COMPACT PAGINATION PANEL *@
         <div class="d-flex justify-content-end align-items-center p-3 border-top bg-light pe-4">
             <div class="d-flex align-items-center gap-1 core-pagination-wrapper shadow-sm rounded-3 p-1 bg-white border">
-
-                <button class="btn btn-paging-arrow @(CurrentPage == 1 ? "disabled" : "")"
-                        @onclick="() => ChangePage(CurrentPage - 1)"
-                        title="Previous Page">
+                <button class="btn btn-paging-arrow @(CurrentPage == 1 ? "disabled" : "")" @onclick="() => ChangePage(CurrentPage - 1)">
                     <i class="bi bi-chevron-left"></i>
                 </button>
-
                 <div class="premium-page-state-text px-2 fw-semibold text-secondary select-none">
                     Page <span class="text-indigo-premium">@CurrentPage</span>/<span>@(TotalPages == 0 ? 1 : TotalPages)</span>
                 </div>
-
-                <button class="btn btn-paging-arrow @(CurrentPage >= TotalPages || TotalPages == 0 ? "disabled" : "")"
-                        @onclick="() => ChangePage(CurrentPage + 1)"
-                        title="Next Page">
+                <button class="btn btn-paging-arrow @(CurrentPage >= TotalPages || TotalPages == 0 ? "disabled" : "")" @onclick="() => ChangePage(CurrentPage + 1)">
                     <i class="bi bi-chevron-right"></i>
                 </button>
-
             </div>
         </div>
     </div>
@@ -279,8 +262,6 @@
         font-size: 13.5px;
         border-radius: 10px;
         border: 1px solid #cbd5e1;
-        background-color: #ffffff;
-        color: #1e293b;
         transition: all 0.2s ease;
     }
 
@@ -297,13 +278,7 @@
         background: none;
         border: none;
         color: #94a3b8;
-        padding: 4px;
-        transition: color 0.15s ease;
     }
-
-        .btn-clear-search:hover {
-            color: #64748b;
-        }
 
     .table thead th {
         background-color: #f8fafc;
@@ -311,13 +286,9 @@
         font-size: 11px;
     }
 
-    .table-row-interactive {
-        transition: background-color 0.15s ease;
+    .table-row-interactive:hover {
+        background-color: #f8fafc;
     }
-
-        .table-row-interactive:hover {
-            background-color: #f8fafc;
-        }
 
     .text-heading-field {
         font-size: 14px;
@@ -336,15 +307,7 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
-        letter-spacing: 0.02em;
-        transition: all 0.2s ease;
     }
-
-        .btn-add-dept:hover {
-            background-color: #4b3ba6 !important;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(92, 74, 199, 0.2) !important;
-        }
 
     .btn-interactive-back {
         background: #ffffff !important;
@@ -354,15 +317,7 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
-        transition: all 0.2s ease;
     }
-
-        .btn-interactive-back:hover {
-            background-color: #f8fafc !important;
-            border-color: #5c4ac7 !important;
-            color: #5c4ac7 !important;
-            transform: translateY(-1px);
-        }
 
     .btn-paging-arrow {
         border: none;
@@ -370,20 +325,10 @@
         color: #475569;
         padding: 4px 10px;
         border-radius: 6px;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
     }
-
-        .btn-paging-arrow:hover {
-            background-color: #f1f5f9;
-            color: #1e293b;
-        }
 
         .btn-paging-arrow.disabled {
             color: #cbd5e1;
-            background: transparent;
             pointer-events: none;
         }
 
@@ -398,24 +343,13 @@
         font-weight: 700;
     }
 
-    .select-none {
-        user-select: none;
-    }
-
     .btn-action-edit {
         background: #f1f5f9;
         border: 1px solid #e2e8f0;
         color: #475569;
         border-radius: 8px;
         padding: 5px 10px;
-        transition: all 0.15s ease;
     }
-
-        .btn-action-edit:hover {
-            background: rgba(92, 74, 199, 0.08);
-            border-color: rgba(92, 74, 199, 0.25);
-            color: #5c4ac7;
-        }
 
     .btn-action-save {
         background-color: #10b981;
@@ -424,7 +358,6 @@
         border-radius: 6px;
         padding: 4px 12px;
         font-size: 12.5px;
-        font-weight: 500;
     }
 
     .btn-action-cancel {
@@ -443,18 +376,11 @@
         border: 1px solid #cbd5e1;
     }
 
-        .premium-edit-input:focus {
-            border-color: #5c4ac7;
-            box-shadow: 0 0 0 3px rgba(92, 74, 199, 0.12);
-            background-color: #ffffff !important;
-        }
-
     .protocol-switch .form-check-input {
         width: 2.3em;
         height: 1.15em;
         cursor: pointer;
         background-color: #cbd5e1;
-        border-color: transparent;
     }
 
         .protocol-switch .form-check-input:checked {
@@ -466,7 +392,6 @@
         font-weight: 600;
         padding: 2px 8px;
         border-radius: 6px;
-        display: inline-block;
         min-width: 60px;
     }
 
@@ -484,151 +409,53 @@
 @code {
     private List<DepartmentDto> departments = new();
     private string _searchQuery = string.Empty;
-
-    private string SearchQuery
-    {
-        get => _searchQuery;
-        set
-        {
-            if (_searchQuery != value)
-            {
-                _searchQuery = value;
-                CurrentPage = 1;
-            }
-        }
-    }
-
+    private string SearchQuery { get => _searchQuery; set { if (_searchQuery != value) { _searchQuery = value; CurrentPage = 1; } } }
     private string? message;
     private string? error;
-
     private Guid? editId;
     private string? editName;
     private string? editDesc;
-
     private int totalCount = 0;
     private int inactiveCount = 0;
-
     private int CurrentPage { get; set; } = 1;
     private int PageSize { get; set; } = 10;
     private int TotalPages => (int)Math.Ceiling((double)FilteredDepartments.Count() / PageSize);
-
-    private IEnumerable<DepartmentDto> FilteredDepartments =>
-        string.IsNullOrWhiteSpace(SearchQuery)
-            ? departments
-            : departments.Where(d => d.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
-                                     (d.Description != null && d.Description.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)));
-
-    private IEnumerable<DepartmentDto> PagedDepartments =>
-        FilteredDepartments.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+    private IEnumerable<DepartmentDto> FilteredDepartments => string.IsNullOrWhiteSpace(SearchQuery) ? departments : departments.Where(d => d.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) || (d.Description != null && d.Description.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)));
+    private IEnumerable<DepartmentDto> PagedDepartments => FilteredDepartments.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
 
     protected override async Task OnInitializedAsync()
     {
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
-        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var value))
-        {
-            message = value.ToString();
-            TriggerAutoDismiss(true); // Query string notifications auto dismiss
-        }
-
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var value)) { message = value.ToString(); TriggerAutoDismiss(true); }
         await LoadDepartments();
     }
 
     private async Task LoadDepartments()
     {
         var rawData = await DeptService.GetAllAsync();
-        if (rawData != null)
-        {
-            departments = rawData;
-            totalCount = departments.Count;
-            inactiveCount = departments.Count(d => !d.IsActive);
-
-            if (CurrentPage > TotalPages && TotalPages > 0)
-            {
-                CurrentPage = TotalPages;
-            }
-        }
+        if (rawData != null) { departments = rawData; totalCount = departments.Count; inactiveCount = departments.Count(d => !d.IsActive); if (CurrentPage > TotalPages && TotalPages > 0) CurrentPage = TotalPages; }
     }
 
-    // Helper system to auto-wipe alerts after a 10s wait duration
-    private async void TriggerAutoDismiss(bool isSuccess)
-    {
-        await Task.Delay(4000);
-        if (isSuccess)
-        {
-            message = null;
-        }
-        else
-        {
-            error = null;
-        }
-        StateHasChanged();
-    }
-
-    private void ChangePage(int pageNumber)
-    {
-        if (pageNumber >= 1 && pageNumber <= TotalPages)
-        {
-            CurrentPage = pageNumber;
-        }
-    }
-
-    private void ClearSearch()
-    {
-        SearchQuery = string.Empty;
-        CurrentPage = 1;
-    }
-
+    private async void TriggerAutoDismiss(bool isSuccess) { await Task.Delay(4000); if (isSuccess) message = null; else error = null; StateHasChanged(); }
+    private void ChangePage(int pageNumber) { if (pageNumber >= 1 && pageNumber <= TotalPages) CurrentPage = pageNumber; }
+    private void ClearSearch() { SearchQuery = string.Empty; CurrentPage = 1; }
     void GoToCreate() => Nav.NavigateTo("/org/create-department");
     void GoBack() => Nav.NavigateTo("/org/dashboard");
-
-    void StartEdit(DepartmentDto dept)
-    {
-        editId = dept.DepartmentId;
-        editName = dept.Name;
-        editDesc = dept.Description;
-    }
-
+    void StartEdit(DepartmentDto dept) { editId = dept.DepartmentId; editName = dept.Name; editDesc = dept.Description; }
     void CancelEdit() => editId = null;
 
     async Task SaveEdit(Guid id)
     {
         if (string.IsNullOrWhiteSpace(editName)) return;
-
-        try
-        {
-            await DeptService.UpdateAsync(id, editName!, editDesc);
-            editId = null;
-            message = "Department details updated successfully.";
-            error = null;
-            await LoadDepartments();
-            TriggerAutoDismiss(true);
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            message = null;
-            TriggerAutoDismiss(false);
-        }
+        try { await DeptService.UpdateAsync(id, editName!, editDesc); editId = null; message = "Department details updated successfully."; await LoadDepartments(); TriggerAutoDismiss(true); }
+        catch (Exception ex) { error = ex.Message; TriggerAutoDismiss(false); }
     }
 
     private async Task ToggleDeptStatus(DepartmentDto d, ChangeEventArgs e)
     {
         var isActive = (bool)e.Value!;
         d.IsActive = isActive;
-
-        try
-        {
-            await DeptService.ToggleStatusAsync(d.DepartmentId, isActive);
-            message = $"Department state changed to {(isActive ? "Active" : "Inactive")}.";
-            error = null;
-            await LoadDepartments();
-            TriggerAutoDismiss(true);
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            message = null;
-            TriggerAutoDismiss(false);
-        }
+        try { await DeptService.ToggleStatusAsync(d.DepartmentId, isActive); message = $"Department state changed to {(isActive ? "Active" : "Inactive")}."; await LoadDepartments(); TriggerAutoDismiss(true); }
+        catch (Exception ex) { error = ex.Message; TriggerAutoDismiss(false); }
     }
 }
