@@ -1,0 +1,452 @@
+﻿@page "/employee/exit"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
+
+@attribute [Authorize(Roles = "Employee,HR")]
+
+@inject EmployeeExitService ExitService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Exit Management | Humatrix HRMS</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-box-arrow-right me-2"></i> Exit Management
+            </h2>
+            <p class="text-muted small mb-0">Submit resignation or track your exit process</p>
+        </div>
+        <button type="button" class="btn btn-secondary px-4" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
+            ← Back to Dashboard
+        </button>
+    </div>
+
+    @if (_myExit == null)
+    {
+        @* No exit request - Show resignation form *@
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-header bg-white border-0 pt-4 pb-0">
+                        <h5 class="fw-bold text-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> Submit Resignation
+                        </h5>
+                        <p class="text-muted small">Please review the terms before submitting your resignation.</p>
+                    </div>
+                    <div class="card-body p-4">
+                        @if (!string.IsNullOrEmpty(_errorMessage))
+                        {
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i> @_errorMessage
+                                <button type="button" class="btn-close" @onclick="ClearError"></button>
+                            </div>
+                        }
+
+                        <EditForm Model="_resignationModel" OnValidSubmit="SubmitResignation">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">Last Working Day <span class="text-danger">*</span></label>
+                                <input type="date"
+                                       class="form-control"
+                                       @bind="_resignationModel.LastWorkingDay"
+                                       @bind:format="yyyy-MM-dd"
+                                       min="@DateTime.Today.AddDays(30).ToString("yyyy-MM-dd")" />                               <small class="text-muted">Minimum notice period is 30 days</small>
+                                @if (!string.IsNullOrEmpty(_lastWorkingDayError))
+                                {
+                                    <div class="text-danger small mt-1">@_lastWorkingDayError</div>
+                                }
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">Reason for Leaving <span class="text-danger">*</span></label>
+                                <select class="form-select" @bind="_resignationModel.Reason">
+                                    <option value="">Select reason...</option>
+                                    <option value="Better Career Opportunity">Better Career Opportunity</option>
+                                    <option value="Higher Studies">Higher Studies</option>
+                                    <option value="Personal Reason">Personal Reason</option>
+                                    <option value="Health Issues">Health Issues</option>
+                                    <option value="Relocation">Relocation</option>
+                                    <option value="Work-Life Balance">Work-Life Balance</option>
+                                    <option value="Company Culture">Company Culture</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                @if (!string.IsNullOrEmpty(_reasonError))
+                                {
+                                    <div class="text-danger small mt-1">@_reasonError</div>
+                                }
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">
+                                    Additional Remarks <span class="text-danger">*</span>
+                                </label>
+
+                                <textarea class="form-control"
+                                          rows="4"
+                                          @bind="_resignationModel.Remarks"
+                                          placeholder="Please provide any additional information about your departure...">
+        </textarea>
+
+                                @if (!string.IsNullOrEmpty(_remarksError))
+                                {
+                                    <div class="text-danger small mt-1">
+                                        @_remarksError
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="alert alert-warning p-3 mb-4">
+                                <div class="form-check">
+                                    <InputCheckbox id="confirmTerms"
+                                                   class="form-check-input"
+                                                   @bind-Value="_confirmTerms" />
+
+                                    <label class="form-check-label" for="confirmTerms">
+                                        I understand that this resignation is final and I will need to complete exit formalities including:
+                                        <ul class="mt-2 mb-0 ps-3 small">
+                                            <li>Returning all company assets</li>
+                                            <li>Completing knowledge transfer</li>
+                                            <li>Serving the notice period</li>
+                                            <li>Clearing all dues</li>
+                                        </ul>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="submit"
+                                        class="btn btn-danger px-4"
+                                        disabled="@_isSubmitting">
+                                    @if (_isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Submit Resignation
+                                </button>
+                                <button type="button" class="btn btn-secondary px-4" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
+                                    Cancel
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* Exit request exists - Show status *@
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-header bg-white border-0 pt-4">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="fw-bold">Exit Request Status</h5>
+                            <span class="badge @GetStatusBadgeClass(_myExit.Status) fs-6 px-3 py-2">
+                                @GetStatusText(_myExit.Status)
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body p-4">
+                        @* Progress Timeline *@
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="small @(GetStatusStep("Submitted") ? "text-success fw-bold" : "text-muted")">
+                                    <i class="bi @(GetStatusStep("Submitted") ? "bi-check-circle-fill" : "bi-circle") me-1"></i> Submitted
+                                </span>
+                                <span class="small @(GetStatusStep("Approved") ? "text-success fw-bold" : "text-muted")">
+                                    <i class="bi @(GetStatusStep("Approved") ? "bi-check-circle-fill" : "bi-circle") me-1"></i> Approved
+                                </span>
+                                <span class="small @(GetStatusStep("Clearance") ? "text-success fw-bold" : "text-muted")">
+                                    <i class="bi @(GetStatusStep("Clearance") ? "bi-check-circle-fill" : "bi-circle") me-1"></i> Clearance
+                                </span>
+                                <span class="small @(GetStatusStep("Completed") ? "text-success fw-bold" : "text-muted")">
+                                    <i class="bi @(GetStatusStep("Completed") ? "bi-check-circle-fill" : "bi-circle") me-1"></i> Completed
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar"
+                                     style="width: @GetProgressPercentage()%"
+                                     aria-valuenow="@GetProgressPercentage()" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+
+                        @* Exit Details *@
+                        <div class="bg-light p-3 rounded-3 mb-4">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="text-muted small">Resignation Date</div>
+                                    <div class="fw-semibold">@_myExit.ResignationDate.ToString("dd MMM yyyy")</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="text-muted small">Last Working Day</div>
+                                    <div class="fw-semibold">@_myExit.LastWorkingDay.ToString("dd MMM yyyy")</div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="text-muted small">Reason</div>
+                                    <div>@_myExit.Reason</div>
+                                </div>
+                                @if (!string.IsNullOrEmpty(_myExit.Remarks))
+                                {
+                                    <div class="col-12">
+                                        <div class="text-muted small">Remarks</div>
+                                        <div>@_myExit.Remarks</div>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(_myExit.ApprovalRemarks))
+                                {
+                                    <div class="col-12">
+                                        <div class="text-muted small">Approval Remarks</div>
+                                        <div class="text-info">@_myExit.ApprovalRemarks</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @* Clearance Status (if approved) *@
+                        @if (_myExit.Status == ExitStatus.Approved || _myExit.Status == ExitStatus.ClearanceInProgress || _myExit.Status == ExitStatus.Completed)
+                        {
+                            <div class="mb-4">
+                                <h6 class="fw-bold mb-3">📋 Clearance Checklist</h6>
+                                <div class="list-group">
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-laptop me-2"></i> Assets Returned</span>
+                                        <span class="badge @(_myExit.AssetsReturned ? "bg-success" : "bg-warning")">
+                                            @(_myExit.AssetsReturned ? "Completed" : "Pending")
+                                        </span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-shield-lock me-2"></i> Access Revoked</span>
+                                        <span class="badge @(_myExit.AccessRevoked ? "bg-success" : "bg-warning")">
+                                            @(_myExit.AccessRevoked ? "Completed" : "Pending")
+                                        </span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-people me-2"></i> Knowledge Transfer</span>
+                                        <span class="badge @(_myExit.KnowledgeTransferred ? "bg-success" : "bg-warning")">
+                                            @(_myExit.KnowledgeTransferred ? "Completed" : "Pending")
+                                        </span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-cash-stack me-2"></i> No Dues Cleared</span>
+                                        <span class="badge @(_myExit.NoDuesCleared ? "bg-success" : "bg-warning")">
+                                            @(_myExit.NoDuesCleared ? "Completed" : "Pending")
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @* Documents Issued *@
+                        @if (_myExit.ExperienceLetterIssued || _myExit.RelievingLetterIssued)
+                        {
+                            <div class="mb-4">
+                                <h6 class="fw-bold mb-3">📄 Documents Issued</h6>
+                                <div class="d-flex gap-3">
+                                    @if (_myExit.ExperienceLetterIssued)
+                                    {
+                                        <span class="badge bg-info">Experience Letter Issued</span>
+                                    }
+                                    @if (_myExit.RelievingLetterIssued)
+                                    {
+                                        <span class="badge bg-info">Relieving Letter Issued</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @* Cancel button for pending requests *@
+                        @if (_myExit.Status == ExitStatus.Pending)
+                        {
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Your resignation is pending HR approval. You can cancel it if needed.
+                            </div>
+                            <button class="btn btn-outline-danger" @onclick="ShowCancelConfirmation">
+                                Cancel Resignation Request
+                            </button>
+                        }
+
+                        @* Completion message *@
+                        @if (_myExit.Status == ExitStatus.Completed)
+                        {
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                Your exit process is complete. Thank you for your contribution to the organization.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private class ResignationModel
+    {
+        public DateTime LastWorkingDay { get; set; } = DateTime.Today.AddDays(30);
+        public string Reason { get; set; } = string.Empty;
+        public string? Remarks { get; set; }
+    }
+
+    private ResignationModel _resignationModel = new();
+    private EmployeeExit? _myExit;
+    private bool _isSubmitting;
+    private string? _errorMessage;
+    private string? _lastWorkingDayError;
+    private string? _reasonError;
+    private string? _remarksError;
+    private bool _confirmTerms;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMyExitRequest();
+    }
+
+    private async Task LoadMyExitRequest()
+    {
+        _myExit = await ExitService.GetMyExitRequestAsync();
+        StateHasChanged();
+    }
+
+    private async Task SubmitResignation()
+    {
+        // Clear previous errors
+        _lastWorkingDayError = null;
+        _reasonError = null;
+        _remarksError = null;
+        _errorMessage = null;
+        // Validate terms
+        if (!_confirmTerms)
+        {
+            _errorMessage = "Please accept the resignation terms before submitting.";
+            StateHasChanged();
+            return;
+        }
+
+        // Validate reason
+        if (string.IsNullOrWhiteSpace(_resignationModel.Reason))
+        {
+            _reasonError = "Please select a reason for leaving.";
+            StateHasChanged();
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_resignationModel.Remarks))
+        {
+            _remarksError = "Additional remarks are required.";
+            StateHasChanged();
+            return;
+        }
+        // Validate last working day (30 days minimum)
+        var minDate = DateTime.Today.AddDays(30);
+        if (_resignationModel.LastWorkingDay.Date < minDate)
+        {
+            _lastWorkingDayError = $"Last working day must be at least 30 days from today. Minimum date: {minDate:dd MMM yyyy}";
+            StateHasChanged();
+            return;
+        }
+
+        _isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            await ExitService.SubmitResignationAsync(
+                _resignationModel.LastWorkingDay,
+                _resignationModel.Reason,
+                _resignationModel.Remarks);
+
+            await LoadMyExitRequest();
+
+            await JSRuntime.InvokeVoidAsync("alert", "Resignation submitted successfully! HR will review your request.");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CancelExitRequest()
+    {
+        try
+        {
+            await ExitService.CancelExitRequestAsync();
+            await LoadMyExitRequest();
+            await JSRuntime.InvokeVoidAsync("alert", "Resignation request cancelled successfully.");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void ClearError()
+    {
+        _errorMessage = null;
+        _lastWorkingDayError = null;
+        _reasonError = null;
+        _remarksError = null;
+    }
+
+    private async Task ShowCancelConfirmation()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to cancel your resignation?");
+        if (confirmed)
+        {
+            await CancelExitRequest();
+        }
+    }
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        ExitStatus.Pending => "bg-warning text-dark",
+        ExitStatus.Approved => "bg-info",
+        ExitStatus.ClearanceInProgress => "bg-primary",
+        ExitStatus.Completed => "bg-success",
+        ExitStatus.Rejected => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusText(string status) => status switch
+    {
+        ExitStatus.Pending => "Pending HR Review",
+        ExitStatus.Approved => "Approved - Clearance Pending",
+        ExitStatus.ClearanceInProgress => "Clearance In Progress",
+        ExitStatus.Completed => "Completed",
+        ExitStatus.Rejected => "Rejected",
+        _ => status
+    };
+
+    private bool GetStatusStep(string step) => _myExit?.Status switch
+    {
+        ExitStatus.Pending => step == "Submitted",
+        ExitStatus.Approved => step == "Submitted" || step == "Approved",
+        ExitStatus.ClearanceInProgress => step == "Submitted" || step == "Approved" || step == "Clearance",
+        ExitStatus.Completed => true,
+        _ => step == "Submitted"
+    };
+
+    private int GetProgressPercentage() => _myExit?.Status switch
+    {
+        ExitStatus.Pending => 25,
+        ExitStatus.Approved => 50,
+        ExitStatus.ClearanceInProgress => 75,
+        ExitStatus.Completed => 100,
+        _ => 0
+    };
+}

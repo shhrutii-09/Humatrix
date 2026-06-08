@@ -64,10 +64,14 @@ namespace Humatrix_HRMS.Configuration
                 .HasForeignKey(x => x.AssetId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            //b.HasOne(x => x.Employee)
+            //    .WithMany()
+            //    .HasForeignKey(x => x.EmployeeId)
+            //    .OnDelete(DeleteBehavior.Restrict);
             b.HasOne(x => x.Employee)
-                .WithMany()
-                .HasForeignKey(x => x.EmployeeId)
-                .OnDelete(DeleteBehavior.Restrict);
+ .WithMany(e => e.AssetAssignments)
+ .HasForeignKey(x => x.EmployeeId)
+ .OnDelete(DeleteBehavior.Restrict);
         }
     }
 

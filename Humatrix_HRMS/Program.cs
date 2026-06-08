@@ -112,6 +112,9 @@ builder.Services.AddScoped<NotificationEngine>();
 builder.Services.AddScoped<ApprovalWorkflowService>();
 builder.Services.AddScoped<ActivityLogService>();
 builder.Services.AddScoped<DashboardBroadcastService>();
+builder.Services.AddHostedService<ExitBackgroundService>();
+// Add to Program.cs
+builder.Services.AddScoped<EmployeeExitService>();
 // Services
 
 builder.Services.AddScoped<IOrgGeneratedDocumentService, OrgGeneratedDocumentService>();

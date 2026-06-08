@@ -20,6 +20,9 @@ namespace Humatrix_HRMS.Models
         public string? Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
 
+        // Add to Employee.cs
+        public DateTime? LastWorkingDay { get; set; }
+        public string? ExitReason { get; set; }
         public string? Phone { get; set; }
         public string? Address { get; set; }
 
@@ -63,5 +66,9 @@ namespace Humatrix_HRMS.Models
 
         public ICollection<EmployeeDocument> Documents { get; set; }
     = new List<EmployeeDocument>();
+
+
+        // Add to Employee.cs - add this navigation property
+        public virtual ICollection<AssetAssignment> AssetAssignments { get; set; } = new List<AssetAssignment>();
     }
 }

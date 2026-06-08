@@ -43,6 +43,8 @@ namespace Humatrix_HRMS.Data
 
         public DbSet<OvertimeRequest> OvertimeRequests { get; set; }
 
+        public DbSet<EmployeeExit> EmployeeExits { get; set; }
+
         public DbSet<AttendanceCorrectionRequest> AttendanceCorrectionRequests { get; set; }
 
         //public DbSet<CorrectionAuditLog> AttendanceAuditLogs { get; set; }
@@ -377,6 +379,35 @@ namespace Humatrix_HRMS.Data
             modelBuilder.ApplyConfiguration(new AssetRequestConfiguration());
             modelBuilder.ApplyConfiguration(new ProcurementRequestConfiguration());
 
+
+            modelBuilder.Entity<EmployeeExit>(entity =>
+            {
+                entity.HasKey(e => e.ExitId);
+
+                // Fix decimal precision
+                entity.Property(e => e.FullFinalAmount)
+                      .HasPrecision(18, 2);
+
+                entity.HasOne(e => e.Employee)
+                      .WithMany()
+                      .HasForeignKey(e => e.EmployeeId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Organization)
+                      .WithMany()
+                      .HasForeignKey(e => e.OrganizationId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.ApprovedBy)
+                      .WithMany()
+                      .HasForeignKey(e => e.ApprovedByEmployeeId)
+                      .IsRequired(false)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(e => new { e.OrganizationId, e.Status });
+                entity.HasIndex(e => e.EmployeeId);
+                entity.HasIndex(e => e.LastWorkingDay);
+            });
 
             //// This automatically injects 'Where(e => e.IsActive)' into every single query across the system
             //modelBuilder.Entity<Employee>().HasQueryFilter(e => e.Status == "Active");

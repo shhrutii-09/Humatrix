@@ -1,0 +1,884 @@
+﻿@page "/hr/exit"
+@rendermode InteractiveServer
+
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.DTOs
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+
+@inject EmployeeExitService ExitService
+@inject CurrentUserService CurrentUserService
+@inject DepartmentService DepartmentService
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Exit Management | HR Portal</PageTitle>
+
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-box-arrow-right me-2"></i> Exit Management
+            </h2>
+            <p class="text-muted small mb-0">Manage employee resignations and exit formalities</p>
+        </div>
+        <button class="btn btn-outline-secondary" @onclick="NavigateDashboard">
+            ← Back to Dashboard
+        </button>
+    </div>
+
+    @* Stats Cards *@
+    @if (_stats != null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm bg-warning bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <p class="text-muted small mb-1">Pending Review</p>
+                                <h3 class="fw-bold mb-0">@_stats.PendingExits</h3>
+                            </div>
+                            <div class="fs-1 opacity-50">⏳</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm bg-info bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <p class="text-muted small mb-1">Approved</p>
+                                <h3 class="fw-bold mb-0">@_stats.ApprovedExits</h3>
+                            </div>
+                            <div class="fs-1 opacity-50">✓</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm bg-primary bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <p class="text-muted small mb-1">Clearance Progress</p>
+                                <h3 class="fw-bold mb-0">@_stats.ClearanceInProgress</h3>
+                            </div>
+                            <div class="fs-1 opacity-50">📋</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm bg-success bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <p class="text-muted small mb-1">Completed This Month</p>
+                                <h3 class="fw-bold mb-0">@_stats.CompletedThisMonth</h3>
+                            </div>
+                            <div class="fs-1 opacity-50">🎓</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Filter Bar *@
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Status Filter</label>
+                    <select class="form-select" @bind="_statusFilter" @bind:after="OnFiltersChanged">
+                        <option value="">All Requests</option>
+                        <option value="Pending">Pending Review</option>
+                        <option value="Approved">Approved</option>
+                        <option value="ClearanceInProgress">Clearance In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Rejected">Rejected</option>
+                    </select>
+                </div>
+                @if (_isOrgAdmin)
+                {
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Department</label>
+                        <select class="form-select" @bind="_departmentFilter" @bind:after="OnFiltersChanged">
+                            <option value="">All Departments</option>
+                            @foreach (var dept in _departments)
+                            {
+                                <option value="@dept.DepartmentId">@dept.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Search</label>
+                    <input type="text" class="form-control" placeholder="Employee name or code..."
+                           @bind="_search" @bind:after="OnFiltersChanged" />
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-outline-secondary w-100" @onclick="ResetFilters">Clear Filters</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Exit Requests Table *@
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-0 pt-3">
+            <h5 class="mb-0 fw-bold">Exit Requests (@_exits.Count)</h5>
+        </div>
+        <div class="card-body p-0">
+            @if (_isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2 text-muted">Loading...</p>
+                </div>
+            }
+            else if (!_exits.Any())
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    <p>No exit requests found</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Employee</th>
+                                <th>Department</th>
+                                <th>Resignation Date</th>
+                                <th>Last Working Day</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var exit in _exits)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@exit.Employee?.FirstName @exit.Employee?.LastName</div>
+                                        <small class="text-muted">@exit.Employee?.EmployeeCode</small>
+                                    </td>
+                                    <td>@exit.Employee?.Department?.Name</td>
+                                    <td>@exit.ResignationDate.ToString("dd MMM yyyy")</td>
+                                    <td class="fw-semibold">@exit.LastWorkingDay.ToString("dd MMM yyyy")</td>
+                                    <td>
+                                        <span class="d-inline-block text-truncate" style="max-width: 150px;" title="@exit.Reason">
+                                            @exit.Reason
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(exit.Status)">
+                                            @GetStatusText(exit.Status)
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => OpenProcessModal(exit)">
+                                            <i class="bi bi-gear"></i> Process
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-info ms-1"
+                                                @onclick="() => OpenViewModal(exit)">
+                                            <i class="bi bi-eye"></i> View
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@* Process Modal *@
+@if (_showProcessModal && _selectedExit != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" @onclick="CloseModalOnBackdrop">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" @onclick="stopPropagation">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Process Exit - @_selectedExit.Employee?.FirstName @_selectedExit.Employee?.LastName</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_processError != null)
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> @_processError
+                            <button type="button" class="btn-close" @onclick="() => _processError = null"></button>
+                        </div>
+                    }
+
+                    <ul class="nav nav-tabs mb-3">
+                        @if (_selectedExit.Status == "Pending")
+                        {
+                            <li class="nav-item">
+                                <button class="nav-link @(_activeTab == "approve" ? "active" : "")"
+                                        @onclick='() => SetTab("approve")'>
+                                    Approve/Reject
+                                </button>
+                            </li>
+                        }
+                        @if (_selectedExit.Status == "Approved" || _selectedExit.Status == "ClearanceInProgress")
+                        {
+                            <li class="nav-item">
+                                <button class="nav-link @(_activeTab == "clearance" ? "active" : "")"
+                                        @onclick='() => SetTab("clearance")'>
+                                    Clearance Checklist
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link @(_activeTab == "complete" ? "active" : "")"
+                                        @onclick='() => SetTab("complete")'>
+                                    Complete Exit
+                                </button>
+                            </li>
+                        }
+                        <li class="nav-item">
+                            <button class="nav-link @(_activeTab == "interview" ? "active" : "")"
+                                    @onclick='() => SetTab("interview")'>
+                                Exit Interview
+                            </button>
+                        </li>
+                    </ul>
+
+                    @* Approve/Reject Tab *@
+                    @if (_activeTab == "approve")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Action</label>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn @(_approveAction == "approve" ? "btn-success" : "btn-outline-success")"
+                                        @onclick='() => { _approveAction = "approve"; }'>
+                                    ✅ Approve
+                                </button>
+                                <button type="button" class="btn @(_approveAction == "reject" ? "btn-danger" : "btn-outline-danger")"
+                                        @onclick='() => { _approveAction = "reject"; }'>
+                                    ❌ Reject
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Remarks</label>
+                            <textarea class="form-control" rows="3" @bind="_approvalRemarks"
+                                      placeholder="Add comments..."></textarea>
+                        </div>
+
+                        @if (_approveAction == "reject")
+                        {
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Rejecting will cancel the resignation. The employee will remain active.
+                            </div>
+                        }
+
+                        <button class="btn btn-primary w-100" @onclick="ProcessApproval" disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            @(_approveAction == "approve" ? "Approve Resignation" : "Reject Resignation")
+                        </button>
+                    }
+
+                    @* Clearance Tab *@
+                    @if (_activeTab == "clearance")
+                    {
+                        <div class="mb-3">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="_clearanceAssets" id="assets">
+                                <label class="form-check-label fw-semibold" for="assets">
+                                    <i class="bi bi-laptop me-2"></i> Assets Returned
+                                </label>
+                                @if (_selectedExit.AssetsReturnedDate.HasValue)
+                                {
+                                    <small class="text-muted ms-2">(Returned: @_selectedExit.AssetsReturnedDate.Value.ToString("dd MMM yyyy"))</small>
+                                }
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="_clearanceAccess" id="access">
+                                <label class="form-check-label fw-semibold" for="access">
+                                    <i class="bi bi-shield-lock me-2"></i> System Access Revoked
+                                </label>
+                                @if (_selectedExit.AccessRevokedDate.HasValue)
+                                {
+                                    <small class="text-muted ms-2">(Revoked: @_selectedExit.AccessRevokedDate.Value.ToString("dd MMM yyyy"))</small>
+                                }
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="_clearanceKnowledge" id="knowledge">
+                                <label class="form-check-label fw-semibold" for="knowledge">
+                                    <i class="bi bi-people me-2"></i> Knowledge Transfer Completed
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" @bind="_clearanceDues" id="dues">
+                                <label class="form-check-label fw-semibold" for="dues">
+                                    <i class="bi bi-cash-stack me-2"></i> No Dues Cleared
+                                </label>
+                                @if (_selectedExit.NoDuesClearedDate.HasValue)
+                                {
+                                    <small class="text-muted ms-2">(Cleared: @_selectedExit.NoDuesClearedDate.Value.ToString("dd MMM yyyy"))</small>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Full & Final Settlement Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" @bind="_fullFinalAmount" step="0.01" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Remarks</label>
+                            <textarea class="form-control" rows="2" @bind="_clearanceRemarks"
+                                      placeholder="Add clearance remarks..."></textarea>
+                        </div>
+
+                        <button class="btn btn-primary w-100" @onclick="UpdateClearance" disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Save Clearance Progress
+                        </button>
+                    }
+
+                    @* Complete Exit Tab *@
+                    @if (_activeTab == "complete")
+                    {
+                        var canComplete = _clearanceAssets && _clearanceAccess &&
+                                          _clearanceKnowledge && _clearanceDues;
+
+                        if (canComplete)
+                        {
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                All clearance items are completed. You can now complete the exit process.
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="_issueExperienceLetter" id="expLetter">
+                                    <label class="form-check-label" for="expLetter">
+                                        <i class="bi bi-file-text me-2"></i> Issue Experience Letter
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="_issueRelievingLetter" id="relLetter">
+                                    <label class="form-check-label" for="relLetter">
+                                        <i class="bi bi-file-check me-2"></i> Issue Relieving Letter
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Warning:</strong> Completing the exit will mark the employee as <strong>Inactive</strong> and revoke all system access.
+                            </div>
+
+                            <button class="btn btn-success w-100" @onclick="CompleteExit" disabled="@_isProcessing">
+                                @if (_isProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Complete Exit Process
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger">
+                                <i class="bi bi-x-circle-fill me-2"></i>
+                                <strong>Cannot complete exit yet.</strong> Please complete all clearance items:
+                                <ul class="mt-2 mb-0">
+                                    @if (!_clearanceAssets) { <li>✓ Assets Returned</li> }
+                                    @if (!_clearanceAccess) { <li>✓ System Access Revoked</li> }
+                                    @if (!_clearanceKnowledge) { <li>✓ Knowledge Transfer Completed</li> }
+                                    @if (!_clearanceDues) { <li>✓ No Dues Cleared</li> }
+                                </ul>
+                            </div>
+                        }
+                    }
+
+                    @* Exit Interview Tab *@
+                    @if (_activeTab == "interview")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Exit Interview Feedback</label>
+                            <textarea class="form-control" rows="6" @bind="_interviewFeedback"
+                                      placeholder="Record feedback from exit interview..."></textarea>
+                        </div>
+
+                        @if (_selectedExit.ExitInterviewCompleted)
+                        {
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Interview feedback was already recorded on @_selectedExit.ExitInterviewDate?.ToString("dd MMM yyyy").
+                            </div>
+                        }
+
+                        <button class="btn btn-info w-100" @onclick="SaveExitInterview" disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Save Interview Feedback
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* View Details Modal *@
+@if (_showViewModal && _selectedExit != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" @onclick="CloseViewModalOnBackdrop">
+        <div class="modal-dialog modal-lg" @onclick="stopPropagation">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Exit Details - @_selectedExit.Employee?.FirstName @_selectedExit.Employee?.LastName</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseViewModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="text-muted small">Employee Code</div>
+                            <div class="fw-semibold">@_selectedExit.Employee?.EmployeeCode</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-muted small">Department</div>
+                            <div>@_selectedExit.Employee?.Department?.Name</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-muted small">Resignation Date</div>
+                            <div>@_selectedExit.ResignationDate.ToString("dd MMM yyyy")</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-muted small">Last Working Day</div>
+                            <div class="fw-semibold">@_selectedExit.LastWorkingDay.ToString("dd MMM yyyy")</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="text-muted small">Reason for Leaving</div>
+                            <div class="bg-light p-2 rounded">@_selectedExit.Reason</div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_selectedExit.Remarks))
+                        {
+                            <div class="col-12">
+                                <div class="text-muted small">Additional Remarks</div>
+                                <div>@_selectedExit.Remarks</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_selectedExit.ApprovalRemarks))
+                        {
+                            <div class="col-12">
+                                <div class="text-muted small">Approval/Rejection Remarks</div>
+                                <div class="text-info">@_selectedExit.ApprovalRemarks</div>
+                            </div>
+                        }
+                        @if (_selectedExit.ExitInterviewCompleted)
+                        {
+                            <div class="col-12">
+                                <div class="text-muted small">Exit Interview Feedback</div>
+                                <div class="bg-light p-2 rounded">@_selectedExit.ExitInterviewFeedback</div>
+                                <small class="text-muted">Recorded on @_selectedExit.ExitInterviewDate?.ToString("dd MMM yyyy")</small>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_selectedExit.ClearanceRemarks))
+                        {
+                            <div class="col-12">
+                                <div class="text-muted small">Clearance Remarks</div>
+                                <div>@_selectedExit.ClearanceRemarks</div>
+                            </div>
+                        }
+                        @if (_selectedExit.FullFinalAmount.HasValue)
+                        {
+                            <div class="col-12">
+                                <div class="text-muted small">Full & Final Settlement</div>
+                                <div class="fw-semibold text-success">$ @_selectedExit.FullFinalAmount.Value.ToString("N2")</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseViewModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<EmployeeExit> _exits = new();
+    private List<DepartmentDto> _departments = new();
+    private ExitDashboardStatsDto? _stats;
+    private EmployeeExit? _selectedExit;
+    private string _statusFilter = "";
+    private string _search = "";
+    private Guid? _departmentFilter;
+    private bool _isLoading = true;
+    private bool _isOrgAdmin;
+    private bool _isProcessing;
+    private string? _processError;
+
+    private bool _showProcessModal;
+    private bool _showViewModal;
+    private string _activeTab = "approve";
+    private string _approveAction = "approve";
+    private string _approvalRemarks = "";
+
+    private bool _clearanceAssets;
+    private bool _clearanceAccess;
+    private bool _clearanceKnowledge;
+    private bool _clearanceDues;
+    private decimal? _fullFinalAmount;
+    private string _clearanceRemarks = "";
+
+    private bool _issueExperienceLetter;
+    private bool _issueRelievingLetter;
+
+    private string _interviewFeedback = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var user = await CurrentUserService.GetUserAsync();
+            if (user != null)
+            {
+                var roles = await ExitService.GetUserRolesAsync(user.Id);
+                _isOrgAdmin = roles.Contains("OrgAdmin");
+            }
+
+            _departments = await DepartmentService.GetAllAsync();
+
+            await LoadExits();
+            await LoadStats();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing page: {ex.Message}");
+            _processError = "Failed to load exit data. Please refresh the page.";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadExits()
+    {
+        try
+        {
+            var status = string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter;
+            var allExits = await ExitService.GetExitRequestsAsync(status, _departmentFilter);
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var searchLower = _search.ToLower();
+                allExits = allExits.Where(x =>
+                    (x.Employee?.FirstName?.ToLower().Contains(searchLower) == true) ||
+                    (x.Employee?.LastName?.ToLower().Contains(searchLower) == true) ||
+                    (x.Employee?.EmployeeCode?.ToLower().Contains(searchLower) == true)
+                ).ToList();
+            }
+
+            _exits = allExits;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading exits: {ex.Message}");
+            _processError = "Failed to load exit requests.";
+        }
+    }
+
+    private async Task OnFiltersChanged()
+    {
+        await LoadExits();
+        await LoadStats();
+        StateHasChanged();
+    }
+
+    private async Task LoadStats()
+    {
+        try
+        {
+            _stats = await ExitService.GetExitDashboardStatsAsync(_departmentFilter);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading stats: {ex.Message}");
+        }
+    }
+
+    private async Task ResetFilters()
+    {
+        _statusFilter = "";
+        _search = "";
+        _departmentFilter = null;
+        await LoadExits();
+        await LoadStats();
+        StateHasChanged();
+    }
+
+    private void OpenProcessModal(EmployeeExit exit)
+    {
+        _selectedExit = exit;
+        _approveAction = "approve";
+        _approvalRemarks = "";
+        _activeTab = exit.Status == "Pending" ? "approve" : "clearance";
+        _processError = null;
+
+        // Load clearance data
+        _clearanceAssets = exit.AssetsReturned;
+        _clearanceAccess = exit.AccessRevoked;
+        _clearanceKnowledge = exit.KnowledgeTransferred;
+        _clearanceDues = exit.NoDuesCleared;
+        _fullFinalAmount = exit.FullFinalAmount;
+        _clearanceRemarks = exit.ClearanceRemarks ?? "";
+        _interviewFeedback = exit.ExitInterviewFeedback ?? "";
+        _issueExperienceLetter = exit.ExperienceLetterIssued;
+        _issueRelievingLetter = exit.RelievingLetterIssued;
+
+        _showProcessModal = true;
+        StateHasChanged();
+    }
+
+    private void NavigateDashboard()
+    {
+        Nav.NavigateTo("/hr/dashboard");
+    }
+
+    private void OpenViewModal(EmployeeExit exit)
+    {
+        _selectedExit = exit;
+        _showViewModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseModal()
+    {
+        _showProcessModal = false;
+        _selectedExit = null;
+        _processError = null;
+    }
+
+    private void CloseModalOnBackdrop()
+    {
+        CloseModal();
+    }
+
+    private void CloseViewModal()
+    {
+        _showViewModal = false;
+        _selectedExit = null;
+    }
+
+    private void CloseViewModalOnBackdrop()
+    {
+        CloseViewModal();
+    }
+
+    private void stopPropagation(MouseEventArgs e)
+    {
+        // Prevents modal from closing when clicking inside
+    }
+
+    private void SetTab(string tab)
+    {
+        _activeTab = tab;
+        StateHasChanged();
+    }
+
+    private async Task ProcessApproval()
+    {
+        if (_selectedExit == null) return;
+
+        _isProcessing = true;
+        _processError = null;
+
+        try
+        {
+            if (_approveAction == "approve")
+            {
+                await ExitService.ApproveExitAsync(_selectedExit.ExitId, _approvalRemarks);
+                await ExitService.StartClearanceAsync(_selectedExit.ExitId);
+                await JSRuntime.InvokeVoidAsync("alert", "✅ Exit request approved successfully! Clearance process has been started.");
+            }
+            else
+            {
+                await ExitService.RejectExitAsync(_selectedExit.ExitId, _approvalRemarks);
+                await JSRuntime.InvokeVoidAsync("alert", "❌ Exit request rejected.");
+            }
+
+            CloseModal();
+            await LoadExits();
+            await LoadStats();
+        }
+        catch (Exception ex)
+        {
+            _processError = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task UpdateClearance()
+    {
+        if (_selectedExit == null) return;
+
+        _isProcessing = true;
+        _processError = null;
+
+        try
+        {
+            // await ExitService.UpdateClearanceAsync(
+            //     _selectedExit.ExitId,
+            //     _clearanceAssets,
+            //     _clearanceAccess,
+            //     _clearanceKnowledge,
+            //     _clearanceDues,
+            //     _clearanceTasksCompleted: true,
+            //     _fullFinalAmount,
+            //     _clearanceRemarks);
+            await ExitService.UpdateClearanceAsync(
+    _selectedExit.ExitId,
+    _clearanceAssets,
+    _clearanceAccess,
+    _clearanceKnowledge,
+    _clearanceDues,
+    true, // Or replace 'true' with your actual variable
+    _fullFinalAmount,
+    _clearanceRemarks);
+
+            // Refresh the selected exit data
+            _selectedExit.AssetsReturned = _clearanceAssets;
+            _selectedExit.AccessRevoked = _clearanceAccess;
+            _selectedExit.KnowledgeTransferred = _clearanceKnowledge;
+            _selectedExit.NoDuesCleared = _clearanceDues;
+            _selectedExit.FullFinalAmount = _fullFinalAmount;
+            _selectedExit.ClearanceRemarks = _clearanceRemarks;
+
+            await JSRuntime.InvokeVoidAsync("alert", "💾 Clearance updated successfully!");
+            await LoadExits();
+        }
+        catch (Exception ex)
+        {
+            _processError = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task CompleteExit()
+    {
+        if (_selectedExit == null) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            "⚠️ Are you sure you want to complete this exit?\n\n" +
+            "This will:\n" +
+            "• Mark the employee as INACTIVE\n" +
+            "• Revoke all system access\n" +
+            "• Mark the exit as COMPLETED\n\n" +
+            "This action cannot be undone.");
+
+        if (!confirmed) return;
+
+        _isProcessing = true;
+        _processError = null;
+
+        try
+        {
+            await ExitService.CompleteExitAsync(
+                _selectedExit.ExitId,
+                _issueExperienceLetter,
+                _issueRelievingLetter);
+
+            await JSRuntime.InvokeVoidAsync("alert", "🎉 Exit process completed successfully!");
+            CloseModal();
+            await LoadExits();
+            await LoadStats();
+        }
+        catch (Exception ex)
+        {
+            _processError = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task SaveExitInterview()
+    {
+        if (_selectedExit == null) return;
+
+        if (string.IsNullOrWhiteSpace(_interviewFeedback))
+        {
+            _processError = "Please enter interview feedback before saving.";
+            return;
+        }
+
+        _isProcessing = true;
+        _processError = null;
+
+        try
+        {
+            await ExitService.RecordExitInterviewAsync(_selectedExit.ExitId, _interviewFeedback);
+            await JSRuntime.InvokeVoidAsync("alert", "📝 Exit interview feedback saved!");
+            await LoadExits();
+        }
+        catch (Exception ex)
+        {
+            _processError = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private string GetStatusBadgeClass(string status) => status switch
+    {
+        "Pending" => "bg-warning text-dark",
+        "Approved" => "bg-info",
+        "ClearanceInProgress" => "bg-primary",
+        "Completed" => "bg-success",
+        "Rejected" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusText(string status) => status switch
+    {
+        "Pending" => "Pending Review",
+        "Approved" => "Approved",
+        "ClearanceInProgress" => "Clearance In Progress",
+        "Completed" => "Completed",
+        "Rejected" => "Rejected",
+        _ => status
+    };
+}
