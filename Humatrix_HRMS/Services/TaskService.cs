@@ -9,24 +9,19 @@ namespace Humatrix_HRMS.Services
     public class TaskService
     {
         private readonly ApplicationDbContext _context;
-
         private readonly CurrentUserService _currentUser;
-
         private readonly NotificationService _notificationService;
         private readonly UserManager<ApplicationUser> _userManager;
 
         public TaskService(
-         ApplicationDbContext context,
-         CurrentUserService currentUser,
-         NotificationService notificationService,
-         UserManager<ApplicationUser> userManager)
+            ApplicationDbContext context,
+            CurrentUserService currentUser,
+            NotificationService notificationService,
+            UserManager<ApplicationUser> userManager)
         {
             _context = context;
-
             _currentUser = currentUser;
-
             _notificationService = notificationService;
-
             _userManager = userManager;
         }
 
@@ -49,47 +44,30 @@ namespace Humatrix_HRMS.Services
             var task = new TaskItem
             {
                 TaskId = Guid.NewGuid(),
-
                 Title = dto.Title ?? string.Empty,
-
                 Description = dto.Description ?? string.Empty,
-
                 Priority = dto.Priority ?? "Medium",
-
                 DueDate = dto.DueDate,
-
                 AssignedTo = (Guid)dto.AssignedTo,
-
-                AssignedBy = Guid.TryParse(user.Id, out var uid)
-                    ? uid
-                    : Guid.Empty,
-
+                AssignedBy = Guid.TryParse(user.Id, out var uid) ? uid : Guid.Empty,
                 OrganizationId = employee.OrganizationId,
-
                 Status = "Pending",
-
                 Progress = 0,
-
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Tasks.Add(task);
-
             await _context.SaveChangesAsync();
 
             // =========================
             // CREATE NOTIFICATION
             // =========================
-
             if (!string.IsNullOrEmpty(employee.UserId))
             {
                 await _notificationService.CreateNotificationAsync(
                     employee.UserId,
-
                     "New Task Assigned",
-
                     $"Task '{task.Title}' assigned to you",
-
                     "/employee/my-tasks"
                 );
             }
@@ -101,18 +79,14 @@ namespace Humatrix_HRMS.Services
         public async Task CreateTaskReminderNotificationsAsync()
         {
             var user = await _currentUser.GetUserAsync();
-
-            if (user == null)
-                return;
+            if (user == null) return;
 
             var employee = await _context.Employees
                 .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
-            if (employee == null)
-                return;
+            if (employee == null) return;
 
             var today = DateTime.Today.Date;
-
             var tomorrow = today.AddDays(1).Date;
 
             var tasks = await _context.Tasks
@@ -124,47 +98,30 @@ namespace Humatrix_HRMS.Services
             foreach (var task in tasks)
             {
                 string? title = null;
-
                 string? message = null;
 
-                // =========================
                 // DUE TODAY
-                // =========================
-                if (task.DueDate.HasValue &&
-                         task.DueDate.Value.Date == today)
+                if (task.DueDate.HasValue && task.DueDate.Value.Date == today)
                 {
                     title = "Task Due Today";
-
                     message = $"Task '{task.Title}' is due today";
                 }
-
-                // =========================
                 // DUE TOMORROW
-                // =========================
-                else if (task.DueDate.HasValue &&
-                       task.DueDate.Value.Date == tomorrow)
+                else if (task.DueDate.HasValue && task.DueDate.Value.Date == tomorrow)
                 {
                     title = "Task Due Tomorrow";
-
                     message = $"Task '{task.Title}' is due tomorrow";
                 }
-
-                // =========================
                 // OVERDUE
-                // =========================
-                else if (task.DueDate.HasValue &&
-                     task.DueDate.Value.Date < today)
+                else if (task.DueDate.HasValue && task.DueDate.Value.Date < today)
                 {
                     title = "Task Overdue";
-
                     message = $"Task '{task.Title}' is overdue";
                 }
 
                 if (title != null)
                 {
-                    // =========================
                     // AVOID DUPLICATE NOTIFICATIONS
-                    // =========================
                     bool exists = await _context.Notifications.AnyAsync(n =>
                         n.UserId == user.Id &&
                         n.Title == title &&
@@ -175,11 +132,8 @@ namespace Humatrix_HRMS.Services
                     {
                         await _notificationService.CreateNotificationAsync(
                             user.Id,
-
                             title,
-
                             message,
-
                             "/employee/my-tasks"
                         );
                     }
@@ -204,32 +158,20 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Employee not found");
 
             return await _context.Tasks
-
                 .Where(t => t.AssignedTo == employee.EmployeeId)
-
                 .OrderByDescending(t => t.CreatedAt)
-
                 .Select(t => new TaskDto
                 {
                     TaskId = t.TaskId,
-
                     Title = t.Title ?? "",
-
                     Description = t.Description ?? "",
-
                     Priority = t.Priority ?? "Medium",
-
                     Status = t.Status ?? "Pending",
-
                     Progress = t.Progress,
-
                     DueDate = t.DueDate,
-
                     CreatedAt = t.CreatedAt,
-
                     AssignedToName = ""
                 })
-
                 .ToListAsync();
         }
 
@@ -244,37 +186,23 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Unauthorized");
 
             return await _context.Tasks
-
                 .Include(t => t.AssignedToEmployee)
-
                 .Where(t => t.OrganizationId == user.OrganizationId)
-
                 .OrderByDescending(t => t.CreatedAt)
-
                 .Select(t => new TaskDto
                 {
                     TaskId = t.TaskId,
-
                     Title = t.Title ?? "",
-
                     Description = t.Description ?? "",
-
                     Priority = t.Priority ?? "Medium",
-
                     Status = t.Status ?? "Pending",
-
                     Progress = t.Progress,
-
                     DueDate = t.DueDate,
-
                     CreatedAt = t.CreatedAt,
-
                     AssignedToName = t.AssignedToEmployee != null
-                        ? t.AssignedToEmployee.FirstName + " "
-                          + t.AssignedToEmployee.LastName
+                        ? t.AssignedToEmployee.FirstName + " " + t.AssignedToEmployee.LastName
                         : ""
                 })
-
                 .ToListAsync();
         }
 
@@ -294,24 +222,21 @@ namespace Humatrix_HRMS.Services
 
             if (dto.Progress >= 100)
                 task.Status = "Completed";
-
             else if (dto.Progress > 0)
                 task.Status = "In Progress";
-
             else
                 task.Status = "Pending";
 
             await _context.SaveChangesAsync();
 
             // =========================
-            // NOTIFY HR WHEN COMPLETED
+            // NOTIFY HR/ADMIN WHEN COMPLETED
             // =========================
-
             if (task.Progress >= 100)
             {
                 var allUsers = await _context.Users
-    .Where(u => u.OrganizationId == task.OrganizationId)
-    .ToListAsync();
+                    .Where(u => u.OrganizationId == task.OrganizationId)
+                    .ToListAsync();
 
                 var hrUsers = new List<ApplicationUser>();
 
@@ -328,11 +253,8 @@ namespace Humatrix_HRMS.Services
                 {
                     await _notificationService.CreateNotificationAsync(
                         hr.Id,
-
                         "Task Completed",
-
                         $"{task.AssignedToEmployee?.FirstName} completed task '{task.Title}'",
-
                         "/hr/tasks"
                     );
                 }
@@ -351,7 +273,6 @@ namespace Humatrix_HRMS.Services
                 throw new Exception("Task not found");
 
             task.Status = "Completed";
-
             task.Progress = 100;
 
             await _context.SaveChangesAsync();

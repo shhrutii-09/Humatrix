@@ -73,16 +73,16 @@
         <div class="card-body p-4">
             <div class="row g-3 align-items-end">
 
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label small fw-bold text-muted">Filter Date</label>
-                    <InputDate @bind-Value="selectedDate" class="form-control custom-search-input shadow-none" />
+                    <InputDate @bind-Value="selectedDate" @bind-Value:after="LoadData" class="form-control custom-search-input shadow-none" />
                 </div>
 
                 @if (isOrgAdmin)
                 {
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label small fw-bold text-muted">Department</label>
-                        <select @bind="selectedDepartmentId" class="form-select custom-search-input shadow-none">
+                        <select @bind="selectedDepartmentId" @bind:after="LoadData" class="form-select custom-search-input shadow-none">
                             <option value="">All Departments</option>
                             @foreach (var dept in departments)
                             {
@@ -90,27 +90,15 @@
                             }
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label class="form-label small fw-bold text-muted">User Role</label>
-                        <select @bind="selectedRole" class="form-select custom-search-input shadow-none">
+                        <select @bind="selectedRole" @bind:after="LoadData" class="form-select custom-search-input shadow-none">
                             <option value="">All Roles</option>
                             <option value="Employee">Employee</option>
                             <option value="HR">HR</option>
                         </select>
                     </div>
                 }
-
-                <div class="col-md-3">
-                    <button class="btn btn-primary w-100 shadow-sm text-uppercase fw-bold text-white py-2 btn-filter-custom"
-                            @onclick="LoadData"
-                            disabled="@isLoading">
-                        @if (isLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2"></span>
-                        }
-                        FILTER RECORDS
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -131,7 +119,7 @@
                     <thead class="bg-light border-bottom text-secondary">
                         <tr>
                             <th class="ps-4 py-3 text-uppercase tracking-wider">EMPLOYEE</th>
-                            <th class="py-3 text-uppercase tracking-wider">DEPARTMENT</th>
+                            <th class="py-3 text-uppercase tracking-wider">ROLE & DEPARTMENT</th>
                             <th class="py-3 text-uppercase tracking-wider text-center">CHECK IN</th>
                             <th class="py-3 text-uppercase tracking-wider text-center">CHECK OUT</th>
                             <th class="py-3 text-uppercase tracking-wider">STATUS</th>
@@ -167,9 +155,17 @@
                                     </td>
 
                                     <td class="py-3">
-                                        <span class="badge bg-light text-secondary border rounded-2 px-2.5 py-1.5 font-monospace fw-normal">
-                                            @item.Department
+                                        @* Added Role Badge *@
+                                        <span class="badge bg-soft-info text-info rounded-pill px-2.5 py-1 mb-1 fw-medium" style="font-size: 0.75rem;">
+                                            @item.Role
                                         </span>
+
+                                        @* Department Name *@
+                                        <div class="small text-dark fw-medium">
+                                            @item.Department
+                                        </div>
+
+                                        @* Keep your existing Manual Entry icon *@
                                         @if (item.IsManual)
                                         {
                                             <span class="ms-1 text-primary" title="Manual Entry">

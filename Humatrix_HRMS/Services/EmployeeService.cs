@@ -127,6 +127,37 @@ namespace Humatrix_HRMS.Services
 
         #region Employee Management
 
+        public async Task<EmployeeStatsDto> GetEmployeeStatsAsync(Guid organizationId)
+        {
+            var stats = new EmployeeStatsDto();
+
+            // Organization ke sabhi users ko filter karein
+            var users = await _userManager.Users
+                .Where(u => u.OrganizationId == organizationId)
+                .ToListAsync();
+
+            foreach (var u in users)
+            {
+                // Check karein user ka role kya hai
+                var roles = await _userManager.GetRolesAsync(u);
+                bool isEmployee = roles.Contains("Employee");
+                bool isHR = roles.Contains("HR");
+
+                // Logic: Sirf Employee ya HR ko hi "Worker" mana jaye
+                if (isEmployee || isHR)
+                {
+                    stats.TotalWorkers++;
+
+                    if (isEmployee) stats.TotalEmployees++;
+                    if (isHR) stats.TotalHrs++;
+
+                    // Inactive status check
+                    if (!u.IsActive) stats.TotalInactive++;
+                }
+            }
+            return stats;
+        }
+
         public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
@@ -442,10 +473,11 @@ namespace Humatrix_HRMS.Services
         #region List Retrieval
 
         public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
-            string? search = null,
-            Guid? departmentId = null,
-            int pageNumber = 1,
-            int pageSize = 10)
+    string? search = null,
+    Guid? departmentId = null,
+    string? role = null, // Added this parameter
+    int pageNumber = 1,
+    int pageSize = 10)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
 
@@ -461,6 +493,7 @@ namespace Humatrix_HRMS.Services
 
             var users = await usersQuery.ToListAsync();
 
+            // Data lists for joining
             var depts = await _context.Departments.Where(d => d.OrganizationId == currentUser.OrganizationId).AsNoTracking().ToListAsync();
             var desigs = await _context.Designations.Where(d => d.OrganizationId == currentUser.OrganizationId).AsNoTracking().ToListAsync();
             var shifts = await _context.Shifts.Where(s => s.OrganizationId == currentUser.OrganizationId).AsNoTracking().ToListAsync();
@@ -471,15 +504,13 @@ namespace Humatrix_HRMS.Services
             foreach (var u in users)
             {
                 var userRoles = await _userManager.GetRolesAsync(u);
-
-                // FIX: OrgAdmin ko exclude karo, sirf Employee aur HR ko lo
                 bool isTargetRole = userRoles.Any(r => r == "Employee" || r == "HR");
 
                 if (!isTargetRole) continue;
+                if (isHR && !isOrgAdmin && u.DepartmentId != currentUser.DepartmentId) continue;
 
-                // HR sirf apne department ke staff ko dekhega
-                if (isHR && !isOrgAdmin && u.DepartmentId != currentUser.DepartmentId)
-                    continue;
+                // Apply role filter if provided
+                if (!string.IsNullOrEmpty(role) && !userRoles.Contains(role)) continue;
 
                 var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
 
@@ -489,7 +520,6 @@ namespace Humatrix_HRMS.Services
                     CreatedAt = profile?.CreatedAt ?? DateTime.MinValue,
                     Email = u.Email ?? string.Empty,
                     FirstName = u.FirstName,
-                    EmployeeCode = profile?.EmployeeCode ?? "",
                     LastName = u.LastName,
                     Name = $"{u.FirstName} {u.LastName}",
                     Role = userRoles.FirstOrDefault(r => r == "Employee" || r == "HR") ?? "Employee",
@@ -505,8 +535,7 @@ namespace Humatrix_HRMS.Services
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                search = search.ToLower();
-                list = list.Where(x => x.Name.ToLower().Contains(search) || x.Email.ToLower().Contains(search)).ToList();
+                list = list.Where(x => x.Name.ToLower().Contains(search.ToLower()) || x.Email.ToLower().Contains(search.ToLower())).ToList();
             }
 
             if (departmentId.HasValue)
@@ -519,7 +548,6 @@ namespace Humatrix_HRMS.Services
 
             return (items, totalCount);
         }
-
         public async Task<List<EmployeeListDto>> GetEmployeesByOrganizationIdAsync(Guid organizationId)
         {
             using var context = await _contextFactory.CreateDbContextAsync();
