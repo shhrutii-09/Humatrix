@@ -265,6 +265,14 @@
                                     }
                                 </InputSelect>
                             </div>
+                            @* --- NEW: Role Change Field --- *@
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold text-secondary">System Role</label>
+                                <InputSelect @bind-Value="editModel.Role" class="form-select">
+                                    <option value="Employee">Employee</option>
+                                    <option value="HR">HR</option>
+                                </InputSelect>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer bg-light border-top border-light px-4 py-3">
@@ -317,7 +325,6 @@
     List<Shift> shifts = new();
     EditEmployeeDto editModel = new();
 
-    // Naya field
     EmployeeStatsDto stats = new();
 
     bool isEditOpen = false;
@@ -355,7 +362,6 @@
         totalEmployees = result.TotalCount;
         employees = result.Items ?? new List<EmployeeListDto>();
 
-        // Naya Stats Logic
         if (currentUser?.OrganizationId != null)
         {
             stats = await EmployeeService.GetEmployeeStatsAsync(currentUser.OrganizationId.Value);
@@ -392,7 +398,16 @@
     private async Task OpenEditModal(EmployeeListDto e)
     {
         editingEmail = e.Email;
-        editModel = new EditEmployeeDto { FirstName = e.FirstName, LastName = e.LastName, DepartmentId = e.DepartmentId, DesignationId = e.DesignationId, ShiftId = e.ShiftId };
+        // Map the role from the list item to the edit model
+        editModel = new EditEmployeeDto
+        {
+            FirstName = e.FirstName,
+            LastName = e.LastName,
+            DepartmentId = e.DepartmentId,
+            DesignationId = e.DesignationId,
+            ShiftId = e.ShiftId,
+            Role = e.Role
+        };
         editDesignations = e.DepartmentId.HasValue ? await DesignationService.GetByDepartmentAsync(e.DepartmentId.Value) : new();
         isEditOpen = true;
     }

@@ -128,35 +128,35 @@ namespace Humatrix_HRMS.Services
         #region Employee Management
 
         public async Task<EmployeeStatsDto> GetEmployeeStatsAsync(Guid organizationId)
+{
+    var stats = new EmployeeStatsDto();
+    
+    // Organization ke sabhi users ko filter karein
+    var users = await _userManager.Users
+        .Where(u => u.OrganizationId == organizationId)
+        .ToListAsync();
+
+    foreach (var u in users)
+    {
+        // Check karein user ka role kya hai
+        var roles = await _userManager.GetRolesAsync(u);
+        bool isEmployee = roles.Contains("Employee");
+        bool isHR = roles.Contains("HR");
+
+        // Logic: Sirf Employee ya HR ko hi "Worker" mana jaye
+        if (isEmployee || isHR)
         {
-            var stats = new EmployeeStatsDto();
-
-            // Organization ke sabhi users ko filter karein
-            var users = await _userManager.Users
-                .Where(u => u.OrganizationId == organizationId)
-                .ToListAsync();
-
-            foreach (var u in users)
-            {
-                // Check karein user ka role kya hai
-                var roles = await _userManager.GetRolesAsync(u);
-                bool isEmployee = roles.Contains("Employee");
-                bool isHR = roles.Contains("HR");
-
-                // Logic: Sirf Employee ya HR ko hi "Worker" mana jaye
-                if (isEmployee || isHR)
-                {
-                    stats.TotalWorkers++;
-
-                    if (isEmployee) stats.TotalEmployees++;
-                    if (isHR) stats.TotalHrs++;
-
-                    // Inactive status check
-                    if (!u.IsActive) stats.TotalInactive++;
-                }
-            }
-            return stats;
+            stats.TotalWorkers++; 
+            
+            if (isEmployee) stats.TotalEmployees++;
+            if (isHR) stats.TotalHrs++;
+            
+            // Inactive status check
+            if (!u.IsActive) stats.TotalInactive++;
         }
+    }
+    return stats;
+}
 
         public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
         {
@@ -265,6 +265,17 @@ namespace Humatrix_HRMS.Services
 
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) throw new Exception("User not found");
+
+            // --- NEW: Update Role Logic ---
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            var newRole = dto.Role; // Assuming "HR" or "Employee"
+
+            if (!string.IsNullOrEmpty(newRole) && !currentRoles.Contains(newRole))
+            {
+                await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                await _userManager.AddToRoleAsync(user, newRole);
+            }
+            // ------------------------------
 
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
