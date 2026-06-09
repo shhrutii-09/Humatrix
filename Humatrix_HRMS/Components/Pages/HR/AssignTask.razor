@@ -7,6 +7,7 @@
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Identity
 
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 
@@ -30,7 +31,7 @@
         <DataAnnotationsValidator />
         <ValidationSummary />
 
-        <!-- Employee -->
+        <!-- Employee Dropdown -->
         <div class="mb-3">
             <label>Assign To</label>
             <InputSelect class="form-control" @bind-Value="model.AssignedTo">
@@ -94,28 +95,71 @@
     {
         using var db = DbFactory.CreateDbContext();
 
-        var user = await CurrentUser.GetUserAsync();
-        if (user == null) return;
+        // Current User सेशन गेट करें
+        var sessionUser = await CurrentUser.GetUserAsync();
+        if (sessionUser == null) return;
 
-        // ✅ Get logged-in HR employee record
-        var currentEmployee = await db.Employees
-            .FirstOrDefaultAsync(e => e.UserId == user.Id);
+        // 1. 🔥 FIX: सीधे DB से फ्रेश User रिकॉर्ड लाएं ताकि OrganizationId मिस न हो
+        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.Id == sessionUser.Id);
+        if (dbUser == null) return;
 
-        if (currentEmployee == null) return;
+        var organizationId = dbUser.OrganizationId;
 
-        // ✅ Filter employees of SAME department only
-        employees = await db.Employees
-            .Include(e => e.Designation)
-            .Where(e =>
-                e.OrganizationId == user.OrganizationId &&
-                e.DepartmentId == currentEmployee.DepartmentId &&   // 🔥 IMPORTANT FIX
-                e.Status == "Active" &&
-                e.Designation != null &&
-                e.Designation.Name.ToLower() != "hr" &&
-                e.Designation.Name.ToLower() != "orgadmin" &&
-                e.UserId != user.Id
-            )
-            .ToListAsync();
+        // 2. 🔥 FIX: सीधे DB से Roles चेक करें (Blazor lifecycle क्लैश से बचने के लिए)
+        var userRoles = await (from ur in db.UserRoles
+                               join r in db.Roles on ur.RoleId equals r.Id
+                               where ur.UserId == dbUser.Id
+                               select r.Name.ToLower()).ToListAsync();
+
+        bool isOrgAdmin = userRoles.Contains("orgadmin");
+        bool isHr = userRoles.Contains("hr");
+
+        // 🏢 CASE 1: अगर Organization Admin लॉगिन है -> केवल "HR" Role वाले Employees दिखाएं
+        if (isOrgAdmin)
+        {
+            // Identity Roles टेबल से सभी HR यूज़र्स की IDs निकालें
+            var hrUserIds = await (from ur in db.UserRoles
+                                   join r in db.Roles on ur.RoleId equals r.Id
+                                   where r.Name.ToLower() == "hr"
+                                   select ur.UserId).ToListAsync();
+
+            employees = await db.Employees
+                .Include(e => e.Designation)
+                .Where(e =>
+                    e.OrganizationId == organizationId &&
+                    e.Status == "Active" &&
+                    e.UserId != dbUser.Id &&
+                    // या तो उसका Identity Role 'HR' हो या Designation 'HR' हो
+                    (hrUserIds.Contains(e.UserId) || (e.Designation != null && e.Designation.Name.ToLower().Contains("hr")))
+                )
+                .ToListAsync();
+        }
+        // 👥 CASE 2: अगर HR लॉगिन है -> केवल अपने Department के Regular Employees दिखाएं
+        else if (isHr)
+        {
+            var currentEmployee = await db.Employees
+                .FirstOrDefaultAsync(e => e.UserId == dbUser.Id);
+
+            if (currentEmployee != null)
+            {
+                // HR और OrgAdmin यूज़र्स को फ़िल्टर आउट करने के लिए उनकी IDs निकालें
+                var excludedUserIds = await (from ur in db.UserRoles
+                                             join r in db.Roles on ur.RoleId equals r.Id
+                                             where r.Name.ToLower() == "hr" || r.Name.ToLower() == "orgadmin"
+                                             select ur.UserId).ToListAsync();
+
+                employees = await db.Employees
+                    .Include(e => e.Designation)
+                    .Where(e =>
+                        e.OrganizationId == organizationId &&
+                        e.DepartmentId == currentEmployee.DepartmentId &&
+                        e.Status == "Active" &&
+                        e.UserId != dbUser.Id &&
+                        !excludedUserIds.Contains(e.UserId)
+                    )
+                    .ToListAsync();
+            }
+        }
     }
 
     private async Task AssignTaskAsync()

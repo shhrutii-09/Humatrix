@@ -5,7 +5,7 @@
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 
-@attribute [Authorize(Roles = "Employee")]
+@attribute [Authorize(Roles = "Employee,HR")]
 
 @inject TaskService TaskService
 
