@@ -16,12 +16,23 @@ namespace Humatrix_HRMS.Services
     public class EmailService
     {
         private readonly EmailSettings _settings;
+        private readonly IConfiguration _configuration;
 
-        public EmailService(IOptions<EmailSettings> settings)
+        public EmailService(IOptions<EmailSettings> settings, IConfiguration configuration)
         {
             _settings = settings.Value;
+            _configuration = configuration;
         }
 
+        private string GetBaseUrl()
+        {
+            return _configuration["AppBaseUrl"] ?? "https://localhost:7057";
+        }
+
+        private string GetCompanyName()
+        {
+            return _configuration["CompanyName"] ?? "Humatrix HRMS";
+        }
 
         private async Task SendEmailAsync(
     string toEmail,
@@ -49,6 +60,84 @@ namespace Humatrix_HRMS.Services
 
             await client.SendMailAsync(mail);
         }
+
+
+        public async Task SendRehireNotificationAsync(
+          string email,
+          string employeeName,
+          DateTime rehireDate,
+          string department,
+          string designation,
+          string? remarks)
+        {
+            var baseUrl = GetBaseUrl();
+            var companyName = GetCompanyName();
+
+            var subject = $"Welcome Back to {companyName} - You've Been Rehired";
+
+            var body = $@"
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 20px; background-color: #f8f9fa; }}
+                .details {{ background-color: white; padding: 15px; margin: 15px 0; border-radius: 5px; }}
+                .footer {{ text-align: center; padding: 20px; font-size: 12px; color: #6c757d; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>Welcome Back, {employeeName}!</h2>
+                </div>
+                <div class='content'>
+                    <p>Dear {employeeName},</p>
+                    
+                    <p>We are pleased to inform you that you have been <strong>rehired</strong> effective <strong>{rehireDate:dd MMM yyyy}</strong>.</p>
+                    
+                    <div class='details'>
+                        <h3>📋 Rehire Details</h3>
+                        <p><strong>Department:</strong> {department}</p>
+                        <p><strong>Designation:</strong> {designation}</p>
+                        <p><strong>Effective Date:</strong> {rehireDate:dd MMM yyyy}</p>
+                        {(remarks != null ? $"<p><strong>Remarks:</strong> {remarks}</p>" : "")}
+                    </div>
+                    
+                    <div class='details'>
+                        <h3>🔐 Account Access</h3>
+                        <p>Your existing account has been reactivated. You can login using your <strong>existing email and password</strong>.</p>
+                        <p><strong>Login URL:</strong> <a href='{baseUrl}/login'>{baseUrl}/login</a></p>
+                        <p>If you have forgotten your password, please use the 'Forgot Password' option on the login page.</p>
+                    </div>
+                    
+                    <div class='details'>
+                        <h3>📝 Next Steps</h3>
+                        <ul>
+                            <li>Login to your account</li>
+                            <li>Review and update your profile information</li>
+                            <li>Check your assigned assets</li>
+                            <li>Review your leave balance</li>
+                            <li>Contact HR if you need any assistance</li>
+                        </ul>
+                    </div>
+                    
+                    <p>We are excited to have you back on the team!</p>
+                    
+                    <p>Best regards,<br />
+                    <strong>HR Team</strong></p>
+                </div>
+                <div class='footer'>
+                    <p>This is an automated message. Please do not reply to this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+            await SendEmailAsync(email, subject, body);
+        }
+
 
         public async Task SendOrganizationInviteAsync(
             string toEmail,

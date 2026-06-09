@@ -34,6 +34,14 @@ namespace Humatrix_HRMS.Models
         public Guid? ApprovedByEmployeeId { get; set; }
         public string? ApprovalRemarks { get; set; }
 
+        public DateTime? CancelledAt { get; set; }
+        public Guid? CancelledByEmployeeId { get; set; }
+        public string? CancellationReason { get; set; }
+
+        // Navigation property
+        [ForeignKey("CancelledByEmployeeId")]
+        public virtual Employee? CancelledBy { get; set; }
+
         // Exit Interview
         public bool ExitInterviewCompleted { get; set; }
         public DateTime? ExitInterviewDate { get; set; }
@@ -66,7 +74,15 @@ namespace Humatrix_HRMS.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? CompletedAt { get; set; }
         public Guid? CompletedByEmployeeId { get; set; }
+        [MaxLength(20)]
+        public string? ExitType { get; set; } = "Resignation"; // "Resignation" or "Termination"
 
+        public Guid? TerminatedByEmployeeId { get; set; }
+        public DateTime? TerminationDate { get; set; }
+        public string? TerminationReason { get; set; }
+
+        [ForeignKey("TerminatedByEmployeeId")]
+        public virtual Employee? TerminatedBy { get; set; }
         public bool TasksCompleted { get; set; }
         public DateTime? TasksCompletedDate { get; set; }
 
@@ -94,5 +110,8 @@ namespace Humatrix_HRMS.Models
         public const string Rejected = "Rejected";
         public const string ClearanceInProgress = "ClearanceInProgress";
         public const string Completed = "Completed";
+        public const string Cancelled = "Cancelled"; // Add this
+        public const string Terminated = "Terminated"; // Add this
+
     }
 }

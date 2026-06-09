@@ -17,6 +17,9 @@ namespace Humatrix_HRMS.Models
         public string FirstName { get; set; } = default!;
         public string LastName { get; set; } = default!;
 
+        public DateTime? LastRehireDate { get; set; }
+        public int? RehireCount { get; set; } = 0;
+        public bool IsRehireable { get; set; } = true;
         public string? Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
 

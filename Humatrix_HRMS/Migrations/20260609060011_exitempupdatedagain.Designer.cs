@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260609060011_exitempupdatedagain")]
+    partial class exitempupdatedagain
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1349,18 +1352,12 @@ namespace Humatrix_HRMS.Migrations
                     b.Property<string>("Gender")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsRehireable")
-                        .HasColumnType("bit");
-
                     b.Property<DateTime>("JoiningDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("LastRehireDate")
-                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("LastWorkingDay")
                         .HasColumnType("datetime2");
@@ -1370,9 +1367,6 @@ namespace Humatrix_HRMS.Migrations
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("RehireCount")
-                        .HasColumnType("int");
 
                     b.Property<Guid?>("ReportingManagerId")
                         .HasColumnType("uniqueidentifier");
@@ -1554,46 +1548,6 @@ namespace Humatrix_HRMS.Migrations
                     b.HasIndex("OrganizationId", "Status");
 
                     b.ToTable("EmployeeExits");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.EmployeeRehire", b =>
-                {
-                    b.Property<Guid>("RehireId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("PreviousExitId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("PreviousExitType")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PreviousStatus")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("RehireDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("RehiredByUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("RehireId");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.HasIndex("PreviousExitId");
-
-                    b.ToTable("EmployeeRehires");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Holiday", b =>
@@ -2830,25 +2784,6 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("Organization");
 
                     b.Navigation("TerminatedBy");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.EmployeeRehire", b =>
-                {
-                    b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Humatrix_HRMS.Models.EmployeeExit", "PreviousExit")
-                        .WithMany()
-                        .HasForeignKey("PreviousExitId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("PreviousExit");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.LeaveBalance", b =>

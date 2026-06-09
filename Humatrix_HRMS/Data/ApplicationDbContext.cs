@@ -23,7 +23,7 @@ namespace Humatrix_HRMS.Data
 
         public DbSet<Attendance> Attendances { get; set; }
         public DbSet<Employee> Employees { get; set; }
-
+        public DbSet<EmployeeRehire> EmployeeRehires { get; set; }
         public DbSet<Shift> Shifts { get; set; }
         public DbSet<Holiday> Holidays { get; set; }
         public DbSet<OfficeLocation> OfficeLocations { get; set; }
