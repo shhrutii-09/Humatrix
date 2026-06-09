@@ -64,14 +64,42 @@
         </div>
     </div>
 
+    @* Statistics Cards *@
     <div class="row g-3 mb-4">
-        <div class="@(UserIsOrgAdmin ? "col-md-7" : "col-md-12")">
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-0 border-start border-4 border-primary">
+                <h6 class="text-muted text-uppercase small mb-1">Total Workers</h6>
+                <h3 class="fw-bold mb-0">@stats.TotalWorkers</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-0 border-start border-4 border-indigo">
+                <h6 class="text-muted text-uppercase small mb-1">Total Employees</h6>
+                <h3 class="fw-bold mb-0 text-indigo">@stats.TotalEmployees</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-0 border-start border-4 border-success">
+                <h6 class="text-muted text-uppercase small mb-1">Total HRs</h6>
+                <h3 class="fw-bold mb-0 text-success">@stats.TotalHrs</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-0 border-start border-4 border-danger">
+                <h6 class="text-muted text-uppercase small mb-1">Total Inactive</h6>
+                <h3 class="fw-bold mb-0 text-danger">@stats.TotalInactive</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="@(UserIsOrgAdmin ? "col-md-4" : "col-md-6")">
             <div class="position-relative">
                 <span class="position-absolute top-50 start-0 translate-middle-y ps-3 text-muted">
                     <i class="bi bi-search"></i>
                 </span>
                 <input class="form-control custom-search-input shadow-none ps-5"
-                       placeholder="Search employee by name or yopmail instantly..."
+                       placeholder="Search by name or email..."
                        value="@search"
                        @oninput="OnSearchInput" />
             </div>
@@ -79,18 +107,24 @@
 
         @if (UserIsOrgAdmin)
         {
-            <div class="col-md-5">
-                <div class="position-relative">
-                    <select class="form-select custom-search-input shadow-none px-3" @onchange="OnDepartmentFilterChanged" value="@filterDepartmentId">
-                        <option value="">All Departments</option>
-                        @foreach (var d in departments.Where(x => x.IsActive))
-                        {
-                            <option value="@d.DepartmentId">@d.Name</option>
-                        }
-                    </select>
-                </div>
+            <div class="col-md-4">
+                <select class="form-select custom-search-input shadow-none px-3" @onchange="OnDepartmentFilterChanged" value="@filterDepartmentId">
+                    <option value="">All Departments</option>
+                    @foreach (var d in departments.Where(x => x.IsActive))
+                    {
+                        <option value="@d.DepartmentId">@d.Name</option>
+                    }
+                </select>
             </div>
         }
+
+        <div class="@(UserIsOrgAdmin ? "col-md-4" : "col-md-6")">
+            <select class="form-select custom-search-input shadow-none px-3" @onchange="OnRoleFilterChanged" value="@filterRole">
+                <option value="">All Roles</option>
+                <option value="HR">HR</option>
+                <option value="Employee">Employee</option>
+            </select>
+        </div>
     </div>
 
     <div class="card shadow-sm border-0 rounded-3 overflow-hidden bg-white mb-4">
@@ -162,7 +196,6 @@
                 </tbody>
             </table>
         </div>
-
         <div class="card-footer bg-white border-top py-3 px-4 d-flex justify-content-end">
             <div class="custom-dept-pagination border rounded d-flex align-items-center bg-light-subtle">
                 <button class="btn btn-link text-muted p-2 border-end shadow-none rounded-0 @(currentPage == 1 ? "disabled opacity-50" : "")" @onclick="() => ChangePage(currentPage - 1)"><i class="bi bi-chevron-left"></i></button>
@@ -209,7 +242,6 @@
                                 }
                                 else
                                 {
-
                                     <input type="text" class="form-control" value="@HRDepartmentName" disabled />
                                 }
                             </div>
@@ -270,6 +302,11 @@
         padding: 0.35rem 0.5rem;
         border-radius: 6px;
     }
+
+    .btn-indigo {
+        background-color: #5c4ac7;
+        color: white;
+    }
 </style>
 
 @code {
@@ -279,9 +316,13 @@
     List<DesignationDto> editDesignations = new();
     List<Shift> shifts = new();
     EditEmployeeDto editModel = new();
+
+    // Naya field
+    EmployeeStatsDto stats = new();
+
     bool isEditOpen = false;
     bool isLoading = false;
-    string? editingEmail, message, error, HRDepartmentName, search = "";
+    string? editingEmail, message, error, HRDepartmentName, search = "", filterRole = "";
     bool UserIsOrgAdmin = false;
     Guid? filterDepartmentId;
     int currentPage = 1, pageSize = 10, totalEmployees = 0;
@@ -308,31 +349,42 @@
     private async Task LoadEmployees()
     {
         isLoading = true;
-        var result = await EmployeeService.GetEmployeesForListAsync(search, filterDepartmentId, currentPage, pageSize);
+        var currentUser = await CurrentUserService.GetUserAsync();
+
+        var result = await EmployeeService.GetEmployeesForListAsync(search, filterDepartmentId, filterRole, currentPage, pageSize);
         totalEmployees = result.TotalCount;
         employees = result.Items ?? new List<EmployeeListDto>();
+
+        // Naya Stats Logic
+        if (currentUser?.OrganizationId != null)
+        {
+            stats = await EmployeeService.GetEmployeeStatsAsync(currentUser.OrganizationId.Value);
+        }
+
         isLoading = false;
     }
 
     private async Task ToggleStatus(EmployeeListDto e)
     {
-        e.IsActive = !e.IsActive; // Optimistic UI update
+        e.IsActive = !e.IsActive;
         try
         {
             await EmployeeService.ToggleUserStatusAsync(e.Email, e.IsActive);
             message = $"Status updated successfully.";
             await LoadEmployees();
         }
-        catch (Exception ex)
+        catch
         {
-            e.IsActive = !e.IsActive; // Revert
-            error = ex.Message;
+            e.IsActive = !e.IsActive;
+            error = "Failed to update status.";
         }
     }
 
     private async Task ChangePage(int newPage) { currentPage = newPage; await LoadEmployees(); }
     private async Task OnSearchInput(ChangeEventArgs e) { search = e.Value?.ToString(); currentPage = 1; await LoadEmployees(); }
     private async Task OnDepartmentFilterChanged(ChangeEventArgs e) { filterDepartmentId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null; currentPage = 1; await LoadEmployees(); }
+    private async Task OnRoleFilterChanged(ChangeEventArgs e) { filterRole = e.Value?.ToString(); currentPage = 1; await LoadEmployees(); }
+
     private void NavigateToDashboard() => Nav.NavigateTo("/org/dashboard");
     private void NavigateToAddEmployee() => Nav.NavigateTo(UserIsOrgAdmin ? "/org/add-employee" : "/hr/add-employee");
     void CloseModal() => isEditOpen = false;
@@ -348,7 +400,7 @@
     private async Task OnEditDepartmentChanged(Guid? id)
     {
         editModel.DepartmentId = id;
-        editModel.DesignationId = null; // Clear old designation when dept changes
+        editModel.DesignationId = null;
         editDesignations = id.HasValue ? await DesignationService.GetByDepartmentAsync(id.Value) : new();
     }
 
