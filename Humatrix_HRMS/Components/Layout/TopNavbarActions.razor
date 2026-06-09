@@ -1,0 +1,118 @@
+﻿@using Humatrix_HRMS.DTOs
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Components.Account.Shared
+@using Humatrix_HRMS.DTOs.Dashboard
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+@inject NotificationService NotificationService
+@inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="d-flex align-items-center gap-3 backend-action-bar">
+
+    <!-- 🔔 LIVE NOTIFICATION HUB (Updates instantly via SignalR) -->
+    @if (dashboardContext != null)
+    {
+        <div class="notification-interactive-wrapper d-flex align-items-center">
+            <NotificationBell />
+        </div>
+    }
+
+    <!-- Small Vertical Divider Line -->
+    <div class="vr text-muted my-2" style="height: 20px;"></div>
+
+    <!-- 👤 PROFILE INTERACTIVE CAPSULE (Clicks trigger instantly) -->
+    <div class="profile-interactive-wrapper d-flex align-items-center">
+        <button class="btn btn-interactive-profile d-flex align-items-center gap-2"
+                @onclick='() => Nav.NavigateTo("/org/profile")'>
+            <div class="profile-avatar-box">
+                <i class="bi bi-person-fill"></i>
+            </div>
+            <div class="profile-text-labels text-start d-none d-md-block">
+                <span class="profile-title d-block">My Profile</span>
+                <span class="profile-subtitle d-block text-muted">Account Settings</span>
+            </div>
+            <i class="bi bi-chevron-down ms-1 text-muted small arrow-toggle"></i>
+        </button>
+    </div>
+
+</div>
+
+@code {
+    private OrgDashboardContextDto? dashboardContext;
+    private HubConnection? _globalHub;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dashboardContext = await CurrentUserService.GetOrgDashboardContextAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _globalHub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Listen for real-time notifications globally without needing a page refresh
+        _globalHub.On<NotificationPushDto>(
+            "ReceiveNotification",
+            async payload =>
+            {
+                try
+                {
+                    Console.WriteLine($"Global Topbar Received Notification: {payload.Title}");
+                    await JS.InvokeVoidAsync("playNotificationSound");
+                    await JS.InvokeVoidAsync(
+                        "showToastNotification",
+                        payload.Title,
+                        payload.Message,
+                        payload.RedirectUrl,
+                        payload.Priority
+                    );
+
+                    // Force the local action items layout to re-render instantly
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Global Notification Rendering Error: {ex.Message}");
+                }
+            });
+
+        _globalHub.Reconnecting += error =>
+        {
+            Console.WriteLine("Global Topbar SignalR reconnecting...");
+            return Task.CompletedTask;
+        };
+
+        _globalHub.Reconnected += connectionId =>
+        {
+            Console.WriteLine("Global Topbar SignalR reconnected");
+            return Task.CompletedTask;
+        };
+
+        await _globalHub.StartAsync();
+
+        if (dashboardContext != null)
+        {
+            await _globalHub.SendAsync("JoinOrgDashboardGroup", dashboardContext.OrganizationId.ToString());
+            await _globalHub.SendAsync("JoinUserGroup", dashboardContext.UserId);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_globalHub != null)
+        {
+            await _globalHub.DisposeAsync();
+        }
+    }
+}

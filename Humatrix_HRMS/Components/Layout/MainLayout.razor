@@ -1,111 +1,31 @@
 ﻿@inherits LayoutComponentBase
-@using Humatrix_HRMS.Data
-@using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Identity
-@using Microsoft.EntityFrameworkCore
-
-@inject AuthenticationStateProvider AuthStateProvider
-@inject UserManager<ApplicationUser> UserManager
-@inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject NavigationManager Nav
-@inject SignInManager<ApplicationUser> SignInManager
-
-@{
-    var currentPath = Nav.ToBaseRelativePath(Nav.Uri);
-
-    // Hide navbar only on Home page "/"
-    bool hideNavbar = string.IsNullOrEmpty(currentPath);
-}
 
 <div class="page">
+    <!-- Left Sidebar Menu -->
+    <div class="sidebar">
+        <NavMenu />
+    </div>
 
-    @if (!hideNavbar)
-    {
-        <div class="sidebar">
-            <NavMenu />
-        </div>
-    }
+    <!-- Right Side Dynamic Content Area -->
+    <main class="main-content-wrapper">
 
-    <main class="main-content @(hideNavbar ? "full-page" : "")">
+        <!-- 🌐 GLOBAL TOP NAVBAR -->
+        <header class="global-top-navbar d-flex justify-content-between align-items-center px-4 shadow-sm">
 
-        @* TOP BAR (OPTIONAL) *@
-        @* 
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-        *@
+            <!-- Left Side: App Context -->
+            <div class="navbar-left-brand">
+                <span class="text-muted small fw-medium">Humatrix Operational Portal</span>
+            </div>
 
-        <article class="content px-4">
+            <!-- Right Side: Interactive Action Container -->
+            <TopNavbarActions />
+
+        </header>
+
+        <!-- DYNAMIC PAGE BODY CONTENT -->
+        <article class="content">
             @Body
         </article>
 
     </main>
-
 </div>
-
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
-</div>
-
-<style>
-
-    /* MAIN CONTENT */
-    .main-content {
-        width: 100%;
-        min-height: 100vh;
-    }
-
-    /* FULL PAGE WHEN SIDEBAR HIDDEN */
-    .full-page {
-        width: 100%;
-        margin-left: 0 !important;
-    }
-</style>
-
-@code {
-
-    private bool _checked = false;
-
-    protected override async Task OnParametersSetAsync()
-    {
-        if (_checked)
-            return;
-
-        _checked = true;
-
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var userPrincipal = authState.User;
-
-        if (userPrincipal.Identity != null &&
-            userPrincipal.Identity.IsAuthenticated)
-        {
-            var user = await UserManager.GetUserAsync(userPrincipal);
-
-            if (user == null)
-                return;
-
-            // CHECK USER ACTIVE
-            if (!user.IsActive)
-            {
-                await SignInManager.SignOutAsync();
-                Nav.NavigateTo("/Account/Login", true);
-                return;
-            }
-
-            using var db = DbFactory.CreateDbContext();
-
-            // CHECK ORGANIZATION ACTIVE
-            var org = await db.Organizations
-                .FirstOrDefaultAsync(o =>
-                    o.OrganizationId == user.OrganizationId);
-
-            if (org != null && !org.IsActive)
-            {
-                await SignInManager.SignOutAsync();
-                Nav.NavigateTo("/Account/Login", true);
-            }
-        }
-    }
-}
