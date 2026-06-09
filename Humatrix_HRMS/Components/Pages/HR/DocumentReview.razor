@@ -1,4 +1,4 @@
-﻿@page "/hr/documents"
+﻿@page "/admin/documents"
 @rendermode InteractiveServer
 
 @using Humatrix_HRMS.DTOs.Dashboard
@@ -36,6 +36,13 @@
                 }
             </p>
         </div>
+        @if (isOrgAdmin)  // Only OrgAdmin can see the Terminate button
+        {
+            <button class="btn btn-secondary px-4"
+                    @onclick='() => Nav.NavigateTo("/org/document-types")'>
+                 Add document-types
+            </button>
+        }
         <button class="btn btn-secondary" @onclick="GoBack">
             Dashboard
         </button>

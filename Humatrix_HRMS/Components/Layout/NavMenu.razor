@@ -28,10 +28,6 @@
 
                 @* HR *@
                 <AuthorizeView Roles="HR" Context="hrContext">
-                    <NavLink class="nav-item-custom" href="/hr/profile">
-                        <i class="bi bi-person-badge"></i>
-                        <span>My Profile</span>
-                    </NavLink>
                     <NavLink class="nav-item-custom" href="/hr/dashboard">
                         <i class="bi bi-bar-chart-line"></i>
                         <span>HR Dashboard</span>
@@ -57,10 +53,19 @@
                         <i class="bi bi-grid"></i>
                         <span>Dashboard</span>
                     </NavLink>
+                    <NavLink class="nav-item-custom" href="/employee/my-tasks">
+                        <i class="bi bi-check2-square"></i>
+                        <span>My Tasks</span>
+                    </NavLink>
+                 
                 </AuthorizeView>
 
                 @* ORG ADMIN *@
                 <AuthorizeView Roles="OrgAdmin" Context="orgContext">
+                    <NavLink class="nav-item-custom" href="/org/dashboard">
+                        <i class="bi bi-diagram-3"></i>
+                        <span>Dashboard</span>
+                    </NavLink>
                     <NavLink class="nav-item-custom" href="/org/departments">
                         <i class="bi bi-diagram-3"></i>
                         <span>Departments</span>
@@ -77,7 +82,10 @@
                         <i class="bi bi-person-gear"></i>
                         <span>Add HR</span>
                     </NavLink>
-
+                    <NavLink class="nav-item-custom" href="/org/assets">
+                        <i class="bi bi-box-seam"></i>
+                        <span>Manage Assets</span>
+                    </NavLink>
                     <NavLink class="nav-item-custom" href="/admin/leave-types">
                         <i class="bi bi-file-earmark-ruled"></i>
                         <span>Leave Types</span>
@@ -99,12 +107,11 @@
                     <NavLink class="nav-item-custom" href="/employees">
                         <i class="bi bi-people"></i>
                         <span>Employee Directory</span>
-                    </NavLink>
-
-                    <NavLink class="nav-item-custom" href="/org/assets">
-                        <i class="bi bi-box-seam"></i>
-                        <span>Manage Assets</span>
-                    </NavLink>
+                    </NavLink>            
+                    <NavLink class="nav-item-custom" href="admin/documents">
+                        <i class="bi bi-people"></i>
+                        <span>Documents management</span>
+                    </NavLink>            
 
                     <NavLink class="nav-item-custom" href="/admin/attendance">
                         <i class="bi bi-calendar-check"></i>
@@ -128,20 +135,13 @@
                         <i class="bi bi-clock-history"></i>
                         <span>Overtime Approvals</span>
                     </NavLink>
-
-                    <NavLink class="nav-item-custom" href="/admin/tasks">
-                        <i class="bi bi-list-task"></i>
-                        <span>All Tasks</span>
-                    </NavLink>
-
-                    <NavLink class="nav-item-custom" href="/hr/assign-task">
-                        <i class="bi bi-plus-circle"></i>
-                        <span>Assign Tasks</span>
-                    </NavLink>
-                 
                     <NavLink class="nav-item-custom" href="/hr/tasks">
                         <i class="bi bi-gear-wide-connected"></i>
                         <span>Manage Tasks</span>
+                    </NavLink>
+                    <NavLink class="nav-item-custom" href="/admin/exit">
+                        <i class="bi bi-check2-square"></i>
+                        <span>Resignation Management</span>
                     </NavLink>
                 </AuthorizeView>
 
@@ -161,12 +161,6 @@
                         <i class="bi bi-stopwatch"></i>
                         <span>My Overtime</span>
                     </NavLink>
-
-                    <NavLink class="nav-item-custom" href="/employee/my-tasks">
-                        <i class="bi bi-check2-square"></i>
-                        <span>My Tasks</span>
-                    </NavLink>
-
                     <NavLink class="nav-item-custom" href="/employee/holidays">
                         <i class="bi bi-calendar3"></i>
                         <span>Holidays</span>
@@ -186,10 +180,10 @@
                         <i class="bi bi-pencil"></i>
                         <span>Attendance Correction</span>
                     </NavLink>
-                    @* <NavLink class="nav-item-custom" href="/employee/asset-requests">
-                        <i class="bi bi-laptop"></i>
-                        <span>Assets Requesting </span>
-                    </NavLink> *@
+                    <NavLink class="nav-item-custom" href="/employee/exit">
+                        <i class="bi bi-pencil"></i>
+                        <span>Resignation Submission</span>
+                    </NavLink>
 
                 </AuthorizeView>
 

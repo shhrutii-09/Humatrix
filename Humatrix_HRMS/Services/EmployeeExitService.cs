@@ -450,7 +450,7 @@ namespace Humatrix_HRMS.Services
                 $"Effective date: {lastWorkingDay:dd MMM yyyy}\n" +
                 $"Reason: {terminationReason}\n" +
                 $"Access revoked: {(revokeAccessImmediately ? "Immediately" : "On last working day")}",
-                "/hr/exit");
+                "/admin/exit");
 
             return exit;
         }
@@ -896,7 +896,7 @@ namespace Humatrix_HRMS.Services
                     exit.OrganizationId,
                     "⚠️ Resignation Cancelled",
                     adminMessage,
-                    "/hr/exit");
+                    "/admin/exit");
 
                 if (exit.ApprovedByEmployeeId.HasValue)
                 {
@@ -911,7 +911,7 @@ namespace Humatrix_HRMS.Services
                             $"{exitEmployee.FirstName} {exitEmployee.LastName} has cancelled their resignation.\n\n" +
                             $"They were previously at status: {originalStatus}\n" +
                             $"All assets and access have been restored.",
-                            "/hr/exit");
+                            "/admin/exit");
                     }
                 }
 
@@ -1147,7 +1147,7 @@ namespace Humatrix_HRMS.Services
                 exit.OrganizationId,
                 "Exit Process Completed",
                 $"{employee.FirstName} {employee.LastName}'s exit process has been completed.",
-                "/hr/exit");
+                "/admin/exit");
 
             return exit;
         }
@@ -1203,7 +1203,7 @@ namespace Humatrix_HRMS.Services
                         exit.OrganizationId,
                         "Exit Auto-Completed",
                         $"{exit.Employee.FirstName} {exit.Employee.LastName}'s exit was auto-completed as their last working day has passed.",
-                        "/hr/exit");
+                        "/admin/exit");
                 }
                 catch (Exception ex)
                 {
@@ -1314,7 +1314,7 @@ namespace Humatrix_HRMS.Services
                     exit.OrganizationId,
                     "Assets Pending Return",
                     $"Employee has {assignedAssets.Count} asset(s) assigned. Please collect before completing exit.",
-                    $"/hr/exit?exitId={exitId}");
+                    $"/admin/exit?exitId={exitId}");
             }
             else
             {
@@ -1396,7 +1396,7 @@ namespace Humatrix_HRMS.Services
                     "HR Exit Request",
                     $"HR member {employee.FirstName} {employee.LastName} has submitted their resignation. " +
                     $"Last working day: {exit.LastWorkingDay:dd MMM yyyy}.{assetNote}",
-                    "/hr/exit");
+                    "/admin/exit");
             }
             else
             {
@@ -1418,7 +1418,7 @@ namespace Humatrix_HRMS.Services
                         "New Exit Request",
                         $"{employee.FirstName} {employee.LastName} has submitted resignation. " +
                         $"Last working day: {exit.LastWorkingDay:dd MMM yyyy}.{assetNote}",
-                        "/hr/exit");
+                        "/admin/exit");
                 }
 
                 await _notificationService.CreateOrgAdminNotificationsAsync(
@@ -1426,7 +1426,7 @@ namespace Humatrix_HRMS.Services
                     "New Exit Request",
                     $"{employee.FirstName} {employee.LastName} has submitted resignation. " +
                     $"Last working day: {exit.LastWorkingDay:dd MMM yyyy}.{assetNote}",
-                    "/hr/exit");
+                    "/admin/exit");
             }
         }
     }
