@@ -959,6 +959,19 @@
     {
         var query = _allExits.AsEnumerable();
 
+        // Apply status filter
+        if (!string.IsNullOrEmpty(_filterStatus))
+        {
+            query = query.Where(x => x.Status == _filterStatus);
+        }
+
+        // Apply department filter
+        if (!string.IsNullOrEmpty(_filterDeptId) && Guid.TryParse(_filterDeptId, out var deptId))
+        {
+            query = query.Where(x => x.Employee.DepartmentId == deptId);
+        }
+
+        // Apply search filter
         if (!string.IsNullOrWhiteSpace(_searchText))
         {
             var term = _searchText.Trim().ToLower();
@@ -1215,16 +1228,6 @@
         catch (Exception ex) { _modalError = ex.Message; }
         finally { _isProcessing = false; }
     }
-
-    // ── Complete Exit ──────────────────────────────────
-
-    // private void OpenCompleteModal(EmployeeExit exit)
-    // {
-    //     _completeExit = exit;
-    //     _complete_expLetter = false;
-    //     _complete_relLetter = false;
-    //     _modalError = null;
-    // }
 
     private void OpenCompleteModal(EmployeeExit exit)
     {
