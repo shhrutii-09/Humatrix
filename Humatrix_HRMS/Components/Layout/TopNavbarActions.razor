@@ -25,10 +25,10 @@
     <!-- Small Vertical Divider Line -->
     <div class="vr text-muted my-2" style="height: 20px;"></div>
 
-    <!-- 👤 PROFILE INTERACTIVE CAPSULE (Clicks trigger instantly) -->
+    <!-- 👤 PROFILE INTERACTIVE CAPSULE -->
     <div class="profile-interactive-wrapper d-flex align-items-center">
         <button class="btn btn-interactive-profile d-flex align-items-center gap-2"
-                @onclick='() => Nav.NavigateTo("/org/profile")'>
+                @onclick="NavigateToProfile">
             <div class="profile-avatar-box">
                 <i class="bi bi-person-fill"></i>
             </div>
@@ -51,6 +51,26 @@
         dashboardContext = await CurrentUserService.GetOrgDashboardContextAsync();
     }
 
+    private void NavigateToProfile()
+    {
+        // Get the current relative URL path lowered (e.g., "hr/dashboard")
+        string currentPath = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+
+        // Dynamically route based on what dashboard area the user is currently visiting
+        if (currentPath.StartsWith("hr"))
+        {
+            Nav.NavigateTo("/hr/profile");
+        }
+        else if (currentPath.StartsWith("employee"))
+        {
+            Nav.NavigateTo("/employee/profile");
+        }
+        else
+        {
+            Nav.NavigateTo("/org/profile");
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -60,7 +80,6 @@
             .WithAutomaticReconnect()
             .Build();
 
-        // Listen for real-time notifications globally without needing a page refresh
         _globalHub.On<NotificationPushDto>(
             "ReceiveNotification",
             async payload =>
@@ -77,7 +96,6 @@
                         payload.Priority
                     );
 
-                    // Force the local action items layout to re-render instantly
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (Exception ex)
