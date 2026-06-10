@@ -128,36 +128,51 @@ namespace Humatrix_HRMS.Services
         #region Employee Management
 
         public async Task<EmployeeStatsDto> GetEmployeeStatsAsync(Guid organizationId)
-{
-    var stats = new EmployeeStatsDto();
-    
-    // Organization ke sabhi users ko filter karein
-    var users = await _userManager.Users
-        .Where(u => u.OrganizationId == organizationId)
-        .ToListAsync();
-
-    foreach (var u in users)
-    {
-        // Check karein user ka role kya hai
-        var roles = await _userManager.GetRolesAsync(u);
-        bool isEmployee = roles.Contains("Employee");
-        bool isHR = roles.Contains("HR");
-
-        // Logic: Sirf Employee ya HR ko hi "Worker" mana jaye
-        if (isEmployee || isHR)
         {
-            stats.TotalWorkers++; 
-            
-            if (isEmployee) stats.TotalEmployees++;
-            if (isHR) stats.TotalHrs++;
-            
-            // Inactive status check
-            if (!u.IsActive) stats.TotalInactive++;
-        }
-    }
-    return stats;
-}
+            var stats = new EmployeeStatsDto();
 
+            var currentUser = await _currentUser.GetUserAsync();
+            if (currentUser == null)
+                return stats;
+
+            var currentRoles = await _userManager.GetRolesAsync(currentUser);
+            bool isHR = currentRoles.Contains("HR");
+
+            var users = await _userManager.Users
+                .Where(u => u.OrganizationId == organizationId)
+                .ToListAsync();
+
+            if (isHR)
+            {
+                users = users
+                    .Where(u => u.DepartmentId == currentUser.DepartmentId)
+                    .ToList();
+            }
+
+            foreach (var u in users)
+            {
+                var roles = await _userManager.GetRolesAsync(u);
+
+                bool isEmployee = roles.Contains("Employee");
+                bool isHrUser = roles.Contains("HR");
+
+                if (isEmployee || isHrUser)
+                {
+                    stats.TotalWorkers++;
+
+                    if (isEmployee)
+                        stats.TotalEmployees++;
+
+                    if (isHrUser)
+                        stats.TotalHrs++;
+
+                    if (!u.IsActive)
+                        stats.TotalInactive++;
+                }
+            }
+
+            return stats;
+        }
         public async Task<EmployeeListDto?> GetEmployeeByEmailAsync(string email)
         {
             using var _context = await _contextFactory.CreateDbContextAsync();
@@ -266,17 +281,6 @@ namespace Humatrix_HRMS.Services
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) throw new Exception("User not found");
 
-            // --- NEW: Update Role Logic ---
-            var currentRoles = await _userManager.GetRolesAsync(user);
-            var newRole = dto.Role; // Assuming "HR" or "Employee"
-
-            if (!string.IsNullOrEmpty(newRole) && !currentRoles.Contains(newRole))
-            {
-                await _userManager.RemoveFromRolesAsync(user, currentRoles);
-                await _userManager.AddToRoleAsync(user, newRole);
-            }
-            // ------------------------------
-
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.DepartmentId = dto.DepartmentId;
@@ -341,146 +345,6 @@ namespace Humatrix_HRMS.Services
 
         #endregion
 
-        //  #region List Retrieval
-
-        //  public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
-        //string? search = null,
-        //Guid? departmentId = null,
-        //int pageNumber = 1,
-        //int pageSize = 10)
-        //  {
-        //      using var _context = await _contextFactory.CreateDbContextAsync();
-
-        //      var currentUser = await _currentUser.GetUserAsync();
-        //      if (currentUser?.OrganizationId == null) return (new List<EmployeeListDto>(), 0);
-
-        //      var currentUserRoles = await _userManager.GetRolesAsync(currentUser);
-        //      bool isOrgAdmin = currentUserRoles.Contains("OrgAdmin");
-        //      bool isHR = currentUserRoles.Contains("HR");
-
-        //      //var usersQuery = _userManager.Users
-        //      //  .Where(u => u.OrganizationId == currentUser.OrganizationId && u.Id != currentUser.Id);
-        //      var usersQuery = _userManager.Users
-        //          .Where(u =>
-        //              u.OrganizationId == currentUser.OrganizationId &&
-        //              u.Id != currentUser.Id);
-        //      if (isHR && !isOrgAdmin)
-        //      {
-        //          usersQuery = usersQuery.Where(u => u.DepartmentId == currentUser.DepartmentId);
-        //      }
-
-        //      var users = await usersQuery.ToListAsync();
-
-        //      var depts = await _context.Departments
-        //        .Where(d => d.OrganizationId == currentUser.OrganizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //      var desigs = await _context.Designations
-        //        .Where(d => d.OrganizationId == currentUser.OrganizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //      var shifts = await _context.Shifts
-        //        .Where(s => s.OrganizationId == currentUser.OrganizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //      var profiles = await _context.Employees
-        //        .Where(e => e.OrganizationId == currentUser.OrganizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //      var creatorIds = profiles
-        //        .Where(p => !string.IsNullOrEmpty(p.CreatedByUserId))
-        //        .Select(p => p.CreatedByUserId!)
-        //        .Distinct()
-        //        .ToList();
-
-        //      var creators = await _userManager.Users
-        //        .Where(u => creatorIds.Contains(u.Id))
-        //        .ToListAsync();
-
-        //      var list = new List<EmployeeListDto>();
-
-        //      foreach (var u in users)
-        //      {
-        //          var userRoles = await _userManager.GetRolesAsync(u);
-
-        //          bool isEmployee = userRoles.Contains("Employee");
-        //          bool isHrUser = userRoles.Contains("HR");
-
-        //          // ORG ADMIN
-        //          if (isOrgAdmin)
-        //          {
-        //              // OrgAdmin can see Employee + HR
-        //              if (!isEmployee && !isHrUser)
-        //                  continue;
-        //          }
-
-        //          // HR
-        //          else if (isHR)
-        //          {
-        //              // HR can ONLY see Employees
-        //              if (!isEmployee)
-        //                  continue;
-
-        //              // Same department only
-        //              if (u.DepartmentId != currentUser.DepartmentId)
-        //                  continue;
-        //          }
-
-        //          var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
-        //          var creator = creators.FirstOrDefault(c => c.Id == profile?.CreatedByUserId);
-
-        //          list.Add(new EmployeeListDto
-        //          {
-        //              EmployeeId = profile?.EmployeeId ?? Guid.Empty,
-        //              CreatedAt = profile?.CreatedAt ?? DateTime.MinValue,
-        //              Email = u.Email ?? string.Empty,
-        //              FirstName = u.FirstName,
-        //              EmployeeCode = profile?.EmployeeCode ?? "",
-        //              LastName = u.LastName,
-        //              Name = $"{u.FirstName} {u.LastName}",
-
-        //              Role = isHrUser ? "HR" : "Employee",
-
-        //              Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
-        //              Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
-        //              DepartmentId = u.DepartmentId,
-        //              DesignationId = u.DesignationId,
-
-        //              CreatedByName = creator != null
-        //                  ? $"{creator.FirstName} {creator.LastName}"
-        //                  : "System",
-
-        //              CreatedByRole = profile?.CreatedByRole ?? "Unknown",
-
-        //              ShiftId = profile?.ShiftId,
-
-        //              ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name
-        //                  ?? "No Shift Assigned",
-
-        //              IsActive = u.IsActive
-        //          });
-        //      }
-        //      if (!string.IsNullOrWhiteSpace(search))
-        //      {
-        //          search = search.ToLower();
-        //          list = list.Where(x => x.Name.ToLower().Contains(search) || x.Email.ToLower().Contains(search)).ToList();
-        //      }
-
-        //      if (departmentId.HasValue)
-        //      {
-        //          list = list.Where(x => x.DepartmentId == departmentId).ToList();
-        //      }
-
-        //      int totalCount = list.Count;
-
-        //      var items = list
-        //        .OrderByDescending(x => x.CreatedAt)
-        //        .Skip((pageNumber - 1) * pageSize)
-        //        .Take(pageSize)
-        //        .ToList();
-
-        //      return (items, totalCount);
-        //  }
         #region List Retrieval
 
         public async Task<(List<EmployeeListDto> Items, int TotalCount)> GetEmployeesForListAsync(
@@ -607,68 +471,7 @@ namespace Humatrix_HRMS.Services
             return resultList.OrderBy(x => x.Name).ToList();
         }
 
-        //#endregion
-        //public async Task<List<EmployeeListDto>> GetEmployeesByOrganizationIdAsync(Guid organizationId)
-        //{
-        //    using var context = await _contextFactory.CreateDbContextAsync();
-
-        //    // Get ALL users first
-        //    var users = await _userManager.Users
-        //        .Where(u => u.OrganizationId == organizationId)
-        //        .AsNoTracking()
-        //        .ToListAsync();
-
-        //    var depts = await context.Departments
-        //        .Where(d => d.OrganizationId == organizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //    var desigs = await context.Designations
-        //        .Where(d => d.OrganizationId == organizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //    var shifts = await context.Shifts
-        //        .Where(s => s.OrganizationId == organizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //    var profiles = await context.Employees
-        //        .Where(e => e.OrganizationId == organizationId)
-        //        .AsNoTracking().ToListAsync();
-
-        //    var resultList = new List<EmployeeListDto>();
-
-        //    foreach (var u in users)
-        //    {
-        //        var userRoles = await _userManager.GetRolesAsync(u);
-
-        //        // FIX: ONLY include users who have the "Employee" role
-        //        // Users with NO roles or other roles should NOT appear
-        //        if (!userRoles.Contains("Employee"))
-        //            continue;
-
-        //        var profile = profiles.FirstOrDefault(p => p.UserId == u.Id);
-
-        //        resultList.Add(new EmployeeListDto
-        //        {
-        //            EmployeeId = profile?.EmployeeId ?? Guid.Empty,
-        //            Email = u.Email ?? string.Empty,
-        //            FirstName = u.FirstName,
-        //            LastName = u.LastName,
-        //            Name = $"{u.FirstName} {u.LastName}",
-        //            Role = "Employee",
-        //            EmployeeCode = profile?.EmployeeCode ?? "",
-        //            Department = depts.FirstOrDefault(d => d.DepartmentId == u.DepartmentId)?.Name ?? "N/A",
-        //            Designation = desigs.FirstOrDefault(d => d.DesignationId == u.DesignationId)?.Name ?? "N/A",
-        //            DepartmentId = u.DepartmentId,
-        //            DesignationId = u.DesignationId,
-        //            ShiftId = profile?.ShiftId,
-        //            ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift Assigned",
-        //            IsActive = u.IsActive
-        //        });
-        //    }
-
-        //    return resultList.OrderBy(x => x.Name).ToList();
-        //}
-
+        
         #endregion
 
         #region Creation
