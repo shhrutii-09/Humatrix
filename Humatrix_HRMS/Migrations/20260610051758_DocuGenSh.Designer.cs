@@ -4,6 +4,7 @@ using Humatrix_HRMS.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Humatrix_HRMS.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260610051758_DocuGenSh")]
+    partial class DocuGenSh
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1205,148 +1208,21 @@ namespace Humatrix_HRMS.Migrations
                     b.ToTable("EmployeeDocuments");
                 });
 
-            modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgDocumentHistory", b =>
-                {
-                    b.Property<long>("HistoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("HistoryId"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("DocumentId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("NewValue")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("OldValue")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("PerformedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PerformedByRole")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PerformedByUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("HistoryId");
-
-                    b.HasIndex("DocumentId");
-
-                    b.ToTable("OrgDocumentHistories");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgDocumentTemplate", b =>
-                {
-                    b.Property<Guid>("TemplateId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedByUserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("PlaceholderSchema")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("RequiresAcknowledgment")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("TemplateContent")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedByUserId")
-                        .HasMaxLength(450)
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("TemplateId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.ToTable("OrgDocumentTemplates");
-                });
-
             modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgGeneratedDocument", b =>
                 {
-                    b.Property<Guid>("DocumentId")
+                    b.Property<Guid>("OrgDocumentId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime?>("AcknowledgedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("AcknowledgedByEmployeeId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("AcknowledgmentRemarks")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ContentSnapshot")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedByUserId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("DocumentName")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("date");
 
                     b.Property<string>("DocumentNumber")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("DocumentTypeId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
@@ -1362,35 +1238,31 @@ namespace Humatrix_HRMS.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<long>("FileSize")
-                        .HasPrecision(18, 2)
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime>("GeneratedAt")
+                    b.Property<bool>("IsLatestVersion")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("IssuedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("GeneratedByRole")
+                    b.Property<string>("IssuedByRole")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("GeneratedByUserId")
+                    b.Property<string>("IssuedByUserId")
                         .IsRequired()
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsLatestVersion")
-                        .HasColumnType("bit");
 
                     b.Property<string>("MimeType")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid?>("OrgDocumentTemplateTemplateId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
@@ -1400,38 +1272,41 @@ namespace Humatrix_HRMS.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid?>("PreviousDocumentId")
+                    b.Property<Guid?>("PreviousOrgDocumentId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("TemplateId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RevokedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("Version")
                         .HasColumnType("int");
 
-                    b.HasKey("DocumentId");
+                    b.HasKey("OrgDocumentId");
 
-                    b.HasIndex("DocumentNumber")
-                        .IsUnique();
+                    b.HasIndex("DocumentTypeId");
 
-                    b.HasIndex("EmployeeId");
+                    b.HasIndex("IssuedByUserId");
 
-                    b.HasIndex("GeneratedAt");
+                    b.HasIndex("PreviousOrgDocumentId");
 
-                    b.HasIndex("OrgDocumentTemplateTemplateId");
+                    b.HasIndex("OrganizationId", "DocumentTypeId");
 
-                    b.HasIndex("PreviousDocumentId");
+                    b.HasIndex("OrganizationId", "IssuedAt");
 
-                    b.HasIndex("Status");
-
-                    b.HasIndex("TemplateId");
-
-                    b.HasIndex("OrganizationId", "EmployeeId");
+                    b.HasIndex("EmployeeId", "DocumentTypeId", "IsLatestVersion")
+                        .HasFilter("[IsRevoked] = 0");
 
                     b.ToTable("OrgGeneratedDocuments");
                 });
@@ -2832,47 +2707,25 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("PreviousDocument");
                 });
 
-            modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgDocumentHistory", b =>
-                {
-                    b.HasOne("Humatrix_HRMS.Models.Documents.OrgGeneratedDocument", "Document")
-                        .WithMany("History")
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgDocumentTemplate", b =>
-                {
-                    b.HasOne("Humatrix_HRMS.Data.ApplicationUser", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
-                        .WithMany()
-                        .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("Organization");
-                });
-
             modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgGeneratedDocument", b =>
                 {
+                    b.HasOne("Humatrix_HRMS.Models.Documents.DocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Humatrix_HRMS.Models.Documents.OrgDocumentTemplate", null)
-                        .WithMany("GeneratedDocuments")
-                        .HasForeignKey("OrgDocumentTemplateTemplateId");
+                    b.HasOne("Humatrix_HRMS.Data.ApplicationUser", "IssuedByUser")
+                        .WithMany()
+                        .HasForeignKey("IssuedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("Humatrix_HRMS.Models.Organization", "Organization")
                         .WithMany()
@@ -2882,21 +2735,18 @@ namespace Humatrix_HRMS.Migrations
 
                     b.HasOne("Humatrix_HRMS.Models.Documents.OrgGeneratedDocument", "PreviousDocument")
                         .WithMany()
-                        .HasForeignKey("PreviousDocumentId");
+                        .HasForeignKey("PreviousOrgDocumentId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("Humatrix_HRMS.Models.Documents.OrgDocumentTemplate", "Template")
-                        .WithMany()
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                    b.Navigation("DocumentType");
 
                     b.Navigation("Employee");
+
+                    b.Navigation("IssuedByUser");
 
                     b.Navigation("Organization");
 
                     b.Navigation("PreviousDocument");
-
-                    b.Navigation("Template");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.Employee", b =>
@@ -3204,16 +3054,6 @@ namespace Humatrix_HRMS.Migrations
                 {
                     b.Navigation("ExpiryAlerts");
 
-                    b.Navigation("History");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgDocumentTemplate", b =>
-                {
-                    b.Navigation("GeneratedDocuments");
-                });
-
-            modelBuilder.Entity("Humatrix_HRMS.Models.Documents.OrgGeneratedDocument", b =>
-                {
                     b.Navigation("History");
                 });
 

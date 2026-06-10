@@ -16,7 +16,8 @@ namespace Humatrix_HRMS.Data
         { }
         public DbSet<Organization> Organizations { get; set; }
         public DbSet<Department> Departments { get; set; }
-
+        public DbSet<OrgGeneratedDocument> OrgGeneratedDocuments { get; set; }
+        public DbSet<OrgDocumentHistory> OrgDocumentHistories { get; set; }
         public DbSet<UserInvite> UserInvites { get; set; }
 
         public DbSet<Designation> Designations { get; set; }
@@ -66,8 +67,9 @@ namespace Humatrix_HRMS.Data
         public DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
         public DbSet<DocumentHistory> DocumentHistories { get; set; }
         public DbSet<DocumentExpiryAlert> DocumentExpiryAlerts { get; set; }
+        public DbSet<OrgDocumentTemplate> OrgDocumentTemplates { get; set; }
 
-        public DbSet<OrgGeneratedDocument> OrgGeneratedDocuments => Set<OrgGeneratedDocument>();
+        //public DbSet<OrgGeneratedDocument> OrgGeneratedDocuments => Set<OrgGeneratedDocument>();
         // In OnModelCreating
 
         //public DbSet<IdentityUserRole<string>> UserRoles { get; set; }

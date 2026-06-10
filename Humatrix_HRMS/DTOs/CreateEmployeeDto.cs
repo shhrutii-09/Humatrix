@@ -10,6 +10,8 @@ namespace Humatrix_HRMS.DTOs
         [Required(ErrorMessage = "Last Name is required")]
         public string LastName { get; set; } = "";
 
+        public DateTime? DateOfBirth { get; set; }
+
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "Invalid email format")]
         public string Email { get; set; } = "";

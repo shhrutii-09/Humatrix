@@ -57,6 +57,13 @@
                             <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1" />
                         </div>
                     </div>
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Date of Birth</label>
+                        <InputDate @bind-Value="model.DateOfBirth"
+                                   class="form-control custom-dept-input shadow-none"
+                                   disabled="@isSubmitting" />
+                        <ValidationMessage For="@(() => model.DateOfBirth)" class="text-danger small mt-1" />
+                    </div>
 
                     <div class="col-md-5 border-start ps-md-4">
                         <h5 class="mb-4 text-secondary text-uppercase tracking-wider section-title">Assignment</h5>

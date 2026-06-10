@@ -108,6 +108,9 @@ namespace Humatrix_HRMS.Models.Documents
         [ForeignKey("PreviousDocumentId")]
         public EmployeeDocument? PreviousDocument { get; set; }
 
+        // Add to EmployeeDocument.cs (around line 60)
+        public bool IsOrganizationGenerated { get; set; } = false;
+
         public bool IsLatestVersion { get; set; } = true;
         public ICollection<DocumentHistory> History { get; set; } = new List<DocumentHistory>();
 

@@ -16,7 +16,7 @@ namespace Humatrix_HRMS.Services
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly CurrentUserService _currentUser;
         private readonly NotificationService _notificationService;
-        private readonly IOrgGeneratedDocumentService _orgDocumentService;
+        private readonly IOrgDocumentGenerationService _orgDocumentService;
         private readonly IConfiguration _config;
         private readonly EmailService _emailService;
 
@@ -25,7 +25,7 @@ namespace Humatrix_HRMS.Services
             UserManager<ApplicationUser> userManager,
             CurrentUserService currentUser,
             NotificationService notificationService,
-            IOrgGeneratedDocumentService orgDocumentService,
+            IOrgDocumentGenerationService orgDocumentService,
             IConfiguration config,        // Add this
             EmailService emailService)     // Add this
         {

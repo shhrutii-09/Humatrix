@@ -1,693 +1,471 @@
-﻿@page "/org/documents/generated"
+﻿@page "/org/documents/generate"
 @rendermode InteractiveServer
-
-@using Humatrix_HRMS.DTOs.Documents
+@attribute [Authorize(Roles = "OrgAdmin,HR")]
 @using Humatrix_HRMS.Models.Documents
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Services.Documents
+@using Humatrix_HRMS.Services.AI
+@using Humatrix_HRMS.DTOs.Documents
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.AspNetCore.Components.Forms
-@using System.Security.Claims
-
-@attribute [Authorize(Roles = "OrgAdmin,HR")]
-
-@inject IOrgGeneratedDocumentService OrgDocService
+@inject IOrgDocumentGenerationService DocumentService
 @inject EmployeeService EmployeeService
 @inject CurrentUserService CurrentUserService
-@inject NavigationManager Nav
-@inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>Org-Issued Documents | Humatrix HRMS</PageTitle>
+<h3>📄 Generate Organization Document</h3>
 
-<div class="container-fluid px-4 mt-4">
-
-    @* ── Header ──────────────────────────────────────────────────────────── *@
-    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-        <div>
-            <h2 class="fw-bold">🏢 Organisation-Issued Documents</h2>
-            <p class="text-muted small mb-0">
-                Issue official letters and documents to employees.
-                @if (!_isOrgAdmin)
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Document Generator</h5>
+                @if (isOrgAdmin)
                 {
-                    <span>You are scoped to <strong>your department</strong> only.</span>
-                }
-            </p>
-        </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary" @onclick="OpenIssueModal">
-                ➕ Issue Document
-            </button>
-            <button class="btn btn-outline-secondary"
-                    @onclick='() => Nav.NavigateTo(_isOrgAdmin ? "/org/dashboard" : "/hr/dashboard")'>
-                Dashboard
-            </button>
-        </div>
-    </div>
-
-    @* ── KPI cards ────────────────────────────────────────────────────────── *@
-    @if (_stats is not null)
-    {
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-md-3">
-                <div class="card shadow-sm border-0 bg-primary bg-opacity-10">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <p class="text-muted small mb-1 fw-semibold">Total Issued</p>
-                                <h2 class="fw-bold mb-0">@_stats.TotalIssued</h2>
-                            </div>
-                            <div class="fs-2 opacity-50">📄</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card shadow-sm border-0 bg-success bg-opacity-10">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <p class="text-muted small mb-1 fw-semibold">This Month</p>
-                                <h2 class="fw-bold mb-0">@_stats.IssuedThisMonth</h2>
-                            </div>
-                            <div class="fs-2 opacity-50">📅</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card shadow-sm border-0 bg-info bg-opacity-10">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <p class="text-muted small mb-1 fw-semibold">Employees Covered</p>
-                                <h2 class="fw-bold mb-0">@_stats.UniqueEmployeesCovered</h2>
-                            </div>
-                            <div class="fs-2 opacity-50">👥</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card shadow-sm border-0 bg-danger bg-opacity-10">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <p class="text-muted small mb-1 fw-semibold">Revoked</p>
-                                <h2 class="fw-bold mb-0">@_stats.TotalRevoked</h2>
-                            </div>
-                            <div class="fs-2 opacity-50">🚫</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
-
-    @* ── Filter bar ───────────────────────────────────────────────────────── *@
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-5">
-                    <label class="form-label fw-semibold small mb-1">Search</label>
-                    <input type="text" class="form-control"
-                           placeholder="Employee name, code, document type..."
-                           @bind="_search" @bind:event="oninput" />
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold small mb-1">Document Type</label>
-                    <select class="form-select" @bind="_filterDocTypeId">
-                        <option value="">All Types</option>
-                        @foreach (var t in _docTypes)
+                    <button class="btn btn-sm btn-light" @onclick="AutoGenerateDocuments" disabled="@isAutoGenerating">
+                        @if (isAutoGenerating)
                         {
-                            <option value="@t.DocumentTypeId">@t.Name</option>
+                            <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">
-                        Clear Filters
+                        🤖 Auto-Generate Missing
                     </button>
-                </div>
+                }
             </div>
-        </div>
-    </div>
+            <div class="card-body">
+                @if (isLoading)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p>Loading...</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- AI Suggestions Section -->
+                    @if (selectedEmployeeId != null && selectedEmployeeId != "" && aiSuggestions.Any())
+                    {
+                        <div class="alert alert-info mb-3">
+                            <strong>🤖 AI Suggestions:</strong>
+                            <ul class="mb-0 mt-2">
+                                @foreach (var suggestion in aiSuggestions)
+                                {
+                                    <li>
+                                        <strong>@suggestion.DocumentType</strong> - @suggestion.Reason
+                                        <button class="btn btn-sm btn-outline-primary ms-2" @onclick="() => UseSuggestion(suggestion)">
+                                            Generate
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
 
-    @* ── Documents table ──────────────────────────────────────────────────── *@
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 fw-bold">
-                Issued Documents
-                <span class="badge bg-secondary ms-2 fw-normal">@FilteredDocs.Count()</span>
-            </h5>
-        </div>
-        <div class="card-body p-0">
-
-            @if (_isLoading)
-            {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-muted small">Loading documents...</p>
-                </div>
-            }
-            else if (!FilteredDocs.Any())
-            {
-                <div class="text-center py-5 text-muted">
-                    <div class="fs-1 mb-2">📂</div>
-                    <p class="mb-1 fw-semibold">No documents issued yet.</p>
-                    <p class="small">Click <strong>Issue Document</strong> to get started.</p>
-                </div>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light text-muted text-uppercase small">
-                            <tr>
-                                <th class="ps-3">Employee</th>
-                                <th>Document Type</th>
-                                <th>File</th>
-                                <th>Doc Date</th>
-                                <th>Issued By</th>
-                                <th>Issued On</th>
-                                <th class="text-center">Ver.</th>
-                                <th class="text-center pe-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var doc in FilteredDocs)
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Select Document Template</label>
+                        <select @bind="selectedTemplateId" class="form-select">
+                            <option value="">-- Select Template --</option>
+                            @foreach (var template in templates)
                             {
-                                <tr>
-                                    <td class="ps-3">
-                                        <div class="fw-semibold">@doc.EmployeeName</div>
-                                        <small class="text-muted">@doc.EmployeeCode · @doc.DepartmentName</small>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-2">
-                                            @doc.DocumentTypeName
-                                        </span>
-                                        <div class="text-muted small">@doc.Category</div>
-                                    </td>
-                                    <td>
-                                        <div class="text-truncate fw-semibold" style="max-width:170px;"
-                                             title="@doc.OriginalFileName">
-                                            @doc.OriginalFileName
-                                        </div>
-                                        <small class="text-muted">@doc.FileSizeDisplay</small>
-                                    </td>
-                                    <td class="text-nowrap">
-                                        @(doc.DocumentDate.HasValue
-                                                                        ? doc.DocumentDate.Value.ToString("dd MMM yyyy")
-                                                                        : "—")
-                            </td>
-                            <td>
-                                <div class="fw-semibold">@doc.IssuedByName</div>
-                                <small class="text-muted">@doc.IssuedByRole</small>
-                            </td>
-                            <td class="text-nowrap">
-                                <div>@doc.IssuedAt.ToString("dd MMM yyyy")</div>
-                                <small class="text-muted">@doc.IssuedAt.ToString("HH:mm")</small>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-secondary rounded-pill">v@doc.Version</span>
-                            </td>
-                            <td class="text-center pe-3">
-                                <div class="d-flex gap-1 justify-content-center">
-                                    <a href="@doc.FilePath"
-                                       target="_blank"
-                                       class="btn btn-sm btn-outline-primary"
-                                       title="View / Download">
-                                        ⬇
-                                    </a>
-                                    <button class="btn btn-sm btn-outline-info"
-                                            title="Re-issue (new version)"
-                                            @onclick="() => OpenReissueModal(doc)">
-                                        🔄
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            title="Revoke"
-                                            @onclick="() => OpenRevokeModal(doc)">
-                                        🚫
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                                                }
-                        </tbody>
-                    </table>
-                </div>
-            }
-
-        </div>
-    </div>
-</div>
-
-@* ═══════════════════════════════════════════════════════════════════════════
-   ISSUE / RE-ISSUE MODAL
-   ═══════════════════════════════════════════════════════════════════════════ *@
-@if (_showIssueModal)
-{
-    <div class="modal fade show d-block" tabindex="-1"
-         style="background: rgba(0,0,0,.45);">
-        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content shadow-lg border-0">
-
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold">
-                        @(_reissueTarget is null ? "➕ Issue Document to Employee" : $"🔄 Re-issue: {_reissueTarget.DocumentTypeName}")
-                    </h5>
-                    <button type="button" class="btn-close" @onclick="CloseIssueModal"
-                            disabled="@_isSaving"></button>
-                </div>
-
-                <div class="modal-body pt-2">
-
-                    @if (_issueError is not null)
-                    {
-                        <div class="alert alert-danger py-2 small">@_issueError</div>
-                    }
-
-                    @if (_reissueTarget is not null)
-                    {
-                        <div class="alert alert-info py-2 mb-3 small">
-                            Re-issuing <strong>@_reissueTarget.DocumentTypeName</strong> for
-                            <strong>@_reissueTarget.EmployeeName</strong> — this will supersede
-                            <strong>v@_reissueTarget.Version</strong>.
-                        </div>
-                    }
-
-                    @* Employee selector — shown only for fresh issue, not re-issue *@
-                    @if (_reissueTarget is null)
-                    {
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold small">
-                                    Employee <span class="text-danger">*</span>
-                                </label>
-                                <select class="form-select" @bind="_form.EmployeeId">
-                                    <option value="@Guid.Empty">— Select Employee —</option>
-                                    @foreach (var emp in _employees)
-                                    {
-                                        <option value="@emp.EmployeeId">
-                                            @emp.Name (@emp.EmployeeCode) · @emp.Department
-                                        </option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold small">
-                                    Document Type <span class="text-danger">*</span>
-                                </label>
-                                <select class="form-select" @bind="_form.DocumentTypeId">
-                                    <option value="@Guid.Empty">— Select Document Type —</option>
-                                    @foreach (var t in _docTypes)
-                                    {
-                                        <option value="@t.DocumentTypeId">@t.Name</option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-                    }
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Document Number</label>
-                            <input type="text" class="form-control"
-                                   placeholder="e.g. OL-2024-001"
-                                   @bind="_form.DocumentNumber" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Document Date</label>
-                            <input type="date" class="form-control"
-                                   @bind="_formDocDate"
-                                   @bind:format="yyyy-MM-dd" />
-                        </div>
+                                <option value="@template.TemplateId">@template.Name (@template.Category)</option>
+                            }
+                        </select>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">
-                            Upload File <span class="text-danger">*</span>
-                            <span class="text-muted fw-normal"> (PDF, DOCX, JPG — max 20 MB)</span>
-                        </label>
-                        <InputFile OnChange="OnFileChanged"
-                                   class="form-control"
-                                   accept=".pdf,.docx,.doc,.jpg,.jpeg,.png" />
-                        @if (_selectedFile is not null)
-                        {
-                            <small class="text-muted mt-1 d-block">
-                                ✅ @_selectedFile.Name
-                                (@(_selectedFile.Size >= 1_048_576
-                                                        ? $"{_selectedFile.Size / 1_048_576.0:F1} MB"
-                                                        : $"{_selectedFile.Size / 1024.0:F0} KB"))
-                    </small>
-                                        }
+                        <label class="form-label fw-bold">Select Employee</label>
+                        <select @bind="selectedEmployeeId" class="form-select">
+                            <option value="">-- Select Employee --</option>
+                            @foreach (var emp in eligibleEmployees)
+                            {
+                                <option value="@emp.EmployeeId">@emp.FirstName @emp.LastName (@emp.EmployeeCode)</option>
+                            }
+                        </select>
                     </div>
 
-                    <div class="mb-1">
-                        <label class="form-label fw-semibold small">Internal Remarks</label>
-                        <textarea class="form-control" rows="2"
-                                  placeholder="Optional internal notes (not shown to employee)..."
-                                  @bind="_form.Remarks"></textarea>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Custom Data (Optional)</label>
+                        <textarea @bind="customDataJson" class="form-control" rows="6"
+                                  placeholder='{
+              "JoiningDate": "2024-06-15",
+              "Designation": "Software Engineer",
+              "Department": "Engineering"
+            }'></textarea>
+                        <small class="text-muted">Enter JSON key-value pairs for template placeholders. Example: {"key": "value"}</small>
                     </div>
 
-                </div>
-
-                <div class="modal-footer border-0">
-                    <button class="btn btn-secondary" @onclick="CloseIssueModal"
-                            disabled="@_isSaving">
-                        Cancel
-                    </button>
-                    <button class="btn btn-primary" @onclick="SubmitIssue"
-                            disabled="@_isSaving">
-                        @if (_isSaving)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
-                        }
-                        @(_reissueTarget is null ? "Issue Document" : "Re-issue Document")
-                    </button>
-                </div>
-
-            </div>
-        </div>
-    </div>
-}
-
-@* ═══════════════════════════════════════════════════════════════════════════
-   REVOKE MODAL
-   ═══════════════════════════════════════════════════════════════════════════ *@
-@if (_showRevokeModal && _revokeTarget is not null)
-{
-    <div class="modal fade show d-block" tabindex="-1"
-         style="background: rgba(0,0,0,.45);">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content shadow-lg border-0">
-
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold text-danger">🚫 Revoke Document</h5>
-                    <button type="button" class="btn-close" @onclick="CloseRevokeModal"
-                            disabled="@_isSaving"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="alert alert-warning py-2 small mb-3">
-                        You are revoking <strong>@_revokeTarget.DocumentTypeName</strong>
-                        for <strong>@_revokeTarget.EmployeeName</strong>.
-                        The employee will no longer see this document.
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Remarks (Internal Notes)</label>
+                        <textarea @bind="remarks" class="form-control" rows="2"></textarea>
                     </div>
-                    @if (_revokeError is not null)
+
+                    <div class="btn-group w-100">
+                        <button class="btn btn-primary" @onclick="GenerateDocument" disabled="@isGenerating">
+                            @if (isGenerating)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            @(isGenerating ? "Generating..." : "Generate Document")
+                        </button>
+
+                        <button class="btn btn-success" @onclick="GenerateDocumentWithAI" disabled="@isGenerating">
+                            @if (isGenerating)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            ✨ Generate with AI
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(resultMessage))
                     {
-                        <div class="alert alert-danger py-2 small">@_revokeError</div>
+                        <div class="alert @(resultMessage.Contains("✅") ? "alert-success" : "alert-danger") mt-3">
+                            @resultMessage
+                        </div>
                     }
-                    <label class="form-label fw-semibold small">
-                        Reason <span class="text-danger">*</span>
-                    </label>
-                    <textarea class="form-control" rows="3"
-                              placeholder="Explain why this document is being revoked..."
-                              @bind="_revokeReason"></textarea>
-                </div>
+                }
+            </div>
+        </div>
+    </div>
 
-                <div class="modal-footer border-0">
-                    <button class="btn btn-secondary" @onclick="CloseRevokeModal"
-                            disabled="@_isSaving">
-                        Cancel
-                    </button>
-                    <button class="btn btn-danger" @onclick="SubmitRevoke"
-                            disabled="@_isSaving">
-                        @if (_isSaving)
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">📋 Available Placeholders</h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">Common placeholders you can use:</p>
+                <ul class="small">
+                    <li><code>{{EmployeeName}}</code> - Full name</li>
+                    <li><code>{{FirstName}}</code> - First name</li>
+                    <li><code>{{LastName}}</code> - Last name</li>
+                    <li><code>{{EmployeeCode}}</code> - Employee ID</li>
+                    <li><code>{{Designation}}</code> - Job title</li>
+                    <li><code>{{Department}}</code> - Department name</li>
+                    <li><code>{{JoiningDate}}</code> - Joining date</li>
+                    <li><code>{{CurrentDate}}</code> - Today's date</li>
+                    <li><code>{{OrganizationName}}</code> - Company name</li>
+                    <li><code>{{GeneratedBy}}</code> - Your name</li>
+                </ul>
+                <hr />
+                <p class="small text-muted">Custom placeholders depend on the template selected.</p>
+            </div>
+        </div>
+
+        @if (selectedEmployeeId != null && selectedEmployeeId != "" && aiSuggestions.Any())
+        {
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">🤖 AI Smart Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small">Based on employee data, AI recommends:</p>
+                    <ul class="list-unstyled">
+                        @foreach (var suggestion in aiSuggestions)
                         {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <li class="mb-2">
+                                <span class="badge bg-primary me-2">Priority @suggestion.Priority</span>
+                                <strong>@suggestion.DocumentType</strong>
+                                <br />
+                                <small class="text-muted">@suggestion.Reason</small>
+                            </li>
                         }
-                        Confirm Revoke
-                    </button>
+                    </ul>
                 </div>
-
             </div>
-        </div>
+        }
     </div>
-}
-
-@* ── Toast notification ───────────────────────────────────────────────────── *@
-@if (_toast is not null)
-{
-    <div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999;">
-        <div class="toast show align-items-center border-0 text-white @(_toastError ? "bg-danger" : "bg-success")">
-            <div class="d-flex">
-                <div class="toast-body fw-semibold">@_toast</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                        @onclick='() => _toast = null'></button>
-            </div>
-        </div>
-    </div>
-}
+</div>
 
 @code {
+    private List<OrgDocumentTemplate> templates = new();
+    private List<Employee> eligibleEmployees = new();
+    private List<AIDocumentSuggestion> aiSuggestions = new();
+    private string selectedTemplateId = "";
+    private string selectedEmployeeId = "";
+    private string customDataJson = "";
+    private string remarks = "";
+    private bool isLoading = true;
+    private bool isGenerating = false;
+    private bool isAutoGenerating = false;
+    private bool isOrgAdmin = false;
+    private string resultMessage = "";
 
-    // ── Identity ─────────────────────────────────────────────────────────────
-    private bool _isOrgAdmin;
-    private string _callerUserId = default!;
-    private string _callerRole = default!;
-    private Guid _organizationId;
-    private Guid? _callerDeptId;   // null when OrgAdmin
-
-    // ── Data ─────────────────────────────────────────────────────────────────
-    private bool _isLoading = true;
-    private List<OrgGeneratedDocumentListDto> _docs = new();
-    private List<DocumentType> _docTypes = new();
-    private List<Humatrix_HRMS.DTOs.EmployeeListDto> _employees = new();
-    private OrgDocumentStatsDto? _stats;
-
-    // ── Filters ───────────────────────────────────────────────────────────────
-    private string _search = "";
-    private string _filterDocTypeId = "";
-
-    private IEnumerable<OrgGeneratedDocumentListDto> FilteredDocs =>
-        _docs.Where(d =>
-        {
-            if (!string.IsNullOrWhiteSpace(_search))
-            {
-                var t = _search.Trim().ToLowerInvariant();
-                if (!d.EmployeeName.ToLowerInvariant().Contains(t) &&
-                    !d.EmployeeCode.ToLowerInvariant().Contains(t) &&
-                    !d.DocumentTypeName.ToLowerInvariant().Contains(t))
-                    return false;
-            }
-            if (!string.IsNullOrEmpty(_filterDocTypeId) &&
-                Guid.TryParse(_filterDocTypeId, out var dtId))
-            {
-                if (d.OrgDocumentId == Guid.Empty) return true; // safety
-                if (_docTypes.FirstOrDefault(x => x.DocumentTypeId == dtId)?.Name != d.DocumentTypeName)
-                    return false;
-            }
-            return true;
-        });
-
-    // ── Issue modal state ─────────────────────────────────────────────────────
-    private bool _showIssueModal;
-    private bool _isSaving;
-    private string? _issueError;
-    private OrgDocumentIssueDto _form = new();
-    private DateOnly? _formDocDate;
-    private IBrowserFile? _selectedFile;
-    private OrgGeneratedDocumentListDto? _reissueTarget;
-
-    // ── Revoke modal state ────────────────────────────────────────────────────
-    private bool _showRevokeModal;
-    private OrgGeneratedDocumentListDto? _revokeTarget;
-    private string _revokeReason = "";
-    private string? _revokeError;
-
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    private string? _toast;
-    private bool _toastError;
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var principal = authState.User;
+        await LoadData();
+    }
 
-        _isOrgAdmin = principal.IsInRole("OrgAdmin");
-        _callerRole = _isOrgAdmin ? "OrgAdmin" : "HR";
-        _callerUserId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? throw new InvalidOperationException("User not authenticated.");
-
-        if (_isOrgAdmin)
+    private async Task LoadData()
+    {
+        try
         {
-            var ctx = await CurrentUserService.GetOrgDashboardContextAsync();
-            if (ctx is null) { Nav.NavigateTo("/"); return; }
-            _organizationId = ctx.OrganizationId;
-            _callerDeptId = null;
+            isLoading = true;
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null)
+            {
+                resultMessage = "User not authenticated. Please login again.";
+                return;
+            }
+
+            isOrgAdmin = await CurrentUserService.IsInRoleAsync("OrgAdmin");
+            var roles = isOrgAdmin ? "OrgAdmin" : "HR";
+
+            templates = await DocumentService.GetAllTemplatesAsync(user.OrganizationId.Value);
+            eligibleEmployees = await DocumentService.GetEligibleRecipientsForDocumentAsync(
+                user.OrganizationId.Value, user.Id, roles);
+        }
+        catch (Exception ex)
+        {
+            resultMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    // Handle employee selection without @onchange
+    // We'll use a separate method that gets called when selectedEmployeeId changes
+    // Add this property to detect changes
+    private string _previousEmployeeId = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender && _previousEmployeeId != selectedEmployeeId)
+        {
+            _previousEmployeeId = selectedEmployeeId;
+            if (!string.IsNullOrEmpty(selectedEmployeeId))
+            {
+                await LoadAISuggestions();
+                StateHasChanged();
+            }
+            else
+            {
+                aiSuggestions.Clear();
+                StateHasChanged();
+            }
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task LoadAISuggestions()
+    {
+        try
+        {
+            aiSuggestions = await DocumentService.GetAIDocumentSuggestionsAsync(Guid.Parse(selectedEmployeeId));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading AI suggestions: {ex.Message}");
+            aiSuggestions = new List<AIDocumentSuggestion>();
+        }
+    }
+
+    private async Task UseSuggestion(AIDocumentSuggestion suggestion)
+    {
+        // Find template ID for the suggested document type
+        var template = templates.FirstOrDefault(t => t.Name == suggestion.DocumentType);
+        if (template != null)
+        {
+            selectedTemplateId = template.TemplateId.ToString();
+
+            // Pre-fill custom data from suggestion
+            if (suggestion.SuggestedData.Any())
+            {
+                customDataJson = System.Text.Json.JsonSerializer.Serialize(suggestion.SuggestedData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            }
+
+            // Auto-generate with AI
+            await GenerateDocumentWithAI();
         }
         else
         {
-            var ctx = await CurrentUserService.GetHrDashboardContextAsync();
-            if (ctx is null) { Nav.NavigateTo("/"); return; }
-            _organizationId = ctx.OrganizationId;
-            _callerDeptId = ctx.DepartmentId;
+            resultMessage = $"❌ Template '{suggestion.DocumentType}' not found. Please create it first.";
         }
-
-        await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    private async Task GenerateDocument()
     {
-        _isLoading = true;
+        if (string.IsNullOrEmpty(selectedTemplateId))
+        {
+            resultMessage = "Please select a template";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(selectedEmployeeId))
+        {
+            resultMessage = "Please select an employee";
+            return;
+        }
+
+        isGenerating = true;
+        resultMessage = "";
+
         try
         {
-            _docTypes = await OrgDocService.GetOrgDocumentTypesAsync(_organizationId);
-            _stats = await OrgDocService.GetStatsAsync(_organizationId, _callerDeptId);
-            _docs = await OrgDocService.GetIssuedDocumentsAsync(_organizationId, _callerDeptId);
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null)
+            {
+                resultMessage = "User not authenticated";
+                return;
+            }
 
-            // Load employee list scoped to caller's role
-            // GetEmployeesForListAsync auto-scopes HR to their own department
-            var (items, _) = await EmployeeService.GetEmployeesForListAsync(
-                pageSize: 1000);   // large page — we just need the full scoped list
+            var isOrgAdminUser = await CurrentUserService.IsInRoleAsync("OrgAdmin");
+            var roles = isOrgAdminUser ? "OrgAdmin" : "HR";
 
-            _employees = items;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
+            Dictionary<string, string>? customData = null;
+            if (!string.IsNullOrEmpty(customDataJson))
+            {
+                try
+                {
+                    var cleanedJson = System.Text.RegularExpressions.Regex.Replace(
+                        customDataJson,
+                        @",(\s*[}\]])",
+                        "$1");
+                    customData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(cleanedJson);
+                }
+                catch (Exception jsonEx)
+                {
+                    resultMessage = $"Invalid JSON format. Error: {jsonEx.Message}";
+                    return;
+                }
+            }
 
-    // ── Filters ───────────────────────────────────────────────────────────────
-    private void ClearFilters()
-    {
-        _search = "";
-        _filterDocTypeId = "";
-    }
+            var dto = new OrgDocumentGenerationDto
+            {
+                TemplateId = Guid.Parse(selectedTemplateId),
+                RecipientEmployeeId = Guid.Parse(selectedEmployeeId),
+                CustomData = customData,
+                Remarks = remarks,
+                SendEmailNotification = true
+            };
 
-    // ── Issue modal ───────────────────────────────────────────────────────────
-    private void OpenIssueModal()
-    {
-        _reissueTarget = null;
-        _form = new OrgDocumentIssueDto();
-        _formDocDate = null;
-        _selectedFile = null;
-        _issueError = null;
-        _showIssueModal = true;
-    }
+            var result = await DocumentService.GenerateDocumentAsync(
+                dto, user.OrganizationId.Value, user.Id, roles);
 
-    private void OpenReissueModal(OrgGeneratedDocumentListDto doc)
-    {
-        _reissueTarget = doc;
-        _form = new OrgDocumentIssueDto
-        {
-            EmployeeId = doc.EmployeeId,
-            DocumentTypeId = _docTypes.FirstOrDefault(t => t.Name == doc.DocumentTypeName)
-                             ?.DocumentTypeId ?? Guid.Empty
-        };
-        _formDocDate = null;
-        _selectedFile = null;
-        _issueError = null;
-        _showIssueModal = true;
-    }
+            resultMessage = $"✅ Document generated successfully! Document ID: {result.DocumentId}";
 
-    private void CloseIssueModal()
-    {
-        _showIssueModal = false;
-        _reissueTarget = null;
-    }
+            // Reset form
+            selectedTemplateId = "";
+            selectedEmployeeId = "";
+            customDataJson = "";
+            remarks = "";
+            aiSuggestions.Clear();
 
-    private void OnFileChanged(InputFileChangeEventArgs e) =>
-        _selectedFile = e.File;
-
-    private async Task SubmitIssue()
-    {
-        _issueError = null;
-
-        if (_form.EmployeeId == Guid.Empty)
-        { _issueError = "Please select an employee."; return; }
-
-        if (_form.DocumentTypeId == Guid.Empty)
-        { _issueError = "Please select a document type."; return; }
-
-        if (_selectedFile is null)
-        { _issueError = "Please choose a file to upload."; return; }
-
-        _form.File = _selectedFile;
-        _form.DocumentDate = _formDocDate;
-
-        _isSaving = true;
-        try
-        {
-            await OrgDocService.IssueAsync(
-                _form,
-                _organizationId,
-                _callerUserId,
-                _callerRole,
-                _callerDeptId);
-
-            CloseIssueModal();
-            await LoadAsync();
-            ShowToast("Document issued successfully.", false);
+            await LoadData();
         }
         catch (Exception ex)
         {
-            _issueError = ex.Message;
+            resultMessage = $"❌ Error: {ex.Message}";
         }
         finally
         {
-            _isSaving = false;
+            isGenerating = false;
         }
     }
 
-    // ── Revoke modal ──────────────────────────────────────────────────────────
-    private void OpenRevokeModal(OrgGeneratedDocumentListDto doc)
+    private async Task GenerateDocumentWithAI()
     {
-        _revokeTarget = doc;
-        _revokeReason = "";
-        _revokeError = null;
-        _showRevokeModal = true;
-    }
+        if (string.IsNullOrEmpty(selectedTemplateId))
+        {
+            resultMessage = "Please select a template";
+            return;
+        }
 
-    private void CloseRevokeModal()
-    {
-        _showRevokeModal = false;
-        _revokeTarget = null;
-    }
+        if (string.IsNullOrEmpty(selectedEmployeeId))
+        {
+            resultMessage = "Please select an employee";
+            return;
+        }
 
-    private async Task SubmitRevoke()
-    {
-        _revokeError = null;
+        isGenerating = true;
+        resultMessage = "";
 
-        if (string.IsNullOrWhiteSpace(_revokeReason))
-        { _revokeError = "Revocation reason is required."; return; }
-
-        _isSaving = true;
         try
         {
-            await OrgDocService.RevokeAsync(
-                _revokeTarget!.OrgDocumentId,
-                _organizationId,
-                _callerUserId,
-                _callerRole,
-                _revokeReason,
-                _callerDeptId);
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null)
+            {
+                resultMessage = "User not authenticated";
+                return;
+            }
 
-            CloseRevokeModal();
-            await LoadAsync();
-            ShowToast("Document revoked.", false);
+            var isOrgAdminUser = await CurrentUserService.IsInRoleAsync("OrgAdmin");
+            var roles = isOrgAdminUser ? "OrgAdmin" : "HR";
+
+            Dictionary<string, string>? customData = null;
+            if (!string.IsNullOrEmpty(customDataJson))
+            {
+                try
+                {
+                    var cleanedJson = System.Text.RegularExpressions.Regex.Replace(
+                        customDataJson,
+                        @",(\s*[}\]])",
+                        "$1");
+                    customData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(cleanedJson);
+                }
+                catch (Exception jsonEx)
+                {
+                    resultMessage = $"Invalid JSON format. Error: {jsonEx.Message}";
+                    return;
+                }
+            }
+
+            var result = await DocumentService.GenerateDocumentWithAIAsync(
+                Guid.Parse(selectedTemplateId),
+                Guid.Parse(selectedEmployeeId),
+                user.Id,
+                roles,
+                customData,
+                true);
+
+            resultMessage = $"✨ AI-generated document successfully! Document ID: {result.DocumentId}";
+
+            // Reset form
+            selectedTemplateId = "";
+            selectedEmployeeId = "";
+            customDataJson = "";
+            remarks = "";
+            aiSuggestions.Clear();
+
+            await LoadData();
         }
         catch (Exception ex)
         {
-            _revokeError = ex.Message;
+            resultMessage = $"❌ AI Generation Error: {ex.Message}";
         }
         finally
         {
-            _isSaving = false;
+            isGenerating = false;
         }
     }
 
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    private void ShowToast(string msg, bool error)
+    private async Task AutoGenerateDocuments()
     {
-        _toast = msg;
-        _toastError = error;
-        _ = Task.Delay(4000).ContinueWith(_ =>
+        isAutoGenerating = true;
+        resultMessage = "";
+
+        try
         {
-            _toast = null;
-            InvokeAsync(StateHasChanged);
-        });
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null)
+            {
+                resultMessage = "User not authenticated";
+                return;
+            }
+
+            var result = await DocumentService.AutoGenerateRequiredDocumentsAsync(user.OrganizationId.Value);
+            resultMessage = $"✅ Auto-generated {result} documents for employees!";
+
+            // Refresh data
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            resultMessage = $"❌ Auto-generation Error: {ex.Message}";
+        }
+        finally
+        {
+            isAutoGenerating = false;
+        }
     }
 }
