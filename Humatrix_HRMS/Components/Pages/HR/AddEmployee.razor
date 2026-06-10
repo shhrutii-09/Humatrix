@@ -15,7 +15,6 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>Add Employee | Humatrix HRMS</PageTitle>
 
@@ -23,16 +22,17 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark mb-1" style="font-size: 2rem;">Add New Employee</h2>
-            <p class="text-muted small mb-0">Onboard a new team member to your department.</p>
+            <p class="text-muted small mb-0">Define a new employee structure and trigger an activation email.</p>
         </div>
         <button class="btn bg-white border text-secondary fw-bold px-4 py-2 text-uppercase shadow-sm text-back-btn"
-                @onclick='() => Nav.NavigateTo("/hr/dashboard")'>
-            Back to Dashboard
+                @onclick='() => Nav.NavigateTo("/employees")'>
+            Back to Employees
         </button>
     </div>
 
     <div class="card shadow-sm border-0 rounded-3 bg-white mb-4 custom-form-card">
         <div class="card-body p-4">
+
             <EditForm Model="model" OnValidSubmit="HandleSubmit" FormName="hrAddEmployeeForm">
                 <DataAnnotationsValidator />
 
@@ -52,9 +52,12 @@
                             </div>
                         </div>
                         <div class="mb-4">
-                            <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Email Address</label>
-                            <InputText @bind-Value="model.Email" type="email" class="form-control custom-dept-input shadow-none" placeholder="employee@company.com" disabled="@isSubmitting" />
+                            <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Corporate Email Address</label>
+                            <InputText @bind-Value="model.Email" type="email" class="form-control custom-dept-input shadow-none" placeholder="employee@yopmail.com" disabled="@isSubmitting" />
                             <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1" />
+                            <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                                *Employee will receive activation mail on Yopmail.
+                            </small>
                         </div>
                     </div>
 
@@ -94,27 +97,46 @@
                         @if (isSubmitting)
                         {
                             <span class="spinner-border spinner-border-sm me-2"></span>
-                            <span>Processing...</span>
- }
+                            <span>Provisioning Employee...</span>
+                        }
                         else
                         {
-                            <i class="bi bi-person-plus me-2"></i>
-                            <span>ADD EMPLOYEE</span>
- }
+                            <i class="bi bi-shield-check me-2"></i>
+                            <span>CREATE EMPLOYEE</span>
+                        }
+                    </button>
+                    <button type="button" class="btn btn-light border bg-white text-secondary fw-medium px-4 py-2" @onclick='() => Nav.NavigateTo("/employees")'>
+                        Cancel
                     </button>
                 </div>
             </EditForm>
 
-            @if (!string.IsNullOrEmpty(link))
+            @if (isCreatedSuccessfully)
             {
-                <div class="alert alert-success mt-4 border-0 shadow-sm p-3">
-                    <strong>Success!</strong> Employee created. <button class="btn btn-sm btn-link" @onclick="CopyLinkToClipboard">Copy Link</button>
+                <div class="alert alert-premium-success mt-4 border-0 shadow-sm p-4 animate__animated animate__fadeIn"
+                     style="background-color: #e6ffed;">
+                    <div class="d-flex align-items-start">
+                        <div class="success-icon-badge me-3">
+                            <i class="bi bi-check-circle-fill fs-3 text-success"></i>
+                        </div>
+                        <div>
+                            <h5 class="text-success fw-bold mb-2">Employee Account Created Successfully!</h5>
+                            <p class="mb-1 text-dark">Employee activation mail has been sent successfully.</p>
+                            <p class="mb-0 text-muted small">Please check the provided Yopmail inbox and activate the employee account.</p>
+                        </div>
+                    </div>
                 </div>
             }
 
             @if (!string.IsNullOrEmpty(error))
             {
-                <div class="alert alert-danger mt-4">@error</div>
+                <div class="alert alert-premium-danger mt-4 shadow-sm border-0 d-flex align-items-center" style="background-color: #fbebeb; color: #dc3545;">
+                    <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+                    <div>
+                        <h6 class="mb-0 fw-bold">System Registration Blocked</h6>
+                        <span class="small opacity-90">@error</span>
+                    </div>
+                </div>
             }
         </div>
     </div>
@@ -135,23 +157,47 @@
         font-size: 0.76rem !important;
         font-weight: 700 !important;
         color: #94a3b8 !important;
+        letter-spacing: 0.8px;
     }
 
     .input-label {
         font-size: 0.72rem !important;
         font-weight: 700 !important;
         color: #64748b !important;
+        letter-spacing: 0.6px;
     }
 
     .custom-dept-input {
         background-color: #f8fafc !important;
         border: 1px solid #e2e8f0 !important;
         border-radius: 8px !important;
+        padding: 0.7rem 1rem;
     }
 
     .btn-create-dept {
         background-color: #5c4ac7 !important;
         border-radius: 8px !important;
+        font-size: 0.785rem !important;
+    }
+
+        .btn-create-dept:hover {
+            background-color: #4b3bb3 !important;
+        }
+
+    .alert-premium-success {
+        border: 1px solid rgba(22, 163, 74, 0.15) !important;
+        border-radius: 12px;
+    }
+
+    .success-icon-badge {
+        color: #16a34a;
+        background: rgba(22, 163, 74, 0.1);
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 </style>
 
@@ -160,10 +206,9 @@
     List<DesignationDto> designations = new();
     List<Shift> shifts = new();
     string? departmentName;
-    string? link;
     string? error;
     bool isSubmitting;
-    bool showCopiedFeedback;
+    bool isCreatedSuccessfully = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -180,31 +225,32 @@
                 shifts = await ShiftService.GetAllShiftsAsync();
             }
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch { error = "Failed to load foundational server parameters."; }
     }
 
     private async Task HandleSubmit()
     {
         if (isSubmitting) return;
+
         isSubmitting = true;
+        error = null;
+        isCreatedSuccessfully = false;
+
         try
         {
             model.Role = "Employee";
-            link = await EmployeeService.CreateEmployeeAsync(model);
+            await EmployeeService.CreateEmployeeAsync(model);
+
+            isCreatedSuccessfully = true;
             model = new CreateEmployeeDto { DepartmentId = model.DepartmentId, Role = "Employee" };
         }
-        catch (Exception ex) { error = ex.Message; }
-        finally { isSubmitting = false; }
-    }
-
-    private async Task CopyLinkToClipboard()
-    {
-        if (!string.IsNullOrEmpty(link))
+        catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
-            showCopiedFeedback = true;
-            await Task.Delay(2000);
-            showCopiedFeedback = false;
+            error = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
         }
     }
 }
