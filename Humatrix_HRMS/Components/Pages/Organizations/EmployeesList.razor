@@ -64,34 +64,56 @@
         </div>
     </div>
 
-    @* Statistics Cards *@
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card p-3 shadow-sm border-0 border-start border-4 border-primary">
-                <h6 class="text-muted text-uppercase small mb-1">Total Workers</h6>
-                <h3 class="fw-bold mb-0">@stats.TotalWorkers</h3>
+    @if (UserIsOrgAdmin)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0 border-start border-4 border-primary">
+                    <h6 class="text-muted text-uppercase small mb-1">Total Workers</h6>
+                    <h3 class="fw-bold mb-0">@stats.TotalWorkers</h3>
+                </div>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card p-3 shadow-sm border-0 border-start border-4 border-indigo">
-                <h6 class="text-muted text-uppercase small mb-1">Total Employees</h6>
-                <h3 class="fw-bold mb-0 text-indigo">@stats.TotalEmployees</h3>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card p-3 shadow-sm border-0 border-start border-4 border-success">
-                <h6 class="text-muted text-uppercase small mb-1">Total HRs</h6>
-                <h3 class="fw-bold mb-0 text-success">@stats.TotalHrs</h3>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card p-3 shadow-sm border-0 border-start border-4 border-danger">
-                <h6 class="text-muted text-uppercase small mb-1">Total Inactive</h6>
-                <h3 class="fw-bold mb-0 text-danger">@stats.TotalInactive</h3>
-            </div>
-        </div>
-    </div>
 
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0 border-start border-4 border-indigo">
+                    <h6 class="text-muted text-uppercase small mb-1">Total Employees</h6>
+                    <h3 class="fw-bold mb-0 text-indigo">@stats.TotalEmployees</h3>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0 border-start border-4 border-success">
+                    <h6 class="text-muted text-uppercase small mb-1">Total HRs</h6>
+                    <h3 class="fw-bold mb-0 text-success">@stats.TotalHrs</h3>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card p-3 shadow-sm border-0 border-start border-4 border-danger">
+                    <h6 class="text-muted text-uppercase small mb-1">Total Inactive</h6>
+                    <h3 class="fw-bold mb-0 text-danger">@stats.TotalInactive</h3>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card p-3 shadow-sm border-0 border-start border-4 border-indigo">
+                    <h6 class="text-muted text-uppercase small mb-1">Total Employees</h6>
+                    <h3 class="fw-bold mb-0 text-indigo">@stats.TotalEmployees</h3>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card p-3 shadow-sm border-0 border-start border-4 border-danger">
+                    <h6 class="text-muted text-uppercase small mb-1">Total Inactive</h6>
+                    <h3 class="fw-bold mb-0 text-danger">@stats.TotalInactive</h3>
+                </div>
+            </div>
+        </div>
+    }
     <div class="row g-3 mb-4">
         <div class="@(UserIsOrgAdmin ? "col-md-4" : "col-md-6")">
             <div class="position-relative">
@@ -118,13 +140,18 @@
             </div>
         }
 
-        <div class="@(UserIsOrgAdmin ? "col-md-4" : "col-md-6")">
-            <select class="form-select custom-search-input shadow-none px-3" @onchange="OnRoleFilterChanged" value="@filterRole">
-                <option value="">All Roles</option>
-                <option value="HR">HR</option>
-                <option value="Employee">Employee</option>
-            </select>
-        </div>
+        @if (UserIsOrgAdmin)
+        {
+            <div class="col-md-4">
+                <select class="form-select custom-search-input shadow-none px-3"
+                        @onchange="OnRoleFilterChanged"
+                        value="@filterRole">
+                    <option value="">All Roles</option>
+                    <option value="HR">HR</option>
+                    <option value="Employee">Employee</option>
+                </select>
+            </div>
+        }
     </div>
 
     <div class="card shadow-sm border-0 rounded-3 overflow-hidden bg-white mb-4">
@@ -265,14 +292,7 @@
                                     }
                                 </InputSelect>
                             </div>
-                            @* --- NEW: Role Change Field --- *@
-                            <div class="col-12">
-                                <label class="form-label small fw-semibold text-secondary">System Role</label>
-                                <InputSelect @bind-Value="editModel.Role" class="form-select">
-                                    <option value="Employee">Employee</option>
-                                    <option value="HR">HR</option>
-                                </InputSelect>
-                            </div>
+                           
                         </div>
                     </div>
                     <div class="modal-footer bg-light border-top border-light px-4 py-3">
