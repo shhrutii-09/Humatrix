@@ -55,10 +55,10 @@ public class DocumentEventMonitor : BackgroundService
     }
 
     private async Task CheckNewEmployeesAsync(
-    ApplicationDbContext db,
-    IOrgDocumentGenerationService documentService,
-    NotificationService notificationService,
-    UserManager<ApplicationUser> userManager)
+     ApplicationDbContext db,
+     IOrgDocumentGenerationService documentService,
+     NotificationService notificationService,
+     UserManager<ApplicationUser> userManager)
     {
         var fiveMinutesAgo = DateTime.UtcNow.AddMinutes(-5);
 
@@ -70,24 +70,11 @@ public class DocumentEventMonitor : BackgroundService
 
         foreach (var employee in newEmployees)
         {
-
-            var existingDoc = await db.OrgGeneratedDocuments
-       .AnyAsync(d => d.EmployeeId == employee.EmployeeId &&
-                     d.DocumentName == "Offer Letter" &&
-                     d.GeneratedAt > DateTime.UtcNow.AddMinutes(-10));
-
-            if (existingDoc)
-            {
-                _logger.LogInformation($"Offer Letter already generated for {employee.FirstName}, skipping");
-                continue;
-            }
-
             // CHECK FOR DUPLICATE - PREVENT MULTIPLE NOTIFICATIONS
             var existingNotification = await db.Notifications
                 .AnyAsync(n => n.UserId == employee.UserId &&
-                              n.Title == "📄 New Document" &&
+                              n.Title.Contains("New Document") &&
                               n.CreatedAt > DateTime.UtcNow.AddMinutes(-10));
-
 
             if (existingNotification)
             {
@@ -107,6 +94,7 @@ public class DocumentEventMonitor : BackgroundService
             {
                 try
                 {
+                    // This method already sends its own notification
                     await documentService.GenerateDocumentWithAIAsync(
                         templateId: template.TemplateId,
                         recipientEmployeeId: employee.EmployeeId,
@@ -121,12 +109,8 @@ public class DocumentEventMonitor : BackgroundService
 
                     _logger.LogInformation($"✅ Generated Offer Letter for {employee.FirstName} {employee.LastName}");
 
-                    // CLEAN, SHORT NOTIFICATION - NO HTML
-                    await notificationService.CreateNotificationAsync(
-                        employee.UserId,
-                        "📄 New Document",
-                        $"Your Offer Letter is ready. View it in My Documents.",
-                        "/employee/docu");
+                    // ❌ REMOVE THIS - Service already sends notification
+                    // await notificationService.CreateNotificationAsync(...);
                 }
                 catch (Exception ex)
                 {
@@ -135,7 +119,6 @@ public class DocumentEventMonitor : BackgroundService
             }
         }
     }
-
     private async Task CheckProbationCompletionAsync(
         ApplicationDbContext db,
         IOrgDocumentGenerationService documentService,

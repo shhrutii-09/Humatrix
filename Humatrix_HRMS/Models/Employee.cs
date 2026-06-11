@@ -23,6 +23,11 @@ namespace Humatrix_HRMS.Models
         public string? Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
 
+        public bool OnboardingDocumentsProcessed { get; set; } = false;
+
+        // Add to Employee model
+        public DateTime? LastBirthdayNotificationSent { get; set; }
+
         // Add to Employee.cs
         public DateTime? LastWorkingDay { get; set; }
         public string? ExitReason { get; set; }

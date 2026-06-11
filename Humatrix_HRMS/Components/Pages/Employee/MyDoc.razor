@@ -1,4 +1,5 @@
-﻿@page "/employee/docu"
+﻿@* Pages/Employee/MyDoc.razor *@
+@page "/employee/docu"
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "Employee,HR")]
 @using Humatrix_HRMS.Models.Documents
@@ -9,141 +10,195 @@
 @inject EmployeeService EmployeeService
 @inject CurrentUserService CurrentUserService
 
-<h3>📁 My Organization Documents</h3>
+<PageTitle>My Documents — Humatrix HRMS</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="mb-0 fw-semibold">My Documents</h4>
+        <small class="text-muted">Documents issued to you by the organization</small>
+    </div>
+    @if (documents?.Any() == true)
+    {
+        <span class="badge bg-primary rounded-pill">@documents.Count document@(documents.Count == 1 ? "" : "s")</span>
+    }
+</div>
+
+<!-- Toast alert -->
+@if (!string.IsNullOrEmpty(toastMessage))
+{
+    <div class="alert @(toastIsError ? "alert-danger" : "alert-success") alert-dismissible fade show d-flex align-items-center gap-2 mb-4"
+         role="alert">
+        <span>@(toastIsError ? "❌" : "✅")</span>
+        <div>@toastMessage</div>
+        <button type="button" class="btn-close ms-auto" @onclick="() => toastMessage = string.Empty"></button>
+    </div>
+}
 
 @if (isLoading)
 {
     <div class="text-center py-5">
         <div class="spinner-border text-primary" role="status"></div>
-        <p>Loading documents...</p>
+        <p class="mt-2 text-muted">Loading your documents...</p>
     </div>
 }
 else if (documents == null || !documents.Any())
 {
-    <div class="alert alert-info mt-4">
-        <i class="bi bi-info-circle"></i> No organization documents have been issued to you yet.
+    <div class="text-center py-5">
+        <div class="display-6 mb-3">📁</div>
+        <h5 class="text-muted">No documents yet</h5>
+        <p class="text-muted small">Documents issued to you by HR or your organization will appear here.</p>
     </div>
 }
 else
 {
-    <div class="table-responsive mt-4">
-        <table class="table table-striped table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>Document Name</th>
-                    <th>Document Number</th>
-                    <th>Issue Date</th>
-                    <th>Issued By</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var doc in documents)
+    <!-- Filter bar -->
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        @foreach (var status in new[] { "All", "Issued", "Acknowledged", "Revoked" })
+        {
+            <button class="btn btn-sm @(activeFilter == status ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => activeFilter = status">
+                @status
+                @if (status != "All")
                 {
-                    <tr>
-                        <td>
-                            <strong>@doc.DocumentName</strong>
+                    var count = documents.Count(d => d.Status == status);
+                    if (count > 0)
+                    {
+                        <span class="badge bg-white text-primary ms-1">@count</span>
+                    }
+                }
+            </button>
+        }
+    </div>
+
+    var filtered = activeFilter == "All"
+        ? documents
+        : documents.Where(d => d.Status == activeFilter).ToList();
+
+    @if (!filtered.Any())
+    {
+        <div class="alert alert-info">
+            No documents with status "@activeFilter".
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var doc in filtered)
+            {
+                <div class="col-md-6 col-xl-4">
+                    <div class="card h-100 shadow-sm border-0 @(doc.Status == "Revoked" ? "opacity-75" : "")">
+                        <div class="card-body">
+
+                            <!-- Header row -->
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="badge text-bg-light border small">@(doc.Template?.Category ?? "Document")</span>
+                                @switch (doc.Status)
+                                {
+                                    case "Issued":
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Issued</span>
+                                        break;
+                                    case "Acknowledged":
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Acknowledged</span>
+                                        break;
+                                    case "Revoked":
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Revoked</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-secondary-subtle text-secondary">@doc.Status</span>
+                                        break;
+                                }
+                            </div>
+
+                            <!-- Document name -->
+                            <h6 class="fw-semibold mb-1">@doc.DocumentName</h6>
+                            <div class="text-muted small mb-3">
+                                <span>Ref: @doc.DocumentNumber</span>
+                                <span class="mx-1">·</span>
+                                <span>@doc.GeneratedAt.ToString("dd MMM yyyy")</span>
+                            </div>
+
                             @if (!string.IsNullOrEmpty(doc.Description))
                             {
-                                <br />
-                                <small class="text-muted">@doc.Description</small>
+                                <p class="text-muted small mb-3">@doc.Description</p>
                             }
-                        </td>
-                        <td>@doc.DocumentNumber</td>
-                        <td>@doc.GeneratedAt.ToString("dd MMM yyyy")</td>
-                        <td>@doc.GeneratedByRole</td>
-                        <td>
-                            @if (doc.Status == "Issued")
-                            {
-                                <span class="badge bg-primary">Issued</span>
-                            }
-                            else if (doc.Status == "Acknowledged")
-                            {
-                                <span class="badge bg-success">Acknowledged</span>
-                            }
-                            else if (doc.Status == "Revoked")
-                            {
-                                <span class="badge bg-danger">Revoked</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary">@doc.Status</span>
-                            }
-                        </td>
-                        <td>
-                            <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-primary me-2">
-                                <i class="bi bi-download"></i> Download
-                            </a>
-                            @if (doc.Status == "Issued")
-                            {
-                                <button class="btn btn-sm btn-outline-success" @onclick="() => AcknowledgeDocument(doc.DocumentId)">
-                                    <i class="bi bi-check2"></i> Acknowledge
-                                </button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
 
-@if (!string.IsNullOrEmpty(message))
-{
-    <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-        <i class="bi bi-check-circle"></i> @message
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-}
+                            @if (doc.Status == "Acknowledged" && doc.AcknowledgedAt.HasValue)
+                            {
+                                <div class="text-muted small mb-2">
+                                    Acknowledged on @doc.AcknowledgedAt.Value.ToString("dd MMM yyyy")
+                                </div>
+                            }
 
-@if (!string.IsNullOrEmpty(errorMessage))
-{
-    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-        <i class="bi bi-exclamation-triangle"></i> @errorMessage
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3">
+                            <div class="d-flex gap-2">
+                                <a href="@doc.FilePath" target="_blank"
+                                   class="btn btn-sm btn-outline-primary flex-fill">
+                                    View / Download
+                                </a>
+
+                                @if (doc.Status == "Issued")
+                                {
+                                    <button class="btn btn-sm btn-outline-success flex-fill"
+                                            @onclick="() => AcknowledgeDocument(doc.DocumentId)"
+                                            disabled="@(acknowledgingDocId == doc.DocumentId)">
+                                        @if (acknowledgingDocId == doc.DocumentId)
+                                        {
+                                            <span class="spinner-border spinner-border-sm"></span>
+                                        }
+                                        else
+                                        {
+                                            <span>Acknowledge</span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 }
 
 @code {
     private List<OrgGeneratedDocument>? documents;
     private bool isLoading = true;
-    private string message = "";
-    private string errorMessage = "";
+    private string activeFilter = "All";
+    private string toastMessage = "";
+    private bool toastIsError = false;
+    private Guid? acknowledgingDocId;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadDocuments();
-    }
+    protected override async Task OnInitializedAsync() => await LoadDocuments();
 
     private async Task LoadDocuments()
     {
         try
         {
             isLoading = true;
-            message = "";
-            errorMessage = "";
 
             var user = await CurrentUserService.GetUserAsync();
             if (user?.OrganizationId == null)
             {
-                errorMessage = "User not authenticated. Please login again.";
+                ShowToast("Your session has expired. Please log in again.", isError: true);
                 return;
             }
 
             var employee = await EmployeeService.GetEmployeeByUserIdAsync(user.Id);
             if (employee == null)
             {
-                errorMessage = "Employee profile not found.";
+                ShowToast("Employee profile not found. Please contact HR.", isError: true);
                 return;
             }
 
-            documents = await DocumentService.GetDocumentsForEmployeeAsync(employee.EmployeeId, user.OrganizationId.Value);
+            documents = await DocumentService.GetDocumentsForEmployeeAsync(
+                employee.EmployeeId, user.OrganizationId.Value);
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading documents: {ex.Message}";
-            Console.WriteLine($"Error loading documents: {ex.Message}");
+            ShowToast($"Unable to load documents: {ex.Message}", isError: true);
         }
         finally
         {
@@ -151,38 +206,45 @@ else
         }
     }
 
-
-//     {
-//   "JoiningDate": "2024-06-15",
-//   "Designation": "Software Engineer",
-//   "Department": "Engineering"
-// }
-
     private async Task AcknowledgeDocument(Guid documentId)
     {
+        acknowledgingDocId = documentId;
+        toastMessage = "";
+
         try
         {
             var user = await CurrentUserService.GetUserAsync();
-            var employee = await EmployeeService.GetEmployeeByUserIdAsync(user.Id);
+            if (user == null) return;
 
-            if (employee != null)
+            var employee = await EmployeeService.GetEmployeeByUserIdAsync(user.Id);
+            if (employee == null) return;
+
+            var success = await DocumentService.AcknowledgeDocumentAsync(
+                documentId, employee.EmployeeId, "Acknowledged via employee portal");
+
+            if (success)
             {
-                var result = await DocumentService.AcknowledgeDocumentAsync(documentId, employee.EmployeeId, "Acknowledged via portal");
-                if (result)
-                {
-                    message = "Document acknowledged successfully!";
-                    await LoadDocuments(); // Refresh the list
-                }
-                else
-                {
-                    errorMessage = "Failed to acknowledge document. Please try again.";
-                }
+                ShowToast("Document acknowledged successfully.");
+                await LoadDocuments();
+            }
+            else
+            {
+                ShowToast("Could not acknowledge document. Please try again.", isError: true);
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error acknowledging document: {ex.Message}";
-            Console.WriteLine($"Error acknowledging document: {ex.Message}");
+            ShowToast($"Error: {ex.Message}", isError: true);
         }
+        finally
+        {
+            acknowledgingDocId = null;
+        }
+    }
+
+    private void ShowToast(string msg, bool isError = false)
+    {
+        toastMessage = msg;
+        toastIsError = isError;
     }
 }

@@ -10,6 +10,7 @@
         public string Role { get; set; } = "";
         public string Department { get; set; } = "";
         public string? CreatedByName { get; set; }
+        public DateTime? DateOfBirth { get; set; }  // ✅ ADD THIS
 
         public string? CreatedByRole { get; set; }
         public string Designation { get; set; } = "";

@@ -82,6 +82,14 @@
                                 </small>
                             </div>
 
+                            <!-- In /org/add-hr, add this after the Email field -->
+                            <div class="mb-3">
+                                <label class="form-label-custom">Date of Birth</label>
+                                <InputDate @bind-Value="model.DateOfBirth" class="form-control premium-form-input" disabled="@isSubmitting" />
+                                <ValidationMessage For="@(() => model.DateOfBirth)" class="text-danger small mt-1 d-block fw-medium" />
+                                <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">*Used for birthday wishes and age calculation</small>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label-custom">Operational Shift Timeline</label>
                                 <div class="dropdown-box-wrapper">

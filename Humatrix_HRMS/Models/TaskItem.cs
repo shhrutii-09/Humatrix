@@ -19,6 +19,9 @@ namespace Humatrix_HRMS.Models
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
 
+        // Add to TaskItem model
+        public bool CompletionCertificateIssued { get; set; } = false;
+
         public string Priority { get; set; } = "Medium"; // Low / Medium / High
 
         public DateTime? DueDate { get; set; }

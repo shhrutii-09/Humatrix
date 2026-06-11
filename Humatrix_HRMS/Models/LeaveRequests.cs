@@ -15,6 +15,8 @@ namespace Humatrix_HRMS.Models
         public LeaveType LeaveType { get; set; } = null!;
 
         public DateTime FromDate { get; set; }
+        // Add to LeaveRequest model
+        public bool LeaveSanctionLetterIssued { get; set; } = false;
         public DateTime ToDate { get; set; }
 
         // If true, only half a day on FromDate is taken

@@ -219,6 +219,7 @@ namespace Humatrix_HRMS.Services
                 DesignationId = user.DesignationId,
                 ShiftId = profile?.ShiftId,
                 ShiftName = shift?.Name ?? "No Shift",
+                DateOfBirth = profile?.DateOfBirth,
                 IsActive = user.IsActive
             };
         }
@@ -298,6 +299,7 @@ namespace Humatrix_HRMS.Services
                 profile.DepartmentId = dto.DepartmentId ?? Guid.Empty;
                 profile.DesignationId = dto.DesignationId ?? Guid.Empty;
                 profile.ShiftId = dto.ShiftId;
+                profile.DateOfBirth = dto.DateOfBirth;  // ✅ ADD THIS LINE
 
                 await _context.SaveChangesAsync();
             }
@@ -403,6 +405,7 @@ namespace Humatrix_HRMS.Services
                     DepartmentId = u.DepartmentId,
                     DesignationId = u.DesignationId,
                     ShiftId = profile?.ShiftId,
+                    DateOfBirth = profile?.DateOfBirth,
                     ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift Assigned",
                     IsActive = u.IsActive
                 });
@@ -463,6 +466,7 @@ namespace Humatrix_HRMS.Services
                     DepartmentId = u.DepartmentId,
                     DesignationId = u.DesignationId,
                     ShiftId = profile?.ShiftId,
+                    DateOfBirth = profile?.DateOfBirth,
                     ShiftName = shifts.FirstOrDefault(s => s.ShiftId == profile?.ShiftId)?.Name ?? "No Shift Assigned",
                     IsActive = u.IsActive
                 });
@@ -530,6 +534,7 @@ namespace Humatrix_HRMS.Services
                     FirstName = dto.FirstName,
                     LastName = dto.LastName,
                     DepartmentId = dto.DepartmentId ?? Guid.Empty,
+                    DateOfBirth = dto.DateOfBirth,
                     DesignationId = dto.DesignationId ?? Guid.Empty,
                     ShiftId = dto.ShiftId,
                     EmployeeCode = await GenerateEmployeeCodeAsync(context),

@@ -85,6 +85,14 @@
                             </div>
                         </div>
 
+                        <!-- In /hr/profile - Add this after the Email field (around line 118-125) -->
+<div class="mb-4">
+    <label class="form-label small fw-bold text-muted">Date of Birth</label>
+    <InputDate @bind-Value="editModel.DateOfBirth" class="form-control shadow-sm" disabled="@(!IsSelf)" />
+    <ValidationMessage For="@(() => editModel.DateOfBirth)" class="text-danger small mt-1" />
+    <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">*Used for birthday wishes and age calculation</small>
+</div>
+
                         <!-- Section: Employment Details -->
                         <div class="d-flex align-items-center mb-3 pb-2 border-bottom mt-2">
                             <i class="bi bi-briefcase-fill text-muted me-2 fs-5"></i>
@@ -331,36 +339,37 @@
     {
         await LoadData();
     }
-
-    private async Task LoadData()
+// In /hr/profile @code section, update the LoadData method:
+private async Task LoadData()
+{
+    try
     {
-        try
+        string? emailToFetch = IsSelf ? (await CurrentUserService.GetUserAsync())?.Email : UserEmail;
+
+        if (!string.IsNullOrEmpty(emailToFetch))
         {
-            string? emailToFetch = IsSelf ? (await CurrentUserService.GetUserAsync())?.Email : UserEmail;
+            model = await EmployeeService.GetEmployeeByEmailAsync(emailToFetch);
 
-            if (!string.IsNullOrEmpty(emailToFetch))
+            if (model != null)
             {
-                model = await EmployeeService.GetEmployeeByEmailAsync(emailToFetch);
-
-                if (model != null)
+                editModel = new EditEmployeeDto
                 {
-                    editModel = new EditEmployeeDto
-                    {
-                        FirstName = model.FirstName,
-                        LastName = model.LastName,
-                        DepartmentId = model.DepartmentId,
-                        DesignationId = model.DesignationId,
-                        ShiftId = model.ShiftId,
-                        Role = model.Role
-                    };
-                }
-                else { errorMessage = "Profile not found."; }
+                    FirstName = model.FirstName,
+                    LastName = model.LastName,
+                    DepartmentId = model.DepartmentId,
+                    DesignationId = model.DesignationId,
+                    ShiftId = model.ShiftId,
+                    Role = model.Role,
+                    DateOfBirth = model.DateOfBirth  // ✅ ADD THIS LINE
+                };
             }
+            else { errorMessage = "Profile not found."; }
         }
-        catch (Exception ex) { errorMessage = "Error loading profile: " + ex.Message; }
-
-        StateHasChanged();
     }
+    catch (Exception ex) { errorMessage = "Error loading profile: " + ex.Message; }
+
+    StateHasChanged();
+}
 
     private async Task HandleUpdate()
     {

@@ -39,6 +39,7 @@
                 <div class="row g-4">
                     <div class="col-md-7 pe-md-4">
                         <h5 class="mb-4 text-secondary text-uppercase tracking-wider section-title">Basic Information</h5>
+
                         <div class="row">
                             <div class="col-md-6 mb-4">
                                 <label class="form-label small fw-bold text-uppercase tracking-wider input-label">First Name</label>
@@ -51,21 +52,21 @@
                                 <ValidationMessage For="@(() => model.LastName)" class="text-danger small mt-1" />
                             </div>
                         </div>
+
                         <div class="mb-4">
                             <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Corporate Email Address</label>
                             <InputText @bind-Value="model.Email" type="email" class="form-control custom-dept-input shadow-none" placeholder="employee@yopmail.com" disabled="@isSubmitting" />
                             <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1" />
-                            <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
-                                *Employee will receive activation mail on Yopmail.
-                            </small>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">*Employee will receive activation mail on Yopmail.</small>
                         </div>
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Date of Birth</label>
-                        <InputDate @bind-Value="model.DateOfBirth"
-                                   class="form-control custom-dept-input shadow-none"
-                                   disabled="@isSubmitting" />
-                        <ValidationMessage For="@(() => model.DateOfBirth)" class="text-danger small mt-1" />
+
+                        <!-- ✅ MOVED: Date of Birth to correct location -->
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Date of Birth</label>
+                            <InputDate @bind-Value="model.DateOfBirth" class="form-control custom-dept-input shadow-none" disabled="@isSubmitting" />
+                            <ValidationMessage For="@(() => model.DateOfBirth)" class="text-danger small mt-1" />
+                            <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">*Used for birthday wishes and age calculation</small>
+                        </div>
                     </div>
 
                     <div class="col-md-5 border-start ps-md-4">

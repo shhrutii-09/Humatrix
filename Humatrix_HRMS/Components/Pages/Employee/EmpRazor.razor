@@ -59,7 +59,12 @@
                                 <label class="form-label small fw-bold">Email Address (Read-Only)</label>
                                 <input type="text" class="form-control bg-light" value="@model.Email" disabled />
                             </div>
-
+                            <!-- After email field, add this -->
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Date of Birth</label>
+                                <InputDate @bind-Value="editModel.DateOfBirth" class="form-control" />
+                                <ValidationMessage For="@(() => editModel.DateOfBirth)" class="text-danger small" />
+                            </div>
                             <h5 class="mt-4 mb-3 text-muted border-bottom pb-2">Professional Details (Read-Only)</h5>
                             <div class="row">
                                 <div class="col-md-4 mb-3">

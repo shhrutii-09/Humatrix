@@ -71,8 +71,8 @@ builder.Services.AddSwaggerGen(c =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string not found.");
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+//builder.Services.AddDbContext<ApplicationDbContext>(options =>
+//    options.UseSqlServer(connectionString));
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
@@ -156,7 +156,9 @@ builder.Services.AddScoped<AssetService>();
 builder.Services.AddScoped<OfficeLocationService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<NotificationService>();
-builder.Services.AddHostedService<DocumentEventMonitor>();
+//builder.Services.AddHostedService<DocumentEventMonitor>();
+// Add this with your other hosted services
+builder.Services.AddHostedService<AIEventMonitor>();
 // Add AI Service
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAIDocumentService, AIDocumentService>();

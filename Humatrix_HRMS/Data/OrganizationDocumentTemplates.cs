@@ -205,7 +205,62 @@ public static class OrgDocumentTemplateSeeder
                 RequiresAcknowledgment = false,
                 CreatedAt = now,
                 CreatedByUserId = createdByUserId
-            }
+            },
+
+
+            // Add these to the templates list in SeedTemplatesForOrganizationAsync
+new OrgDocumentTemplate
+{
+    TemplateId = Guid.NewGuid(),
+    OrganizationId = organizationId,
+    Name = "Leave Sanction Letter",
+    Category = "Leave",
+    TemplateContent = GetLeaveSanctionLetterTemplate(),
+    IsActive = true,
+    DisplayOrder = 60,
+    RequiresAcknowledgment = false,
+    CreatedAt = now,
+    CreatedByUserId = createdByUserId
+},
+new OrgDocumentTemplate
+{
+    TemplateId = Guid.NewGuid(),
+    OrganizationId = organizationId,
+    Name = "Birthday Card",
+    Category = "Recognition",
+    TemplateContent = GetBirthdayCardTemplate(),
+    IsActive = true,
+    DisplayOrder = 61,
+    RequiresAcknowledgment = false,
+    CreatedAt = now,
+    CreatedByUserId = createdByUserId
+},
+new OrgDocumentTemplate
+{
+    TemplateId = Guid.NewGuid(),
+    OrganizationId = organizationId,
+    Name = "Anniversary Certificate",
+    Category = "Recognition",
+    TemplateContent = GetAnniversaryCertificateTemplate(),
+    IsActive = true,
+    DisplayOrder = 62,
+    RequiresAcknowledgment = false,
+    CreatedAt = now,
+    CreatedByUserId = createdByUserId
+},
+new OrgDocumentTemplate
+{
+    TemplateId = Guid.NewGuid(),
+    OrganizationId = organizationId,
+    Name = "Task Completion Certificate",
+    Category = "Recognition",
+    TemplateContent = GetTaskCompletionCertificateTemplate(),
+    IsActive = true,
+    DisplayOrder = 63,
+    RequiresAcknowledgment = false,
+    CreatedAt = now,
+    CreatedByUserId = createdByUserId
+}
         };
 
         await db.OrgDocumentTemplates.AddRangeAsync(templates);
@@ -315,5 +370,81 @@ public static class OrgDocumentTemplateSeeder
         return @"<h2>No Dues Certificate</h2>
 <p>{{EmployeeName}} has cleared all dues.</p>
 <p>Date: {{CurrentDate}}<br/>{{GeneratedBy}}</p>";
+    }
+
+
+
+    private static string GetLeaveSanctionLetterTemplate()
+    {
+        return @"
+<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+    <div style='text-align: center; border-bottom: 2px solid #4a6741; margin-bottom: 20px;'>
+        <h2>Leave Sanction Letter</h2>
+    </div>
+    
+    <p>Dear {{EmployeeName}},</p>
+    
+    <p>Your request for <strong>{{LeaveType}}</strong> leave has been <strong style='color: green;'>approved</strong>.</p>
+    
+    <div style='background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 8px;'>
+        <p><strong>📅 Leave Period:</strong> {{FromDate}} to {{ToDate}}</p>
+        <p><strong>📊 Total Days:</strong> {{TotalDays}} day(s)</p>
+        <p><strong>📝 Reason:</strong> {{Reason}}</p>
+    </div>
+    
+    <p>Please ensure all pending work is handed over before proceeding on leave.</p>
+    
+    <p>Wishing you a refreshing break!</p>
+    
+    <div style='margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd;'>
+        <p>Best regards,<br/>HR Department</p>
+    </div>
+</div>";
+    }
+
+    private static string GetBirthdayCardTemplate()
+    {
+        return @"
+<div style='font-family: Georgia, serif; max-width: 500px; margin: 0 auto; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; text-align: center; color: white;'>
+    <h1 style='font-size: 48px; margin: 0;'>🎂</h1>
+    <h2>Happy Birthday!</h2>
+    <h3>{{EmployeeName}}</h3>
+    <p style='margin: 20px 0;'>Wishing you a fantastic day filled with joy and celebration!</p>
+    <p>From,<br/>The HR Team</p>
+</div>";
+    }
+
+    private static string GetAnniversaryCertificateTemplate()
+    {
+        return @"
+<div style='font-family: Georgia, serif; max-width: 600px; margin: 0 auto; padding: 30px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 15px; text-align: center;'>
+    <h1 style='color: #2c3e50;'>🎉 Service Recognition 🎉</h1>
+    <h2>{{Years}} Year{{Years > 1 ? 's' : ''}} of Excellence</h2>
+    <div style='margin: 20px 0; padding: 15px; background: white; border-radius: 10px;'>
+        <p><strong>{{EmployeeName}}</strong></p>
+        <p>{{Designation}} | {{Department}}</p>
+    </div>
+    <p>Thank you for your dedication and contribution to our organization.</p>
+    <p>Presented on {{CurrentDate}}</p>
+</div>";
+    }
+
+    private static string GetTaskCompletionCertificateTemplate()
+    {
+        return @"
+<div style='font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 25px; border: 2px solid #4a6741; border-radius: 10px;'>
+    <div style='text-align: center;'>
+        <h2>Task Completion Certificate</h2>
+        <p>This certificate is presented to</p>
+        <h3>{{EmployeeName}}</h3>
+        <p>for successfully completing</p>
+        <div style='background: #f0f8ff; padding: 10px; margin: 15px 0;'>
+            <strong>{{TaskTitle}}</strong>
+        </div>
+        <p>on {{CompletionDate}}</p>
+        <hr/>
+        <p>Thank you for your contribution!</p>
+    </div>
+</div>";
     }
 }

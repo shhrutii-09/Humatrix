@@ -1,16 +1,14 @@
-﻿using Humatrix_HRMS.DTOs.Documents;
+﻿// Services/Documents/IOrgDocumentGenerationService.cs
+using Humatrix_HRMS.DTOs.Documents;
 using Humatrix_HRMS.Models;
 using Humatrix_HRMS.Models.Documents;
 using Humatrix_HRMS.Services.AI;
 
 namespace Humatrix_HRMS.Services.Documents;
 
-/// <summary>
-/// Service for generating organization documents (Offer Letters, Warning Letters, etc.)
-/// </summary>
 public interface IOrgDocumentGenerationService
 {
-    // Template Management
+    // ── Template management ───────────────────────────────────
     Task<OrgDocumentTemplate> CreateTemplateAsync(OrgDocumentTemplateDto dto, Guid organizationId, string userId, string userRole);
     Task<OrgDocumentTemplate> UpdateTemplateAsync(Guid templateId, UpdateOrgDocumentTemplateDto dto, Guid organizationId, string userId);
     Task<bool> DeleteTemplateAsync(Guid templateId, Guid organizationId);
@@ -18,44 +16,33 @@ public interface IOrgDocumentGenerationService
     Task<List<OrgDocumentTemplate>> GetTemplatesByCategoryAsync(Guid organizationId, string category);
     Task<List<OrgDocumentTemplate>> GetAllTemplatesAsync(Guid organizationId, bool includeInactive = false);
 
-    // Document Generation
+    // ── Document generation — manual (from UI) ────────────────
     Task<OrgDocumentGenerationResponseDto> GenerateDocumentAsync(OrgDocumentGenerationDto dto, Guid organizationId, string userId, string userRole);
+    Task<OrgDocumentGenerationResponseDto> GenerateDocumentWithAIAsync(Guid templateId, Guid recipientEmployeeId, string userId, string userRole, Dictionary<string, string>? customData = null, bool sendEmail = false);
+    Task<List<OrgDocumentGenerationResponseDto>> GenerateDocumentsBulkAsync(Guid templateId, List<Guid> employeeIds, Dictionary<string, string>? commonCustomData, Guid organizationId, string userId, string userRole);
 
-    // AI-Powered Document Generation (NEW)
-    Task<OrgDocumentGenerationResponseDto> GenerateDocumentWithAIAsync(
-        Guid templateId,
-        Guid recipientEmployeeId,
-        string userId,
-        string userRole,
-        Dictionary<string, string>? customData = null,
-        bool sendEmail = true);
+    // ── Document generation — system (background jobs only) ───
+    /// <summary>
+    /// Generates a document without sending any notification.
+    /// Used exclusively by background services (AIEventMonitor).
+    /// The caller is responsible for sending a consolidated notification.
+    /// </summary>
+    Task<OrgDocumentGenerationResponseDto> GenerateDocumentSystemAsync(Guid templateId, Guid recipientEmployeeId, string actorUserId, string actorRole, Dictionary<string, string>? customData = null);
 
-    // AI Suggestions (NEW)
-    Task<List<AIDocumentSuggestion>> GetAIDocumentSuggestionsAsync(Guid employeeId);
-
-    // Auto-Generate Required Documents (NEW)
-    Task<int> AutoGenerateRequiredDocumentsAsync(Guid organizationId);
-
-    // Bulk Generation
-    Task<List<OrgDocumentGenerationResponseDto>> GenerateDocumentsBulkAsync(
-        Guid templateId,
-        List<Guid> employeeIds,
-        Dictionary<string, string>? commonCustomData,
-        Guid organizationId,
-        string userId,
-        string userRole);
-
-    // Viewing
+    // ── Viewing ───────────────────────────────────────────────
     Task<List<OrgGeneratedDocument>> GetDocumentsForEmployeeAsync(Guid employeeId, Guid organizationId);
     Task<List<OrgGeneratedDocument>> GetDocumentsGeneratedByUserAsync(string userId, Guid organizationId);
     Task<OrgGeneratedDocument?> GetDocumentByIdAsync(Guid documentId, Guid organizationId);
     Task<List<OrgDocumentHistory>> GetDocumentHistoryAsync(Guid documentId);
 
-    // Acknowledgment & Revoke
+    // ── State transitions ─────────────────────────────────────
     Task<bool> AcknowledgeDocumentAsync(Guid documentId, Guid employeeId, string? remarks = null);
     Task<bool> RevokeDocumentAsync(Guid documentId, string userId, string userRole, string reason);
 
-    // Permission Helpers
+    // ── Permissions ───────────────────────────────────────────
     Task<bool> CanGenerateDocumentForEmployeeAsync(Guid employeeId, Guid organizationId, string userId, string userRole);
     Task<List<Employee>> GetEligibleRecipientsForDocumentAsync(Guid organizationId, string userId, string userRole);
+
+    // ── AI ────────────────────────────────────────────────────
+    Task<List<AIDocumentSuggestion>> GetAIDocumentSuggestionsAsync(Guid employeeId);
 }
