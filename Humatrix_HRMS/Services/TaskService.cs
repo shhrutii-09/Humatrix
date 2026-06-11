@@ -206,6 +206,34 @@ namespace Humatrix_HRMS.Services
                 .ToListAsync();
         }
 
+        // TaskService.cs mein add karein
+        public async Task<List<TaskDto>> GetTasksAssignedByMeAsync()
+        {
+            var user = await _currentUser.GetUserAsync();
+            if (user == null) throw new Exception("Unauthorized");
+
+            Guid userGuid = Guid.TryParse(user.Id, out var guid) ? guid : Guid.Empty;
+
+            return await _context.Tasks
+                .Include(t => t.AssignedToEmployee)
+                .Where(t => t.AssignedBy == userGuid) // Sirf login user dwara assign kiye tasks
+                .OrderByDescending(t => t.CreatedAt)
+                .Select(t => new TaskDto
+                {
+                    TaskId = t.TaskId,
+                    Title = t.Title ?? "",
+                    Description = t.Description ?? "",
+                    Priority = t.Priority ?? "Medium",
+                    Status = t.Status ?? "Pending",
+                    Progress = t.Progress,
+                    DueDate = t.DueDate,
+                    CreatedAt = t.CreatedAt,
+                    AssignedToName = t.AssignedToEmployee != null
+                        ? t.AssignedToEmployee.FirstName + " " + t.AssignedToEmployee.LastName : ""
+                })
+                .ToListAsync();
+        }
+
         // =========================
         // UPDATE PROGRESS (Employee)
         // =========================

@@ -292,7 +292,6 @@
                                     }
                                 </InputSelect>
                             </div>
-                           
                         </div>
                     </div>
                     <div class="modal-footer bg-light border-top border-light px-4 py-3">
@@ -411,14 +410,28 @@
     private async Task OnDepartmentFilterChanged(ChangeEventArgs e) { filterDepartmentId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null; currentPage = 1; await LoadEmployees(); }
     private async Task OnRoleFilterChanged(ChangeEventArgs e) { filterRole = e.Value?.ToString(); currentPage = 1; await LoadEmployees(); }
 
-    private void NavigateToDashboard() => Nav.NavigateTo("/org/dashboard");
+    private async Task NavigateToDashboard()
+    {
+        if (AuthState != null)
+        {
+            var authState = await AuthState;
+            if (authState.User.IsInRole("OrgAdmin"))
+            {
+                Nav.NavigateTo("/org/dashboard");
+            }
+            else
+            {
+                Nav.NavigateTo("/hr/dashboard");
+            }
+        }
+    }
+
     private void NavigateToAddEmployee() => Nav.NavigateTo(UserIsOrgAdmin ? "/org/add-employee" : "/hr/add-employee");
     void CloseModal() => isEditOpen = false;
 
     private async Task OpenEditModal(EmployeeListDto e)
     {
         editingEmail = e.Email;
-        // Map the role from the list item to the edit model
         editModel = new EditEmployeeDto
         {
             FirstName = e.FirstName,

@@ -16,75 +16,119 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject NavigationManager Nav
 
-<PageTitle>Assign Task</PageTitle>
+<PageTitle>Assign Task | Humatrix HRMS</PageTitle>
 
-<div class="container mt-4">
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Assign New Task</h2>
+            <p class="text-muted small mb-0">Delegate operational responsibilities and track progress within your department.</p>
+        </div>
+        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo("/hr/tasks")'>
+            <i class="bi bi-arrow-left me-1"></i> BACK TO TASKS
+        </button>
+    </div>
 
-    <h3>Assign Task</h3>
+    <div class="card border-0 shadow-sm form-container-card mx-auto ms-0" style="max-width: 800px;">
+        <div class="card-body p-4">
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-premium-danger d-flex align-items-center mb-4 border-0 shadow-sm" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                    <div class="small fw-medium">@error</div>
+                </div>
+            }
 
-    @if (!string.IsNullOrEmpty(error))
-    {
-        <div class="alert alert-danger">@error</div>
+            <EditForm Model="model" OnValidSubmit="AssignTaskAsync">
+                <DataAnnotationsValidator />
+                <div class="row g-3">
+                    <div class="col-md-12 mb-2">
+                        <label class="form-label-custom">ASSIGN TO</label>
+                        <InputSelect class="form-select premium-form-input" @bind-Value="model.AssignedTo">
+                            <option value="">-- Select Employee --</option>
+                            @foreach (var emp in employees)
+                            {
+                                <option value="@emp.EmployeeId">@emp.FirstName @emp.LastName</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => model.AssignedTo)" class="text-danger small mt-1" />
+                    </div>
+                    <div class="col-md-12 mb-2">
+                        <label class="form-label-custom">TASK TITLE</label>
+                        <InputText class="form-control premium-form-input" @bind-Value="model.Title" placeholder="e.g. Monthly Performance Review" />
+                    </div>
+                    <div class="col-md-12 mb-2">
+                        <label class="form-label-custom">DESCRIPTION</label>
+                        <InputTextArea class="form-control premium-form-input" @bind-Value="model.Description" rows="4" />
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label-custom">PRIORITY</label>
+                        <InputSelect class="form-select premium-form-input" @bind-Value="model.Priority">
+                            <option value="">-- Select Priority --</option>
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label-custom">DUE DATE</label>
+                        <InputDate class="form-control premium-form-input" @bind-Value="model.DueDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                </div>
+                <div class="border-top pt-4 mt-4 text-end">
+                    <button type="submit" class="btn btn-action-submit px-5 shadow-sm">
+                        <i class="bi bi-send-fill me-2"></i> ASSIGN TASK
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-label-custom {
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.5rem;
+        display: block;
     }
 
-    <EditForm Model="model" OnValidSubmit="AssignTaskAsync">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
+    .premium-form-input {
+        font-size: 14px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background-color: #f8fafc !important;
+    }
 
-        <!-- Employee Dropdown -->
-        <div class="mb-3">
-            <label>Assign To</label>
-            <InputSelect class="form-control" @bind-Value="model.AssignedTo">
-                <option value="">-- Select Employee --</option>
-                @foreach (var emp in employees)
-                {
-                    <option value="@emp.EmployeeId">
-                        @emp.FirstName @emp.LastName
-                    </option>
-                }
-            </InputSelect>
-            <ValidationMessage For="@(() => model.AssignedTo)" />
-        </div>
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
 
-        <!-- Title -->
-        <div class="mb-3">
-            <label>Title</label>
-            <InputText class="form-control" @bind-Value="model.Title" />
-            <ValidationMessage For="@(() => model.Title)" />
-        </div>
+    .btn-action-submit {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border-radius: 10px;
+        padding: 10px 24px;
+    }
 
-        <!-- Description -->
-        <div class="mb-3">
-            <label>Description</label>
-            <InputTextArea class="form-control" @bind-Value="model.Description" />
-            <ValidationMessage For="@(() => model.Description)" />
-        </div>
-
-        <!-- Priority -->
-        <div class="mb-3">
-            <label>Priority</label>
-            <InputSelect class="form-control" @bind-Value="model.Priority">
-                <option value="">-- Select Priority --</option>
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-            </InputSelect>
-            <ValidationMessage For="@(() => model.Priority)" />
-        </div>
-
-        <!-- Due Date -->
-        <div class="mb-3">
-            <label>Due Date</label>
-            <InputDate class="form-control"
-                       @bind-Value="model.DueDate"
-                       min="@DateTime.Today.ToString("yyyy-MM-dd")" />
-            <ValidationMessage For="@(() => model.DueDate)" />
-        </div>
-
-        <button class="btn btn-primary">Assign Task</button>
-    </EditForm>
-
-</div>
+    .alert-premium-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+</style>
 
 @code {
     private CreateTaskDto model = new();
@@ -94,70 +138,28 @@
     protected override async Task OnInitializedAsync()
     {
         using var db = DbFactory.CreateDbContext();
-
-        // Current User सेशन गेट करें
         var sessionUser = await CurrentUser.GetUserAsync();
         if (sessionUser == null) return;
-
-        // 1. 🔥 FIX: सीधे DB से फ्रेश User रिकॉर्ड लाएं ताकि OrganizationId मिस न हो
         var dbUser = await db.Users.FirstOrDefaultAsync(u => u.Id == sessionUser.Id);
         if (dbUser == null) return;
 
         var organizationId = dbUser.OrganizationId;
-
-        // 2. 🔥 FIX: सीधे DB से Roles चेक करें (Blazor lifecycle क्लैश से बचने के लिए)
-        var userRoles = await (from ur in db.UserRoles
-                               join r in db.Roles on ur.RoleId equals r.Id
-                               where ur.UserId == dbUser.Id
-                               select r.Name.ToLower()).ToListAsync();
-
+        var userRoles = await (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id where ur.UserId == dbUser.Id select r.Name.ToLower()).ToListAsync();
         bool isOrgAdmin = userRoles.Contains("orgadmin");
         bool isHr = userRoles.Contains("hr");
 
-        // 🏢 CASE 1: अगर Organization Admin लॉगिन है -> केवल "HR" Role वाले Employees दिखाएं
         if (isOrgAdmin)
         {
-            // Identity Roles टेबल से सभी HR यूज़र्स की IDs निकालें
-            var hrUserIds = await (from ur in db.UserRoles
-                                   join r in db.Roles on ur.RoleId equals r.Id
-                                   where r.Name.ToLower() == "hr"
-                                   select ur.UserId).ToListAsync();
-
-            employees = await db.Employees
-                .Include(e => e.Designation)
-                .Where(e =>
-                    e.OrganizationId == organizationId &&
-                    e.Status == "Active" &&
-                    e.UserId != dbUser.Id &&
-                    // या तो उसका Identity Role 'HR' हो या Designation 'HR' हो
-                    (hrUserIds.Contains(e.UserId) || (e.Designation != null && e.Designation.Name.ToLower().Contains("hr")))
-                )
-                .ToListAsync();
+            var hrUserIds = await (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id where r.Name.ToLower() == "hr" select ur.UserId).ToListAsync();
+            employees = await db.Employees.Where(e => e.OrganizationId == organizationId && e.Status == "Active" && e.UserId != dbUser.Id && hrUserIds.Contains(e.UserId)).OrderBy(e => e.FirstName).ToListAsync();
         }
-        // 👥 CASE 2: अगर HR लॉगिन है -> केवल अपने Department के Regular Employees दिखाएं
         else if (isHr)
         {
-            var currentEmployee = await db.Employees
-                .FirstOrDefaultAsync(e => e.UserId == dbUser.Id);
-
+            var currentEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == dbUser.Id);
             if (currentEmployee != null)
             {
-                // HR और OrgAdmin यूज़र्स को फ़िल्टर आउट करने के लिए उनकी IDs निकालें
-                var excludedUserIds = await (from ur in db.UserRoles
-                                             join r in db.Roles on ur.RoleId equals r.Id
-                                             where r.Name.ToLower() == "hr" || r.Name.ToLower() == "orgadmin"
-                                             select ur.UserId).ToListAsync();
-
-                employees = await db.Employees
-                    .Include(e => e.Designation)
-                    .Where(e =>
-                        e.OrganizationId == organizationId &&
-                        e.DepartmentId == currentEmployee.DepartmentId &&
-                        e.Status == "Active" &&
-                        e.UserId != dbUser.Id &&
-                        !excludedUserIds.Contains(e.UserId)
-                    )
-                    .ToListAsync();
+                var excludedUserIds = await (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id where r.Name.ToLower() == "hr" || r.Name.ToLower() == "orgadmin" select ur.UserId).ToListAsync();
+                employees = await db.Employees.Include(e => e.Designation).Where(e => e.OrganizationId == organizationId && e.DepartmentId == currentEmployee.DepartmentId && e.Status == "Active" && e.UserId != dbUser.Id && !excludedUserIds.Contains(e.UserId)).ToListAsync();
             }
         }
     }
@@ -165,21 +167,12 @@
     private async Task AssignTaskAsync()
     {
         error = null;
-
-        if (model.DueDate.HasValue && model.DueDate.Value.Date < DateTime.Today)
-        {
-            error = "Cannot assign past date";
-            return;
-        }
-
+        if (model.DueDate.HasValue && model.DueDate.Value.Date < DateTime.Today) { error = "Cannot assign past date"; return; }
         try
         {
             await TaskService.AssignTaskAsync(model);
-            Nav.NavigateTo("/hr/tasks");
+            Nav.NavigateTo($"/hr/tasks?success={Uri.EscapeDataString("Task assigned successfully!")}");
         }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-        }
+        catch (Exception ex) { error = ex.Message; }
     }
 }

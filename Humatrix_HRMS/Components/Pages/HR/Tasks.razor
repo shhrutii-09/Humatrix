@@ -6,6 +6,7 @@
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.WebUtilities
 
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 
@@ -14,85 +15,109 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject CurrentUserService CurrentUser
 
-<PageTitle>Task Management</PageTitle>
+<PageTitle>Task Management | Humatrix HRMS</PageTitle>
+
+@* Toast Notification Container *@
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
+                    <span class="small fw-medium">@message</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
+            </div>
+        </div>
+    }
+</div>
 
 <div class="container-fluid px-4 mt-4">
-
-    <!-- TOP HEADER SECTION -->
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3 pb-3 border-bottom">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold text-dark mb-1">Task Management</h2>
-            <p class="text-muted mb-0">Monitor, assign, and track employee operational tasks</p>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Task Management</h2>
+            <p class="text-muted small mb-0">Monitor, assign, and track organizational operational tasks.</p>
         </div>
-
-        <!-- ➕ RIGHT CORNER TOP BUTTON -->
-        <div>
-            <button class="btn btn-primary btn-lg d-flex align-items-center gap-2 shadow action-btn"
+        <div class="d-flex gap-2">
+            <button class="btn btn-add-task d-flex align-items-center gap-2 shadow-sm"
                     @onclick='() => Nav.NavigateTo("/hr/assign-task")'>
-                <i class="bi bi-plus-lg fw-bold"></i>
-                <span class="fw-semibold">Assign Task</span>
+                <i class="bi bi-plus-circle"></i>
+                ASSIGN TASK
+            </button>
+            <button class="btn btn-interactive-back shadow-sm"
+                    @onclick='() => Nav.NavigateTo(dashboardPath)'>
+                <i class="bi bi-speedometer2"></i>
+                DASHBOARD
             </button>
         </div>
     </div>
 
-    <!-- SUMMARY METRICS CARDS -->
+    @* Metrics Section *@
     <div class="row g-3 mb-4">
-        <div class="col-6 col-md-3">
-            <div class="card metric-card total-card h-100 border-0 shadow-sm p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-muted fw-medium small">Total Tasks</span>
-                    <div class="icon-box bg-primary-soft text-primary"><i class="bi bi-list-task"></i></div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #5c4ac7 !important;">
+                <div class="card-body d-flex align-items-center justify-content-between p-3">
+                    <div>
+                        <span class="text-secondary small fw-bold tracking-wider text-uppercase d-block mb-1">Total Tasks</span>
+                        <h3 class="fw-bold text-dark mb-0">@tasks.Count</h3>
+                    </div>
+                    <div class="metric-icon-box" style="background-color: rgba(92, 74, 199, 0.08); color: #5c4ac7;">
+                        <i class="bi bi-list-task"></i>
+                    </div>
                 </div>
-                <h3 class="fw-bold text-dark mt-2 mb-0">@tasks.Count</h3>
             </div>
         </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card metric-card pending-card h-100 border-0 shadow-sm p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-muted fw-medium small">Pending</span>
-                    <div class="icon-box bg-warning-soft text-warning"><i class="bi bi-clock-history"></i></div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #ffc107 !important;">
+                <div class="card-body d-flex align-items-center justify-content-between p-3">
+                    <div>
+                        <span class="text-secondary small fw-bold tracking-wider text-uppercase d-block mb-1">Pending</span>
+                        <h3 class="fw-bold text-dark mb-0">@tasks.Count(t => t.Status == "Pending")</h3>
+                    </div>
+                    <div class="metric-icon-box" style="background-color: rgba(255, 193, 7, 0.08); color: #ffc107;">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
                 </div>
-                <h3 class="fw-bold text-warning mt-2 mb-0">@tasks.Count(t => t.Status == "Pending")</h3>
             </div>
         </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card metric-card progress-card h-100 border-0 shadow-sm p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-muted fw-medium small">In Progress</span>
-                    <div class="icon-box bg-info-soft text-info"><i class="bi bi-gear-slide"></i></div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #0dcaf0 !important;">
+                <div class="card-body d-flex align-items-center justify-content-between p-3">
+                    <div>
+                        <span class="text-secondary small fw-bold tracking-wider text-uppercase d-block mb-1">In Progress</span>
+                        <h3 class="fw-bold text-dark mb-0">@tasks.Count(t => t.Status == "In Progress")</h3>
+                    </div>
+                    <div class="metric-icon-box" style="background-color: rgba(13, 202, 240, 0.08); color: #0dcaf0;">
+                        <i class="bi bi-gear-slide"></i>
+                    </div>
                 </div>
-                <h3 class="fw-bold text-info mt-2 mb-0">@tasks.Count(t => t.Status == "In Progress")</h3>
             </div>
         </div>
-
-        <div class="col-6 col-md-3">
-            <div class="card metric-card completed-card h-100 border-0 shadow-sm p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-muted fw-medium small">Completed</span>
-                    <div class="icon-box bg-success-soft text-success"><i class="bi bi-check2-circle"></i></div>
+        <div class="col-md-3 col-sm-6">
+            <div class="card border-0 shadow-sm metric-panel-card" style="border-left: 4px solid #10b981 !important;">
+                <div class="card-body d-flex align-items-center justify-content-between p-3">
+                    <div>
+                        <span class="text-secondary small fw-bold tracking-wider text-uppercase d-block mb-1">Completed</span>
+                        <h3 class="fw-bold text-dark mb-0">@tasks.Count(t => t.Status == "Completed")</h3>
+                    </div>
+                    <div class="metric-icon-box" style="background-color: rgba(16, 185, 129, 0.08); color: #10b981;">
+                        <i class="bi bi-check2-circle"></i>
+                    </div>
                 </div>
-                <h3 class="fw-bold text-success mt-2 mb-0">@tasks.Count(t => t.Status == "Completed")</h3>
             </div>
         </div>
     </div>
 
-    <!-- FILTER BAR BLOCK -->
+    @* Filters Section *@
     <div class="card border-0 shadow-sm p-3 mb-4 bg-light-gradient">
         <div class="row g-3 align-items-center">
             <div class="col-12 col-md-4">
                 <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0 text-muted">
-                        <i class="bi bi-search"></i>
-                    </span>
-                    <input class="form-control border-start-0 ps-0 text-input"
-                           placeholder="Search tasks or employees..."
-                           @bind="searchText"
-                           @bind:event="oninput" />
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input class="form-control border-start-0 ps-0 text-input" placeholder="Search tasks or employees..." @bind="searchText" @bind:event="oninput" />
                 </div>
             </div>
-
             <div class="col-6 col-md-4">
                 <select class="form-select custom-select" @bind="selectedStatus">
                     <option value="">All Statuses</option>
@@ -101,7 +126,6 @@
                     <option>Completed</option>
                 </select>
             </div>
-
             <div class="col-6 col-md-4">
                 <select class="form-select custom-select" @bind="selectedPriority">
                     <option value="">All Priorities</option>
@@ -113,7 +137,7 @@
         </div>
     </div>
 
-    <!-- TASK DATATABLE -->
+    @* Table Section *@
     <div class="card border-0 shadow-sm overflow-hidden mb-5">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 custom-table">
@@ -125,7 +149,7 @@
                         <th>Status</th>
                         <th>Progress</th>
                         <th>Due Date</th>
-                        <th class="pe-4">Created</th>
+                        <th class="pe-4">Assigned Date</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -146,52 +170,32 @@
                         @foreach (var t in filteredTasks)
                         {
                             <tr class="@(IsOverdue(t) ? "overdue-row" : "")">
-                                <!-- TASK TITLE & DESC -->
                                 <td class="ps-4 style-title-cell" style="min-width: 280px;">
                                     <div class="fw-bold text-dark mb-1">@t.Title</div>
-                                    <div class="text-muted text-truncate-custom small">
-                                        @(string.IsNullOrEmpty(t.Description) ? "No description provided." : t.Description)
-                                    </div>
+                                    <div class="text-muted text-truncate-custom small">@(string.IsNullOrEmpty(t.Description) ? "No description provided." : t.Description)</div>
                                 </td>
-
-                                <!-- ASSIGNED TO -->
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="avatar-circle">@t.AssignedToName?[0]</div>
-                                        <span class="text-primary fw-semibold link-hover"
-                                              @onclick="@(() => Nav.NavigateTo($"/hr/employee/{t.AssignedToName}"))">
-                                            @t.AssignedToName
-                                        </span>
+                                        <span class="text-primary fw-semibold link-hover" @onclick="@(() => Nav.NavigateTo($"/hr/employee/{t.AssignedToName}"))">@t.AssignedToName</span>
                                     </div>
                                 </td>
-
-                                <!-- PRIORITY BADGE -->
                                 <td>
-                                    <span class="badge rounded-pill priority-badge @GetPriorityClass(t.Priority)">
-                                        @t.Priority
-                                    </span>
+                                    <span class="badge rounded-pill priority-badge @GetPriorityClass(t.Priority)">@t.Priority</span>
                                 </td>
-
-                                <!-- STATUS BADGE -->
                                 <td>
                                     <span class="badge rounded-pill status-badge @GetStatusClass(t.Status)">
                                         <i class="bi bi-circle-fill me-1 small-dot"></i>@t.Status
                                     </span>
                                 </td>
-
-                                <!-- PROGRESS BAR -->
                                 <td style="min-width: 180px;">
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="progress flex-grow-1 card-progress">
-                                            <div class="progress-bar progress-bar-striped progress-bar-animated @GetProgressColor(t.Status)"
-                                                 style="width:@t.Progress%">
-                                            </div>
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated @GetProgressColor(t.Status)" style="width:@t.Progress%"></div>
                                         </div>
                                         <span class="fw-bold small text-secondary">@t.Progress%</span>
                                     </div>
                                 </td>
-
-                                <!-- DUE DATE -->
                                 <td>
                                     @if (t.DueDate.HasValue)
                                     {
@@ -208,11 +212,7 @@
                                         <span class="text-muted">-</span>
                                     }
                                 </td>
-
-                                <!-- CREATED DATE -->
-                                <td class="pe-4 text-muted small">
-                                    @t.CreatedAt.ToString("dd MMM yyyy")
-                                </td>
+                                <td class="pe-4 text-muted small">@t.CreatedAt.ToString("dd MMM yyyy")</td>
                             </tr>
                         }
                     }
@@ -223,84 +223,64 @@
 </div>
 
 <style>
-    /* Global Component Aesthetics */
     body {
         background-color: #f4f6f9;
     }
 
-    .action-btn {
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .btn-add-task {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
         border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
     }
 
-        .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(13, 110, 253, 0.3) !important;
-        }
-
-    /* Metric Cards Styling */
-    .metric-card {
-        border-radius: 14px;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        background: #ffffff;
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
     }
 
-        .metric-card:hover {
+    .metric-panel-card {
+        border-radius: 12px;
+        background-color: #ffffff;
+        overflow: hidden;
+        transition: transform 0.2s;
+    }
+
+        .metric-panel-card:hover {
             transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.05) !important;
         }
 
-    .icon-box {
-        width: 40px;
-        height: 40px;
+    .metric-icon-box {
+        width: 42px;
+        height: 42px;
         border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.25rem;
+        font-size: 20px;
     }
 
-    .bg-primary-soft {
-        background-color: rgba(13, 110, 253, 0.1);
-    }
-
-    .bg-warning-soft {
-        background-color: rgba(255, 193, 7, 0.15);
-    }
-
-    .bg-info-soft {
-        background-color: rgba(13, 202, 240, 0.15);
-    }
-
-    .bg-success-soft {
-        background-color: rgba(25, 135, 84, 0.1);
-    }
-
-    .bg-danger-soft {
-        background-color: rgba(220, 53, 69, 0.1);
-    }
-
-    /* Filter Panel */
     .bg-light-gradient {
         background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
         border: 1px solid #e9ecef !important;
         border-radius: 12px;
-    }
-
-    .text-input, .custom-select {
-        border-radius: 8px;
-        border: 1px solid #ced4da;
-    }
-
-        .text-input:focus, .custom-select:focus {
-            border-color: #86b7fe;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
-        }
-
-    /* Table Design Overhauls */
-    .custom-table thead {
-        background-color: #f8f9fa;
-        border-bottom: 2px solid #edf2f7;
     }
 
     .custom-table th {
@@ -308,57 +288,18 @@
         font-weight: 600;
         text-transform: uppercase;
         font-size: 0.75rem;
-        letter-spacing: 0.5px;
         padding: 16px 12px;
     }
 
-    .custom-table tbody tr {
-        border-bottom: 1px solid #f1f5f9;
-        transition: background-color 0.2s ease;
+    .custom-table tbody tr:hover {
+        background-color: rgba(248, 249, 250, 0.85) !important;
     }
 
-        .custom-table tbody tr:hover {
-            background-color: rgba(248, 249, 250, 0.85) !important;
-        }
-
-    .text-truncate-custom {
-        display: -webkit-box;
-        -webkit-line-clamp: 1;
-        -webkit-box-orient: vertical;
+    .card-progress {
+        height: 6px;
+        background-color: #edf2f7;
+        border-radius: 10px;
         overflow: hidden;
-        max-width: 320px;
-    }
-
-    /* Overdue highlight styling */
-    .overdue-row {
-        background-color: rgba(220, 53, 69, 0.02);
-    }
-
-    .overdue-tag {
-        font-size: 0.65rem;
-        padding: 3px 6px;
-        margin-left: 5px;
-        vertical-align: middle;
-    }
-
-    /* Badges & Identity Circles */
-    .priority-badge {
-        font-size: 0.8rem;
-        padding: 6px 12px;
-        font-weight: 500;
-    }
-
-    .status-badge {
-        font-size: 0.8rem;
-        padding: 6px 12px;
-        font-weight: 500;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .small-dot {
-        font-size: 0.45rem;
-        vertical-align: middle;
     }
 
     .avatar-circle {
@@ -377,19 +318,32 @@
 
     .link-hover {
         cursor: pointer;
-        text-decoration: none;
     }
 
         .link-hover:hover {
             text-decoration: underline;
         }
 
-    /* Custom Slim Progress Bars */
-    .card-progress {
-        height: 6px;
-        background-color: #edf2f7;
-        border-radius: 10px;
-        overflow: hidden;
+    .overdue-tag {
+        font-size: 0.65rem;
+        padding: 3px 6px;
+        margin-left: 5px;
+    }
+
+    .bg-success-soft {
+        background-color: rgba(25, 135, 84, 0.1);
+    }
+
+    .bg-warning-soft {
+        background-color: rgba(255, 193, 7, 0.15);
+    }
+
+    .bg-info-soft {
+        background-color: rgba(13, 202, 240, 0.15);
+    }
+
+    .bg-danger-soft {
+        background-color: rgba(220, 53, 69, 0.1);
     }
 </style>
 
@@ -398,127 +352,45 @@
     private string? searchText;
     private string? selectedStatus;
     private string? selectedPriority;
+    private string? message;
+    private string dashboardPath = "/";
 
     protected override async Task OnInitializedAsync()
     {
-        using var db = DbFactory.CreateDbContext();
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var msg))
+        {
+            message = msg;
+            _ = Task.Run(async () => { await Task.Delay(4000); message = null; await InvokeAsync(StateHasChanged); });
+        }
 
+        using var db = DbFactory.CreateDbContext();
         var sessionUser = await CurrentUser.GetUserAsync();
         if (sessionUser == null) return;
 
-        var dbUser = await db.Users.FirstOrDefaultAsync(u => u.Id == sessionUser.Id);
-        if (dbUser == null) return;
-
-        var organizationId = dbUser.OrganizationId;
-
         var userRoles = await (from ur in db.UserRoles
                                join r in db.Roles on ur.RoleId equals r.Id
-                               where ur.UserId == dbUser.Id
+                               where ur.UserId == sessionUser.Id
                                select r.Name.ToLower()).ToListAsync();
 
         bool isOrgAdmin = userRoles.Contains("orgadmin");
         bool isHr = userRoles.Contains("hr");
 
-        var allTasks = await TaskService.GetAllTasksAsync();
+        if (isOrgAdmin) dashboardPath = "/org/dashboard";
+        else if (isHr) dashboardPath = "/hr/dashboard";
 
-        if (isOrgAdmin)
-        {
-            var hrUserIds = await (from ur in db.UserRoles
-                                   join r in db.Roles on ur.RoleId equals r.Id
-                                   where r.Name.ToLower() == "hr"
-                                   select ur.UserId).ToListAsync();
-
-            var hrEmployees = await db.Employees
-                .Include(e => e.Designation)
-                .Where(e =>
-                    e.OrganizationId == organizationId &&
-                    e.Status == "Active" &&
-                    (hrUserIds.Contains(e.UserId) || (e.Designation != null && e.Designation.Name.ToLower().Contains("hr")))
-                ).ToListAsync();
-
-            var hrNames = hrEmployees.Select(e => $"{e.FirstName} {e.LastName}".Trim().ToLower()).ToHashSet();
-
-            tasks = allTasks.Where(t =>
-                !string.IsNullOrEmpty(t.AssignedToName) &&
-                hrNames.Contains(t.AssignedToName.Trim().ToLower())
-            ).ToList();
-        }
-        else if (isHr)
-        {
-            var currentEmployee = await db.Employees
-                .FirstOrDefaultAsync(e => e.UserId == dbUser.Id);
-
-            if (currentEmployee != null)
-            {
-                var excludedUserIds = await (from ur in db.UserRoles
-                                             join r in db.Roles on ur.RoleId equals r.Id
-                                             where r.Name.ToLower() == "hr" || r.Name.ToLower() == "orgadmin"
-                                             select ur.UserId).ToListAsync();
-
-                var deptEmployees = await db.Employees
-                    .Include(e => e.Designation)
-                    .Where(e =>
-                        e.OrganizationId == organizationId &&
-                        e.DepartmentId == currentEmployee.DepartmentId &&
-                        e.Status == "Active" &&
-                        !excludedUserIds.Contains(e.UserId) &&
-                        (e.Designation == null || (!e.Designation.Name.ToLower().Contains("hr") && !e.Designation.Name.ToLower().Contains("orgadmin")))
-                    ).ToListAsync();
-
-                var deptEmployeeNames = deptEmployees.Select(e => $"{e.FirstName} {e.LastName}".Trim().ToLower()).ToHashSet();
-
-                tasks = allTasks.Where(t =>
-                    !string.IsNullOrEmpty(t.AssignedToName) &&
-                    deptEmployeeNames.Contains(t.AssignedToName.Trim().ToLower())
-                ).ToList();
-            }
-        }
-        else
-        {
-            tasks = new List<TaskDto>();
-        }
+        // Yahan maine naya method call kiya hai jo sirf current user ke assign kiye tasks layega
+        tasks = await TaskService.GetTasksAssignedByMeAsync();
     }
 
-    private List<TaskDto> filteredTasks =>
-        tasks
-        .Where(t =>
-            (string.IsNullOrWhiteSpace(searchText) ||
-             t.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-             t.AssignedToName.Contains(searchText, StringComparison.OrdinalIgnoreCase))
-            && (string.IsNullOrEmpty(selectedStatus) || t.Status == selectedStatus)
-            && (string.IsNullOrEmpty(selectedPriority) || t.Priority == selectedPriority)
-        )
-        .OrderBy(t => t.Status == "Completed")
-        .ThenByDescending(t => t.CreatedAt)
-        .ToList();
+    private List<TaskDto> filteredTasks => tasks.Where(t =>
+        (string.IsNullOrWhiteSpace(searchText) || t.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) || (t.AssignedToName != null && t.AssignedToName.Contains(searchText, StringComparison.OrdinalIgnoreCase))) &&
+        (string.IsNullOrEmpty(selectedStatus) || t.Status == selectedStatus) &&
+        (string.IsNullOrEmpty(selectedPriority) || t.Priority == selectedPriority)).OrderBy(t => t.Status == "Completed").ThenByDescending(t => t.CreatedAt).ToList();
 
-    private bool IsOverdue(TaskDto t)
-    {
-        return t.DueDate.HasValue
-            && t.DueDate.Value.Date < DateTime.Today
-            && t.Status != "Completed";
-    }
+    private bool IsOverdue(TaskDto t) => t.DueDate.HasValue && t.DueDate.Value.Date < DateTime.Today && t.Status != "Completed";
 
-    private string GetStatusClass(string status) => status switch
-    {
-        "Completed" => "bg-success-soft text-success",
-        "Pending" => "bg-warning-soft text-warning",
-        "In Progress" => "bg-info-soft text-info",
-        _ => "bg-secondary text-dark"
-    };
-
-    private string GetPriorityClass(string priority) => priority switch
-    {
-        "High" => "bg-danger text-danger bg-opacity-10",
-        "Medium" => "bg-primary text-primary bg-opacity-10",
-        "Low" => "bg-secondary text-secondary bg-opacity-10",
-        _ => "bg-light text-dark"
-    };
-
-    private string GetProgressColor(string status) => status switch
-    {
-        "Completed" => "bg-success",
-        "In Progress" => "bg-info",
-        _ => "bg-warning"
-    };
+    private string GetStatusClass(string status) => status switch { "Completed" => "bg-success-soft text-success", "Pending" => "bg-warning-soft text-warning", "In Progress" => "bg-info-soft text-info", _ => "bg-secondary text-dark" };
+    private string GetPriorityClass(string priority) => priority switch { "High" => "bg-danger text-danger bg-opacity-10", "Medium" => "bg-primary text-primary bg-opacity-10", "Low" => "bg-secondary text-secondary bg-opacity-10", _ => "bg-light text-dark" };
+    private string GetProgressColor(string status) => status switch { "Completed" => "bg-success", "In Progress" => "bg-info", _ => "bg-warning" };
 }
