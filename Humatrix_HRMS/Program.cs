@@ -169,6 +169,17 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
+
+// ==========================================
+// AUTO APPLY PENDING MIGRATIONS
+// ==========================================
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    await db.Database.MigrateAsync();
+}
+
 // ==========================================
 // SEED ORGANIZATION DOCUMENT TEMPLATES FOR ALL ORGS
 // ==========================================
@@ -189,6 +200,10 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine(ex.StackTrace);
     }
 }
+
+
+
+
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())
