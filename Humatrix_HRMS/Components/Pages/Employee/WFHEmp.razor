@@ -3,283 +3,222 @@
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize(Roles = "Employee , HR")]
 @inject WorkFromHomeService WfhService
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Work From Home | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 mt-4">
-
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="fw-bold mb-0">Work From Home</h4>
-            <small class="text-muted">Submit and track your WFH requests</small>
-        </div>
-        <button class="btn btn-primary shadow-sm"
-                style="background-color:#5c4ac7;border:none;"
-                @onclick="OpenApplyModal">
-            <i class="bi bi-house me-1"></i>+ Apply WFH
-        </button>
-    </div>
-
-    <!-- ALERT BANNER -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
     @if (!string.IsNullOrEmpty(message))
     {
-        <div class="alert alert-@(isError ? "danger" : "success") alert-dismissible shadow-sm border-0 d-flex gap-2">
-            <i class="bi bi-@(isError ? "exclamation-triangle-fill" : "check-circle-fill") mt-1"></i>
-            <div class="flex-grow-1">@message</div>
-            <button class="btn-close" @onclick="() => message = null"></button>
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
+                    <span class="small fw-medium">@message</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
+            </div>
         </div>
     }
-
-    <!-- TABLE -->
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white border-bottom py-3 px-4">
-            <span class="text-muted small fw-bold">@requests.Count REQUEST(S)</span>
-        </div>
-
-        @if (isLoading)
-        {
-            <div class="text-center py-5">
-                <div class="spinner-border text-primary"></div>
-                <p class="text-muted small mt-2">Loading...</p>
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #fef2f2; color: #991b1b; border-left: 4px solid #ef4444 !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5" style="color: #ef4444;"></i>
+                    <span class="small fw-medium">@error</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => error = null"></button>
             </div>
-        }
-        else
-        {
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
-                        <tr>
-                            <th class="ps-4 text-muted small fw-bold border-0">DATE</th>
-                            <th class="text-muted small fw-bold border-0">REASON</th>
-                            <th class="text-muted small fw-bold border-0">APPLIED ON</th>
-                            <th class="text-muted small fw-bold border-0">STATUS</th>
-                            <th class="text-muted small fw-bold border-0 pe-4"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (!requests.Any())
+        </div>
+    }
+</div>
+
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Work From Home</h2>
+            <p class="text-muted small mb-0">Submit and track your remote work requests.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="OpenApplyModal">
+                <i class="bi bi-house-add"></i> APPLY WFH
+            </button>
+            <button class="btn btn-interactive-back shadow-sm" @onclick="GoDashboard">
+                <i class="bi bi-speedometer2"></i> DASHBOARD
+            </button>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm panel-container-card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">DATE</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">REASON</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3">APPLIED ON</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-center">STATUS</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pe-4">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (isLoading)
+                    {
+                        <tr><td colspan="5" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var r in requests.OrderByDescending(x => x.Date))
                         {
                             <tr>
-                                <td colspan="5" class="text-center py-5 text-muted">
-                                    <i class="bi bi-house-door fs-2 d-block mb-2 opacity-25"></i>
-                                    No WFH requests found.
+                                <td class="ps-4 fw-bold text-dark">@r.Date.ToString("dd MMM yyyy")</td>
+                                <td class="text-muted small">@r.Reason</td>
+                                <td class="small text-muted">@r.AppliedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
+                                <td class="text-center"><span class="badge rounded-pill @GetStatusClass(r.Status)">@r.Status</span></td>
+                                <td class="pe-4 text-end">
+                                    @if (r.Status == "Pending")
+                                    {
+                                        <button class="btn btn-sm btn-action-cancel" @onclick="() => Cancel(r.Id)">Cancel</button>
+                                    }
                                 </td>
                             </tr>
                         }
-                        else
-                        {
-                            @foreach (var r in requests.OrderByDescending(x => x.Date))
-                            {
-                                <tr class="@(r.Status == "Pending" ? "table-warning" : "")">
-                                    <td class="ps-4 fw-semibold">@r.Date.ToString("dd MMM yyyy")</td>
-                                    <td class="text-muted small">@r.Reason</td>
-                                    <td class="small text-muted">
-                                        @r.AppliedAt.ToLocalTime().ToString("dd MMM yyyy")
-                                    </td>
-                                    <td>
-                                        <span class="badge rounded-pill @GetStatusClass(r.Status)">
-                                            @r.Status
-                                        </span>
-                                    </td>
-                                    <td class="pe-4 text-end">
-                                        @if (r.Status == "Pending")
-                                        {
-                                            <button class="btn btn-sm btn-outline-danger"
-                                                    disabled="@actionLoading"
-                                                    @onclick="() => Cancel(r.Id)">
-                                                Cancel
-                                            </button>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-
 </div>
 
-<!-- APPLY WFH MODAL -->
 @if (showModal)
 {
-    <div class="modal fade show d-block" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content shadow">
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
                 <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold">
-                        <i class="bi bi-house-fill text-primary me-2"></i>Apply for WFH
-                    </h5>
+                    <h5 class="modal-title fw-bold">Apply for WFH</h5>
                     <button class="btn-close" @onclick="CloseModal"></button>
                 </div>
-                <div class="modal-body pt-2">
-
-                    <!-- MODAL INLINE ERROR -->
-                    @if (!string.IsNullOrEmpty(modalError))
-                    {
-                        <div class="alert alert-danger border-0 d-flex gap-2 small">
-                            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
-                            <div>@modalError</div>
-                        </div>
-                    }
-
+                <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-uppercase text-muted">
-                            Date <span class="text-danger">*</span>
-                        </label>
-                        <input type="date"
-                               class="form-control @(showModalValidation && model.Date == default ? "is-invalid" : "")"
-                               min="@DateTime.Today.ToString("yyyy-MM-dd")"
-                               @bind="model.Date" />
-                        @if (showModalValidation && model.Date == default)
-                        {
-                            <div class="invalid-feedback">Date is required.</div>
-                        }
+                        <label class="form-label small fw-bold text-uppercase text-muted">Date</label>
+                        <input type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" @bind="model.Date" />
                     </div>
-
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-uppercase text-muted">
-                            Reason <span class="text-danger">*</span>
-                        </label>
-                        <textarea class="form-control @(showModalValidation && string.IsNullOrWhiteSpace(model.Reason) ? "is-invalid" : "")"
-                                  rows="3"
-                                  placeholder="Briefly explain why you need to work from home..."
-                                  @bind="model.Reason"></textarea>
-                        @if (showModalValidation && string.IsNullOrWhiteSpace(model.Reason))
-                        {
-                            <div class="invalid-feedback">Reason is required.</div>
-                        }
+                        <label class="form-label small fw-bold text-uppercase text-muted">Reason</label>
+                        <textarea class="form-control" rows="3" @bind="model.Reason"></textarea>
                     </div>
-
                 </div>
                 <div class="modal-footer border-0">
-                    <button class="btn btn-secondary" @onclick="CloseModal" disabled="@actionLoading">
-                        Cancel
-                    </button>
-                    <button class="btn btn-primary"
-                            style="background-color:#5c4ac7;border:none;"
-                            @onclick="SubmitWfh"
-                            disabled="@actionLoading">
-                        @if (actionLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
-                        }
-                        Submit Request
-                    </button>
+                    <button class="btn btn-action-cancel" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-add-dept" @onclick="SubmitWfh">Submit Request</button>
                 </div>
             </div>
         </div>
     </div>
-    <div class="modal-backdrop fade show"></div>
 }
 
-@code {
+<style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
 
-    // ── State ────────────────────────────────────────────────────────────────────
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .btn-add-dept {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        border: none;
+    }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .btn-action-cancel {
+        background-color: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 5px 12px;
+        font-size: 12.5px;
+    }
+</style>
+
+@code {
     private List<WorkFromHomeRequest> requests = new();
     private WorkFromHomeRequest model = new();
+    private bool isLoading, showModal;
+    private string? message, error;
 
-    private bool isLoading;
-    private bool actionLoading;
-    private bool showModal;
-    private bool showModalValidation;
-    private bool isError;
-    private string? message;
-    private string? modalError;
-
-    // ── Lifecycle ────────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync() => await LoadRequests();
 
-    private async Task LoadRequests()
+    private async void TriggerAutoDismiss(bool isSuccess)
     {
-        isLoading = true;
-        try
-        {
-            requests = await WfhService.GetMyAsync();
-        }
-        catch (Exception ex)
-        {
-            isError = true;
-            message = ex.Message;
-        }
-        finally
-        {
-            isLoading = false;
-        }
+        await Task.Delay(4000);
+        if (isSuccess) message = null; else error = null;
+        StateHasChanged();
     }
 
-    // ── Modal ────────────────────────────────────────────────────────────────────
-    private void OpenApplyModal()
-    {
-        model = new WorkFromHomeRequest { Date = DateTime.Today.AddDays(1) };
-        modalError = null;
-        showModalValidation = false;
-        showModal = true;
-    }
+    private async Task LoadRequests() { isLoading = true; requests = await WfhService.GetMyAsync(); isLoading = false; }
 
+    private void OpenApplyModal() { model = new WorkFromHomeRequest { Date = DateTime.Today.AddDays(1) }; showModal = true; }
     private void CloseModal() => showModal = false;
 
-    // ── Actions ──────────────────────────────────────────────────────────────────
     private async Task SubmitWfh()
     {
-        showModalValidation = true;
-        modalError = null;
-
-        if (model.Date == default || string.IsNullOrWhiteSpace(model.Reason))
-            return;
-
-        actionLoading = true;
         try
         {
             await WfhService.ApplyAsync(model);
-            isError = false;
-            message = "WFH request submitted successfully. Pending HR approval.";
+            message = "WFH request submitted successfully.";
             showModal = false;
             await LoadRequests();
+            TriggerAutoDismiss(true);
         }
-        catch (Exception ex)
-        {
-            modalError = ex.Message;
-        }
-        finally
-        {
-            actionLoading = false;
-        }
+        catch (Exception ex) { error = ex.Message; TriggerAutoDismiss(false); }
     }
 
     private async Task Cancel(Guid id)
     {
-        actionLoading = true;
-        message = null;
         try
         {
             await WfhService.CancelAsync(id);
-            isError = false;
             message = "WFH request cancelled.";
             await LoadRequests();
+            TriggerAutoDismiss(true);
         }
-        catch (Exception ex)
-        {
-            isError = true;
-            message = ex.Message;
-        }
-        finally
-        {
-            actionLoading = false;
-        }
+        catch (Exception ex) { error = ex.Message; TriggerAutoDismiss(false); }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────────
-    private static string GetStatusClass(string? status) => status switch
+    private async Task GoDashboard()
     {
-        "Approved" => "bg-success",
-        "Rejected" => "bg-danger",
-        "Cancelled" => "bg-secondary",
-        _ => "bg-warning text-dark"
-    };
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        Nav.NavigateTo(authState.User.IsInRole("HR") ? "/hr/dashboard" : "/employee/dashboard");
+    }
+
+    private static string GetStatusClass(string? status) => status switch { "Approved" => "bg-success", "Rejected" => "bg-danger", "Cancelled" => "bg-secondary", _ => "bg-warning" };
 }

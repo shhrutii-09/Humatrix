@@ -6,83 +6,109 @@
 @using Microsoft.AspNetCore.Authorization
 
 @attribute [Authorize]
-@* @attribute [Authorize(Roles = "Employee")] *@
-
-
 @inject HolidayService HolidayService
+@inject NavigationManager Nav
 
-<PageTitle>Holidays | Humatrix</PageTitle>
+<PageTitle>Holidays | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-normal">Holiday Calendar</h2>
-
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <button class="btn btn-outline-secondary btn-sm me-2" @onclick="PrevMonth">◀</button>
-            <span class="fw-semibold">@currentMonth.ToString("MMMM yyyy")</span>
-            <button class="btn btn-outline-secondary btn-sm ms-2" @onclick="NextMonth">▶</button>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Holiday Calendar</h2>
+            <p class="text-muted small mb-0">View upcoming company holidays and observances.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
+                <i class="bi bi-speedometer2"></i>
+                DASHBOARD
+            </button>
         </div>
     </div>
 
-    <!-- CALENDAR -->
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-3">
+    <div class="card border-0 shadow-sm panel-container-card">
+        <div class="card-header bg-white border-0 pt-4 pb-2 d-flex justify-content-center align-items-center gap-3">
+            <button class="btn btn-sm btn-outline-secondary border-0" @onclick="PrevMonth"><i class="bi bi-chevron-left"></i></button>
+            <h5 class="mb-0 fw-bold text-indigo-premium">@currentMonth.ToString("MMMM yyyy")</h5>
+            <button class="btn btn-sm btn-outline-secondary border-0" @onclick="NextMonth"><i class="bi bi-chevron-right"></i></button>
+        </div>
 
-            <!-- WEEK HEADER -->
-            <div class="row text-center fw-semibold border-bottom pb-2 mb-2">
+        <div class="card-body p-4">
+            <div class="row text-center fw-bold text-secondary small tracking-wider mb-2">
                 @foreach (var day in weekDays)
                 {
-                    <div class="col">@day</div>
+                    <div class="col py-2">@day</div>
                 }
             </div>
 
-            <!-- DAYS GRID -->
             @foreach (var week in calendar)
             {
-                <div class="row text-center mb-2">
-
+                <div class="row text-center">
                     @foreach (var date in week)
                     {
                         var holiday = GetHoliday(date);
+                        var isCurrentMonth = date.Month == currentMonth.Month;
 
-                        <div class="col border rounded p-2 position-relative"
-                             style="min-height:80px;">
-
-                            <div class="small text-muted">@date.Day</div>
+                        <div class="col border p-2 position-relative @(isCurrentMonth ? "" : "bg-light text-muted")"
+                             style="min-height: 100px; transition: background 0.2s;">
+                            <div class="small fw-semibold">@date.Day</div>
 
                             @if (holiday != null)
                             {
-                                <div class="mt-2 p-1 rounded text-white small"
-                                     style="background-color:@(holiday.IsOptional ? "#ffc107" : "#dc3545")"
-                                     title="@holiday.Name">
+                                <div class="mt-2 p-1 rounded small fw-medium shadow-sm"
+                                     style="background-color:@(holiday.IsOptional ? "#fffbeb" : "#fef2f2");
+                                                        color:@(holiday.IsOptional ? "#92400e" : "#991b1b");
+                                                        border: 1px solid @(holiday.IsOptional ? "#fcd34d" : "#fecaca");">
                                     @holiday.Name
                                 </div>
                             }
-
                         </div>
                     }
-
                 </div>
             }
-
         </div>
     </div>
-
 </div>
 
+<style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+        text-transform: uppercase;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .text-indigo-premium {
+        color: #5c4ac7;
+    }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-interactive-back:hover {
+            background: #f8fafc !important;
+        }
+</style>
+
 @code {
-
     private List<Holiday> holidays = new();
-
     private DateTime currentMonth = DateTime.Today;
-
-    private List<string> weekDays = new()
-    {
-        "Mon","Tue","Wed","Thu","Fri","Sat","Sun"
-    };
-
+    private List<string> weekDays = new() { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
     private List<List<DateTime>> calendar = new();
 
     protected override async Task OnInitializedAsync()
@@ -94,40 +120,23 @@
     private void BuildCalendar()
     {
         calendar.Clear();
-
         var firstDay = new DateTime(currentMonth.Year, currentMonth.Month, 1);
-
-        // Align to Monday
         int offset = ((int)firstDay.DayOfWeek + 6) % 7;
         var startDate = firstDay.AddDays(-offset);
 
         for (int week = 0; week < 6; week++)
         {
             var days = new List<DateTime>();
-
             for (int i = 0; i < 7; i++)
             {
                 days.Add(startDate.AddDays(week * 7 + i));
             }
-
             calendar.Add(days);
         }
     }
 
-    private Holiday? GetHoliday(DateTime date)
-    {
-        return holidays.FirstOrDefault(h => h.Date.Date == date.Date);
-    }
+    private Holiday? GetHoliday(DateTime date) => holidays.FirstOrDefault(h => h.Date.Date == date.Date);
 
-    private void PrevMonth()
-    {
-        currentMonth = currentMonth.AddMonths(-1);
-        BuildCalendar();
-    }
-
-    private void NextMonth()
-    {
-        currentMonth = currentMonth.AddMonths(1);
-        BuildCalendar();
-    }
+    private void PrevMonth() { currentMonth = currentMonth.AddMonths(-1); BuildCalendar(); }
+    private void NextMonth() { currentMonth = currentMonth.AddMonths(1); BuildCalendar(); }
 }
