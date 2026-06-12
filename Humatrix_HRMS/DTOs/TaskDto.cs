@@ -13,7 +13,7 @@
         public DateTime? DueDate { get; set; }
         public int Progress { get; set; }
         public string AssignedToName { get; set; } = "";
-
+        public string AssignedByName { get; set; } = "";
         public DateTime CreatedAt { get; set; }
     }
 }

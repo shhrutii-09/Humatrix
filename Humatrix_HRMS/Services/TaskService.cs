@@ -170,7 +170,11 @@ namespace Humatrix_HRMS.Services
                     Progress = t.Progress,
                     DueDate = t.DueDate,
                     CreatedAt = t.CreatedAt,
-                    AssignedToName = ""
+                    AssignedToName = "",
+                    AssignedByName = _context.Users
+                .Where(u => u.Id == t.AssignedBy.ToString())
+                .Select(u => u.FirstName + " " + u.LastName)
+                .FirstOrDefault() ?? "Admin"
                 })
                 .ToListAsync();
         }

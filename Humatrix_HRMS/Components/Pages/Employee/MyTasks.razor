@@ -179,7 +179,14 @@
                                disabled="@(t.Status == "Completed")" @onchange="(e) => UpdateProgress(t, e)" />
 
                         <div class="mt-auto pt-2 border-top">
-                            <small class="text-muted"><i class="bi bi-calendar3 me-1"></i> Due: @(t.DueDate?.ToString("dd MMM yyyy") ?? "N/A")</small>
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted"><i class="bi bi-calendar3 me-1"></i> Due: @(t.DueDate?.ToString("dd MMM yyyy") ?? "N/A")</small>
+
+                                @* Naya Code: Assigned By display karne ke liye *@
+                                <small class="text-primary fw-bold">
+                                    <i class="bi bi-person-badge"></i> @t.AssignedByName
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
