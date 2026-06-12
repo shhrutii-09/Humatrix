@@ -55,11 +55,13 @@
             <p class="text-muted small mb-0">Manage, filter, and review team rosters and active directories.</p>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn text-white fw-bold px-4 py-2 text-uppercase btn-add-dept" @onclick="NavigateToAddEmployee">
-                <i class="bi bi-plus-lg me-2"></i>Add Employee
+            <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="NavigateToAddEmployee">
+                <i class="bi bi-plus-circle"></i>
+                ADD EMPLOYEE
             </button>
-            <button class="btn bg-white border text-secondary fw-bold px-4 py-2 text-uppercase shadow-sm text-dashboard" @onclick="NavigateToDashboard">
-                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+            <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2" @onclick="NavigateToDashboard">
+                <i class="bi bi-speedometer2"></i>
+                DASHBOARD
             </button>
         </div>
     </div>
@@ -307,9 +309,24 @@
 <style>
     .btn-add-dept {
         background-color: #5c4ac7 !important;
-        font-size: 0.785rem !important;
+        color: white !important;
+        font-weight: 600 !important;
+        padding: 0.5rem 1rem !important;
         border-radius: 8px !important;
     }
+
+    .btn-interactive-back {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #475569 !important;
+        font-weight: 600 !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 8px !important;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+        }
 
     .custom-search-input {
         border: 1px solid #dfe5ef !important;
