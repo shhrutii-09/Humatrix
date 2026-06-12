@@ -52,7 +52,7 @@ public class EmployeeDocumentViewDto
 
 public class EmployeeDocumentDashboardDto
 {
-    public int ProfileCompletionPercentage { get; set; }
+    public int? ProfileCompletionPercentage { get; set; }
     public int TotalRequiredDocuments { get; set; }
     public int UploadedDocuments { get; set; }
     public int VerifiedDocuments { get; set; }

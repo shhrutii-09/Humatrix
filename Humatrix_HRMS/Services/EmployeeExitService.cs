@@ -1029,13 +1029,13 @@ namespace Humatrix_HRMS.Services
         }
 
         public async Task<EmployeeExit> UpdateClearanceAsync(
-            Guid exitId,
-            bool assetsReturned,
-            bool accessRevoked,
-            bool knowledgeTransferred,
-            bool noDuesCleared,
-            decimal? fullFinalAmount = null,
-            string? remarks = null)
+    Guid exitId,
+    bool assetsReturned,
+    bool accessRevoked,
+    bool knowledgeTransferred,
+    bool noDuesCleared,
+    decimal? fullFinalAmount = null,
+    string? remarks = null)
         {
             var exit = await _db.EmployeeExits
                 .Include(x => x.Employee)
@@ -1045,8 +1045,21 @@ namespace Humatrix_HRMS.Services
             if (exit.Status != ExitStatus.ClearanceInProgress && exit.Status != ExitStatus.Approved)
                 throw new InvalidOperationException("Exit must be in clearance state to update.");
 
+            // NEW: Check asset return deadline
+            var lastWorkingDayDate = exit.LastWorkingDay.Date;
+            var deadlineForAssetReturn = lastWorkingDayDate.AddDays(-1);
+            var today = DateTime.UtcNow.Date;
+
             if (assetsReturned && !exit.AssetsReturned)
             {
+                // Check if returning assets after the deadline
+                if (today > deadlineForAssetReturn)
+                {
+                    throw new InvalidOperationException(
+                        $"Assets cannot be returned after {deadlineForAssetReturn:dd MMM yyyy} (1 day before last working day). " +
+                        $"Please contact HR for assistance.");
+                }
+
                 await AutoReturnAssetsAsync(exit.EmployeeId);
                 exit.AssetsReturnedDate = DateTime.UtcNow;
             }
@@ -1089,9 +1102,9 @@ namespace Humatrix_HRMS.Services
         // ─────────────────────────────────────────────
 
         public async Task<EmployeeExit> CompleteExitAsync(
-            Guid exitId,
-            bool issueExperienceLetter = false,
-            bool issueRelievingLetter = false)
+      Guid exitId,
+      bool issueExperienceLetter = false,
+      bool issueRelievingLetter = false)
         {
             var exit = await _db.EmployeeExits
                 .Include(x => x.Employee)
@@ -1115,17 +1128,37 @@ namespace Humatrix_HRMS.Services
                     $"Complete all clearance items before finalising exit: {string.Join(", ", missing)}.");
 
             var today = DateTime.UtcNow.Date;
+
+            // NEW: Assets must be returned at least 1 day before last working day
+            var lastWorkingDayDate = exit.LastWorkingDay.Date;
+            var assetsReturnedByDate = exit.AssetsReturnedDate?.Date;
+
+            if (assetsReturnedByDate.HasValue && assetsReturnedByDate.Value >= lastWorkingDayDate)
+            {
+                throw new InvalidOperationException(
+                    $"Assets must be returned at least 1 day before your last working day ({exit.LastWorkingDay:dd MMM yyyy}). " +
+                    $"Assets were returned on {assetsReturnedByDate.Value:dd MMM yyyy}.");
+            }
+
+            // Also check if today is after the deadline
+            var deadlineForAssetReturn = lastWorkingDayDate.AddDays(-1);
+            if (!exit.AssetsReturned && today >= deadlineForAssetReturn)
+            {
+                throw new InvalidOperationException(
+                    $"Assets must be returned by {deadlineForAssetReturn:dd MMM yyyy} (1 day before last working day). " +
+                    $"Please return all assets immediately.");
+            }
+
             if (exit.LastWorkingDay.Date > today)
                 throw new InvalidOperationException(
                     $"Cannot complete exit before Last Working Day ({exit.LastWorkingDay:dd MMM yyyy}).");
 
             // Verify no assets still assigned
             var stillAssigned = await _db.AssetAssignments.AnyAsync(a =>
-                a.EmployeeId == exit.EmployeeId && a.ReturnedAt == null);
+        a.EmployeeId == exit.EmployeeId && a.ReturnedAt == null);
             if (stillAssigned)
                 throw new InvalidOperationException(
                     "Employee still has assigned assets. Return all assets before completing exit.");
-
             var currentUser = await _currentUser.GetUserAsync();
             var currentEmployee = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == currentUser!.Id);
 
@@ -1371,9 +1404,21 @@ namespace Humatrix_HRMS.Services
 
         private async Task<bool> HasPendingTasksAsync(Guid employeeId)
         {
+            // Check for tasks that are NOT completed
             return await _db.Tasks.AnyAsync(t =>
                 t.AssignedTo == employeeId &&
-                t.Status != "Completed");
+                t.Status != "Completed" &&
+                t.Status != "Cancelled");
+        }
+
+
+        // Add this method to get pending task count
+        public async Task<int> GetPendingTasksCountAsync(Guid employeeId)
+        {
+            return await _db.Tasks.CountAsync(t =>
+                t.AssignedTo == employeeId &&
+                t.Status != "Completed" &&
+                t.Status != "Cancelled");
         }
 
         private async Task<int> GetMinimumNoticePeriodAsync(Guid organizationId)

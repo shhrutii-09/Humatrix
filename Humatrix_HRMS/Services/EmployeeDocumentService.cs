@@ -188,10 +188,10 @@ public class EmployeeDocumentService : IEmployeeDocumentService
             .ToListAsync();
     }
 
-    public async Task<int>
-        GetProfileCompletionPercentageAsync(
-            Guid employeeId,
-            Guid organizationId)
+    public async Task<int?>
+     GetProfileCompletionPercentageAsync(
+         Guid employeeId,
+         Guid organizationId)
     {
         int totalRequired =
             await _db.DocumentTypes
@@ -201,7 +201,7 @@ public class EmployeeDocumentService : IEmployeeDocumentService
                 x.IsActive);
 
         if (totalRequired == 0)
-            return 100;
+            return null;  // CHANGE THIS: Return null instead of 100
 
         int uploaded =
             await _db.EmployeeDocuments
@@ -250,9 +250,13 @@ public class EmployeeDocumentService : IEmployeeDocumentService
             .ToList();
 
         // Calculate profile completion
-        var completionPercentage = totalRequired > 0
-            ? (int)Math.Round((verifiedCount * 100.0) / totalRequired)
-            : 100;
+        // Calculate profile completion
+        int? completionPercentage = null;  // Change to nullable
+        if (totalRequired > 0)
+        {
+            completionPercentage = (int)Math.Round((verifiedCount * 100.0) / totalRequired);
+        }
+        // If totalRequired == 0, keep completionPercentage as null (not 100)
 
         // Build document view DTOs
         // Update the GetEmployeeDocumentDashboardAsync method - specifically the part where you create documentViews

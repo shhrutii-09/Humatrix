@@ -50,7 +50,7 @@ public class EmployeeDocumentSummaryDto
     public string EmployeeCode { get; set; } = default!;
     public string DepartmentName { get; set; } = default!;
     public string DesignationName { get; set; } = default!;
-    public int ProfileCompletionPercentage { get; set; }
+    public int? ProfileCompletionPercentage { get; set; }
     public int TotalRequired { get; set; }
     public int VerifiedCount { get; set; }
     public int PendingCount { get; set; }

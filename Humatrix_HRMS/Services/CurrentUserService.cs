@@ -11,33 +11,58 @@ namespace Humatrix_HRMS.Services
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
-
+        private readonly ILogger<CurrentUserService>? _logger;
 
         public CurrentUserService(
             IHttpContextAccessor httpContextAccessor,
-            IDbContextFactory<ApplicationDbContext> contextFactory)
+            IDbContextFactory<ApplicationDbContext> contextFactory,
+            ILogger<CurrentUserService>? logger = null)
         {
             _httpContextAccessor = httpContextAccessor;
             _contextFactory = contextFactory;
+            _logger = logger;
         }
 
         public async Task<ApplicationUser?> GetUserAsync()
         {
-            var principal = _httpContextAccessor.HttpContext?.User;
+            try
+            {
+                var principal = _httpContextAccessor.HttpContext?.User;
 
-            if (principal == null)
+                if (principal == null)
+                {
+                    _logger?.LogWarning("HttpContext.User is null");
+                    return null;
+                }
+
+                var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger?.LogWarning("UserId claim not found");
+                    return null;
+                }
+
+                _logger?.LogInformation("Getting user with ID: {UserId}", userId);
+
+                using var context = _contextFactory.CreateDbContext();
+
+                var user = await context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+
+                if (user == null)
+                {
+                    _logger?.LogWarning("User not found with ID: {UserId}", userId);
+                }
+
+                return user;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting current user");
                 return null;
-
-            var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userId))
-                return null;
-
-            using var context = _contextFactory.CreateDbContext();
-
-            return await context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Id == userId);
+            }
         }
 
         //public async Task<HrDashboardContextDto?> GetHrDashboardContextAsync()

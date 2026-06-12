@@ -165,7 +165,19 @@
                                 @ChecklistRow("bi-shield-lock", "Access Revoked", _activeExit.AccessRevoked)
                                 @ChecklistRow("bi-people", "Knowledge Transfer", _activeExit.KnowledgeTransferred)
                                 @ChecklistRow("bi-cash-stack", "No Dues Cleared", _activeExit.NoDuesCleared)
-                                @ChecklistRow("bi-kanban", "Tasks Completed", _activeExit.TasksCompleted)
+                                <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                    <span>
+                                        <i class="bi bi-kanban me-2 text-secondary"></i>
+                                        Tasks Completed
+                                        @if (_pendingTasksCount > 0)
+                                        {
+                                            <span class="badge bg-danger rounded-pill ms-2">@_pendingTasksCount pending</span>
+                                        }
+                                    </span>
+                                    <span class="badge @(_tasksCompleted ? "bg-success-subtle text-success border border-success-subtle" : "bg-warning-subtle text-warning border border-warning-subtle") px-2 py-1">
+                                        @(_tasksCompleted ? "✓ Done" : $"Pending ({_pendingTasksCount} tasks)")
+                                    </span>
+                                </div>
                             </div>
                         }
 
@@ -185,33 +197,35 @@
                             </div>
                         }
 
-                        @* Cancel button *@
+                        @* ── CANCEL BUTTON (MOVED HERE - INSIDE THE ACTIVE EXIT CARD) ── *@
                         @if (_activeExit.Status != ExitStatus.Completed && _activeExit.Status != ExitStatus.Rejected)
                         {
-                            var canCancel = _activeExit.LastWorkingDay.Date > DateTime.Today;
-                            if (canCancel)
+                            var isAfterLwd = _activeExit.LastWorkingDay.Date <= DateTime.Today;
+
+                            if (isAfterLwd)
+                            {
+                                <div class="alert alert-danger py-2 small mb-3">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <strong>Warning:</strong> Your last working day (@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")) has passed.
+                                    Cancelling now may require HR approval.
+                                </div>
+                            }
+                            else
                             {
                                 <div class="alert alert-warning py-2 small mb-3">
                                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                                     <strong>You can cancel your resignation anytime before your last working day</strong>
                                     (@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")).
                                 </div>
-                                <button class="btn btn-outline-danger" @onclick="ConfirmCancel" disabled="@_isProcessing">
-                                    @if (_isProcessing)
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-2"></span>
-                                    }
-                                    <i class="bi bi-x-circle me-1"></i> Cancel Resignation
-                                </button>
                             }
-                            else
-                            {
-                                <div class="alert alert-secondary py-2 small mb-3">
-                                    <i class="bi bi-calendar-x me-2"></i>
-                                    Your last working day (@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")) has passed.
-                                    You can no longer cancel this resignation.
-                                </div>
-                            }
+
+                            <button class="btn btn-outline-danger w-100" @onclick="ConfirmCancel" disabled="@_isProcessing">
+                                @if (_isProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                <i class="bi bi-x-circle me-1"></i> Cancel Resignation
+                            </button>
                         }
 
                         @if (_activeExit.Status == ExitStatus.Completed)
@@ -413,6 +427,9 @@
     private string? _reasonError;
     private string? _remarksError;
 
+    private int _pendingTasksCount = 0;
+    private bool _tasksCompleted => _pendingTasksCount == 0;
+
     private static readonly (string step, string label)[] _steps =
     [
         ("Submitted",  "Submitted"),
@@ -433,11 +450,12 @@
         _activeExit = await ExitService.GetMyActiveExitRequestAsync();
         _exitHistory = await ExitService.GetAllMyExitsAsync();
 
-        // Remove the active one from history if it exists
         if (_activeExit != null)
         {
             _exitHistory = _exitHistory.Where(x => x.ExitId != _activeExit.ExitId).ToList();
+            _pendingTasksCount = await ExitService.GetPendingTasksCountAsync(_activeExit.EmployeeId);
         }
+
         StateHasChanged();
     }
 
@@ -486,7 +504,6 @@
             await LoadAsync();
             ShowToast("Resignation submitted successfully!");
 
-            // Reset form
             _model = new ResignationModel();
             _confirmed = false;
         }
@@ -543,11 +560,11 @@
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
-            StateHasChanged();
         }
         finally
         {
             _isProcessing = false;
+            StateHasChanged();
         }
     }
 
@@ -577,8 +594,6 @@
         _reasonError = null;
         _remarksError = null;
     }
-
-    // ── Status helpers ─────────────────────────────────
 
     private bool StepDone(string step) => _activeExit?.Status switch
     {

@@ -29,7 +29,7 @@ public interface IEmployeeDocumentService
         Guid employeeId,
         Guid organizationId);
 
-    Task<int> GetProfileCompletionPercentageAsync(
+    Task<int?> GetProfileCompletionPercentageAsync(
         Guid employeeId,
         Guid organizationId);
     // Add to IEmployeeDocumentService.cs

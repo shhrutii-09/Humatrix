@@ -3,9 +3,10 @@
 @rendermode InteractiveServer
 @attribute [Authorize(Roles = "OrgAdmin,HR")]
 @using Humatrix_HRMS.Data
-@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Models.Documents
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
+@using Microsoft.EntityFrameworkCore
 @using Humatrix_HRMS.Services.Documents
 @using Humatrix_HRMS.DTOs.Documents
 @using Microsoft.AspNetCore.Authorization
@@ -13,297 +14,409 @@
 @using System.IO
 @inject IOrgDocumentGenerationService DocumentService
 @inject CurrentUserService CurrentUserService
-@inject NavigationManager Nav
 
-<PageTitle>Issue Document — Humatrix HRMS</PageTitle>
+<PageTitle>Document Management | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 mt-4">
+<div class="container-fluid px-4">
 
-    {{!-- ── Header ──}}
-    <div class="d-flex align-items-center justify-content-between mb-4 border-bottom pb-3">
+    <!-- Header -->
+    <div class="page-header mb-4">
         <div>
-            <h2 class="fw-bold mb-0">Issue Document to Employee</h2>
-            <p class="text-muted small mb-0">
-                @if (isOrgAdmin)
-                {
-                    <span>Upload documents for any employee in your organisation</span>
-                }
-                else
-                {
-                    <span>Upload documents for employees in your department</span>
-                }
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-file-earmark-arrow-up me-2"></i>
+                Document Management
+            </h2>
+
+            <p class="text-muted mb-0">
+                Upload and manage employee documents securely
             </p>
         </div>
-        <button class="btn btn-outline-secondary btn-sm" @onclick='() => Nav.NavigateTo("/org/dashboard")'>
-            ← Dashboard
-        </button>
+
+        <div>
+            <span class="badge bg-primary px-3 py-2">
+                @eligibleEmployees.Count Employees
+            </span>
+        </div>
     </div>
 
     @if (isLoading)
     {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2 text-muted">Loading...</p>
+        <div class="loading-container">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-3">Loading documents...</p>
         </div>
     }
     else
     {
         <div class="row g-4">
 
-            {{!-- ── Left: Upload Form ──}}
-            <div class="col-lg-7">
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
-                        <h6 class="mb-0 fw-semibold">Document Details</h6>
-                        @if (!string.IsNullOrEmpty(prefillDocumentType))
-                        {
-                            <span class="badge bg-info text-dark px-3 py-2">
-                                💡 Prefilled from suggestion
-                            </span>
-                        }
+            <!-- Left -->
+            <div class="col-xl-8">
+
+                @if (dashboardSuggestions.Any())
+                {
+                    <div class="card dashboard-card mb-4">
+                        <div class="card-header-custom">
+                            <h6>
+                                Recommendations
+                                <span class="badge bg-primary ms-2">
+                                    @dashboardSuggestions.Count
+                                </span>
+                            </h6>
+                        </div>
+
+                        <div class="card-body">
+
+                            @foreach (var suggestion in dashboardSuggestions.OrderByDescending(x => x.Priority))
+                            {
+                                <div class="suggestion-item">
+
+                                    <div>
+                                        <div class="fw-semibold">
+                                            @suggestion.DocumentType
+                                        </div>
+
+                                        <small class="text-muted">
+                                            @suggestion.EmployeeName
+                                            •
+                                            @suggestion.Department
+                                        </small>
+
+                                        <div class="small text-secondary mt-1">
+                                            @suggestion.Reason
+                                        </div>
+                                    </div>
+
+                                    <button class="btn btn-primary btn-sm"
+                                            @onclick="() => PrefillForm(suggestion)">
+                                        Upload
+                                    </button>
+
+                                </div>
+                            }
+
+                        </div>
                     </div>
+                }
+
+                <div class="card dashboard-card">
+
+                    <div class="card-header-custom">
+                        <h5 class="mb-0">
+                            Upload Document
+                        </h5>
+                    </div>
+
                     <div class="card-body">
 
-                        {{!-- Result banner ──}}
-                        @if (!string.IsNullOrEmpty(resultMessage))
-                        {
-                            <div class="alert @(isSuccess ? "alert-success" : "alert-danger") d-flex align-items-start gap-2 mb-4">
-                                <span>@(isSuccess ? "✅" : "❌")</span>
-                                <div>@resultMessage</div>
-                            </div>
-                        }
+                        <EditForm Model="@uploadModel"
+                                  OnValidSubmit="HandleUpload"
+                                  FormName="uploadForm">
 
-                        <EditForm Model="@uploadModel" OnValidSubmit="@HandleUpload" FormName="uploadForm">
                             <DataAnnotationsValidator />
 
-                            {{!-- Employee selector with role tags ──}}
-                            <div class="mb-3">
-                                <label class="form-label fw-medium">
-                                    Employee <span class="text-danger">*</span>
-                                </label>
-                                <select class="form-select" value="@uploadModel.RecipientEmployeeId"
-                                        @onchange="OnEmployeeChanged">
-                                    <option value="">— Select an employee —</option>
-                                    @foreach (var dept in eligibleEmployees
-                                                                    .GroupBy(e => e.Department?.Name ?? "No Department")
-                                                                    .OrderBy(g => g.Key))
-                                    {
-                                        <optgroup label="@dept.Key">
-                                            @foreach (var emp in dept.OrderBy(e => e.FirstName))
-                                            {
-                                                var roleTag = employeeRoles.GetValueOrDefault(emp.EmployeeId, "Employee");
-                                                <option value="@emp.EmployeeId">
-                                                    @emp.FirstName @emp.LastName (@emp.EmployeeCode) — @roleTag
-                                                </option>
-                                            }
-                                        </optgroup>
-                                    }
-                                </select>
-                                @if (!eligibleEmployees.Any())
-                                {
-                                    <div class="alert alert-warning py-2 small mt-2">
-                                        No eligible employees found.
-                                    </div>
-                                }
-                            </div>
+                            <div class="row">
 
-                            {{!-- Document Name with autocomplete suggestions ──}}
-                            <div class="mb-3 position-relative">
-                                <label class="form-label fw-medium">
-                                    Document Name <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                       class="form-control"
-                                       placeholder="e.g., Offer Letter, Confirmation Letter..."
-                                       value="@uploadModel.DocumentName"
-                                       @oninput="OnDocumentNameInput"
-                                       @onfocus="ShowNameSuggestions"
-                                       @onblur="HideNameSuggestionsDelayed"
-                                       autocomplete="off" />
-                                @if (showNameSuggestions && filteredDocNameSuggestions.Any())
-                                {
-                                    <div class="position-absolute w-100 bg-white border rounded shadow-sm"
-                                         style="z-index:1000; top:100%; max-height:200px; overflow-y:auto;">
-                                        @foreach (var s in filteredDocNameSuggestions)
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label">
+                                        Employee
+                                    </label>
+
+                                    <InputSelect class="form-select form-control-modern"
+                                                 @bind-Value="uploadModel.RecipientEmployeeId">
+
+                                        <option value="">
+                                            Select Employee
+                                        </option>
+
+                                        @foreach (var emp in eligibleEmployees.OrderBy(x => x.FirstName))
                                         {
-                                            <div class="px-3 py-2 border-bottom hover-bg-light"
-                                                 style="cursor:pointer;"
-                                                 @onmousedown="() => SelectDocumentName(s)">
-                                                <span class="fw-medium">@s.Name</span>
-                                                <span class="badge bg-light text-secondary border ms-2" style="font-size:0.7rem;">
-                                                    @s.Category
-                                                </span>
+                                            <option value="@emp.EmployeeId">
+                                                @emp.FirstName @emp.LastName
+                                                (@emp.EmployeeCode)
+                                            </option>
+                                        }
+
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">
+                                        Document Name
+                                    </label>
+
+                                    <InputText class="form-control form-control-modern"
+                                               @bind-Value="uploadModel.DocumentName" />
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">
+                                        Category
+                                    </label>
+
+                                    <InputSelect class="form-select form-control-modern"
+                                                 @bind-Value="uploadModel.Category">
+
+                                        <option value="">Select</option>
+                                        <option value="HR">HR</option>
+                                        <option value="Finance">Finance</option>
+                                        <option value="Legal">Legal</option>
+                                        <option value="General">General</option>
+
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-12 mb-3">
+                                    <label class="form-label">
+                                        Description
+                                    </label>
+
+                                    <InputTextArea class="form-control form-control-modern"
+                                                   rows="4"
+                                                   @bind-Value="uploadModel.Description" />
+                                </div>
+
+                                <!-- Drag Drop Upload -->
+                                <div class="col-12 mb-4">
+
+                                    <label class="form-label">
+                                        Upload File
+                                    </label>
+
+                                    <div class="upload-zone">
+
+                                        <i class="bi bi-cloud-arrow-up upload-icon"></i>
+
+                                        <h6>
+                                            Drag & Drop File
+                                        </h6>
+
+                                        <small class="text-muted">
+                                            PDF, DOCX, JPG, PNG
+                                        </small>
+
+                                        <InputFile class="form-control mt-3"
+                                                   OnChange="OnFileSelected" />
+
+                                        @if (!string.IsNullOrWhiteSpace(selectedFileName))
+                                        {
+                                            <div class="selected-file">
+                                                📄 @selectedFileName
                                             </div>
                                         }
+
                                     </div>
-                                }
-                            </div>
 
-                            {{!-- Category (auto-detected from document name) ──}}
-                            <div class="mb-3">
-                                <label class="form-label fw-medium">
-                                    Category
-                                    @if (!string.IsNullOrEmpty(autoCategoryHint))
-                                    {
-                                        <span class="badge bg-success ms-2" style="font-size:0.7rem;">
-                                            ✓ Auto-detected
-                                        </span>
-                                    }
-                                </label>
-                                <select class="form-select" value="@uploadModel.Category"
-                                        @onchange="e => uploadModel.Category = e.Value?.ToString() ?? string.Empty">
-                                    <option value="">— Select category —</option>
-                                    <option value="Onboarding">Onboarding</option>
-                                    <option value="HR Policies">HR Policies</option>
-                                    <option value="Performance">Performance</option>
-                                    <option value="Exit">Exit</option>
-                                    <option value="General">General</option>
-                                </select>
-                            </div>
+                                </div>
 
-                            {{!-- Description ──}}
-                            <div class="mb-3">
-                                <label class="form-label fw-medium">Description (Optional)</label>
-                                <InputTextArea class="form-control" @bind-Value="uploadModel.Description"
-                                               rows="2" placeholder="Brief description" />
-                            </div>
+                                <div class="col-12 mb-3">
 
-                            {{!-- File Upload ──}}
-                            <div class="mb-3">
-                                <label class="form-label fw-medium">
-                                    Document File <span class="text-danger">*</span>
-                                </label>
-                                <InputFile class="form-control" OnChange="@OnFileSelected" />
-                                <div class="form-text">PDF, DOCX, DOC, JPG, PNG — max 10 MB</div>
-                                @if (!string.IsNullOrEmpty(selectedFileName))
-                                {
-                                    <div class="alert alert-info mt-2 py-1 small">
-                                        📄 @selectedFileName
+                                    <div class="form-check form-switch">
+
+                                        <InputCheckbox class="form-check-input"
+                                                       @bind-Value="uploadModel.RequiresAcknowledgment" />
+
+                                        <label class="form-check-label">
+                                            Requires Employee Acknowledgment
+                                        </label>
+
                                     </div>
-                                }
-                            </div>
 
-                            {{!-- Requires Acknowledgment ──}}
-                            <div class="mb-4">
-                                <div class="form-check">
-                                    <InputCheckbox class="form-check-input" @bind-Value="uploadModel.RequiresAcknowledgment" />
-                                    <label class="form-check-label fw-medium">
-                                        Requires Employee Acknowledgment
+                                </div>
+
+                                <div class="col-12 mb-4">
+
+                                    <label class="form-label">
+                                        Internal Remarks
                                     </label>
+
+                                    <InputTextArea class="form-control form-control-modern"
+                                                   rows="3"
+                                                   @bind-Value="uploadModel.Remarks" />
+
                                 </div>
-                                <div class="form-text">Employee will need to confirm receipt of this document</div>
-                            </div>
 
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-primary flex-fill" disabled="@isUploading">
-                                    @if (isUploading)
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-2"></span>
-                                        <span>Uploading...</span>
-                                    }
-                                    else
-                                    {
-                                        <span>📤 Issue Document</span>
-                                    }
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary px-4" @onclick="ResetForm">Clear</button>
-                            </div>
-                        </EditForm>
-                    </div>
-                </div>
-            </div>
+                                @if (!string.IsNullOrWhiteSpace(resultMessage))
+                                {
+                                    <div class="col-12 mb-3">
 
-            {{!-- ── Right: Suggestions + Issued Docs ──}}
-            <div class="col-lg-5">
+                                        <div class="alert @(isSuccess ? "alert-success" : "alert-danger")">
 
-                {{!-- Smart Suggestions ──}}
-                @if (suggestions.Any())
-                {
-                    <div class="card shadow-sm border-0 mb-4">
-                        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
-                            <h6 class="mb-0 fw-semibold">💡 Action Items</h6>
-                            <span class="badge bg-primary rounded-pill">@suggestions.Count</span>
-                        </div>
-                        <div class="card-body p-0">
-                            @foreach (var s in suggestions.Take(8))
-                            {
-                                <div class="p-3 border-bottom @(s.IsRevocationWarning ? "bg-danger-subtle" : "")">
-                                    <div class="d-flex justify-content-between align-items-start gap-2">
-                                        <div class="flex-fill">
-                                            <div class="fw-semibold small">@s.EmployeeName</div>
-                                            <div class="text-muted" style="font-size:0.78rem;">@s.Reason</div>
+                                            @resultMessage
+
                                         </div>
-                                        @if (!s.IsRevocationWarning)
-                                        {
-                                            <button class="btn btn-sm btn-outline-primary flex-shrink-0"
-                                                    @onclick="() => ApplySuggestion(s)">
-                                                Use
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <a href="/org/documents/issued" class="btn btn-sm btn-outline-danger flex-shrink-0">
-                                                Review
-                                            </a>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                }
 
-                {{!-- Recent Issues for selected employee ──}}
-                @if (recentForEmployee.Any())
-                {
-                    <div class="card shadow-sm border-0 mb-4">
-                        <div class="card-header bg-white border-bottom py-3">
-                            <h6 class="mb-0 fw-semibold">📋 Previously Issued to this Employee</h6>
-                        </div>
-                        <div class="card-body p-0">
-                            @foreach (var doc in recentForEmployee.Take(5))
-                            {
-                                <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="small fw-semibold">@doc.DocumentName</div>
-                                        <div class="text-muted" style="font-size:0.75rem;">
-                                            @doc.GeneratedAt.ToString("dd MMM yyyy") — @doc.Status
-                                        </div>
                                     </div>
-                                    <span class="badge @GetStatusBadge(doc.Status)">@doc.Status</span>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                }
+                                }
 
-                {{!-- Common document types help ──}}
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white border-bottom py-3">
-                        <h6 class="mb-0 fw-semibold">📄 Common Document Types</h6>
-                    </div>
-                    <div class="card-body small text-muted">
-                        <div class="row g-1">
-                            @foreach (var item in DocumentNamePresets)
-                            {
-                                <div class="col-6">
-                                    <button class="btn btn-sm btn-light w-100 text-start py-1 px-2"
-                                            style="font-size:0.78rem;"
-                                            @onclick="() => SelectDocumentName(item)">
-                                        @item.Name
+                                <div class="col-12">
+
+                                    <button type="submit"
+                                            class="btn btn-primary btn-lg"
+                                            disabled="@isUploading">
+
+                                        @if (isUploading)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+
+                                        Upload Document
+
                                     </button>
+
+                                    <button type="button"
+                                            class="btn btn-outline-secondary ms-2"
+                                            @onclick="ResetForm">
+
+                                        Reset
+
+                                    </button>
+
                                 </div>
-                            }
-                        </div>
+
+                            </div>
+
+                        </EditForm>
+
                     </div>
+
                 </div>
+
             </div>
+
+            <!-- Right Sidebar -->
+            <div class="col-xl-4">
+
+                <div class="card dashboard-card mb-4">
+
+                    <div class="card-header-custom">
+                        Upload Guidelines
+                    </div>
+
+                    <div class="card-body">
+
+                        <ul class="list-unstyled small">
+
+                            <li>✔ Supported file size: 10 MB</li>
+                            <li>✔ Secure document storage</li>
+                            <li>✔ Employee notifications</li>
+                            <li>✔ Audit tracking enabled</li>
+                            <li>✔ Online acknowledgments</li>
+
+                        </ul>
+
+                    </div>
+
+                </div>
+
+                <div class="card dashboard-card">
+
+                    <div class="card-header-custom">
+                        Statistics
+                    </div>
+
+                    <div class="card-body">
+
+                        <div class="stat-box">
+                            <h4>@eligibleEmployees.Count</h4>
+                            <span>Eligible Employees</span>
+                        </div>
+
+                        <div class="stat-box mt-3">
+                            <h4>@dashboardSuggestions.Count</h4>
+                            <span> Suggestions</span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
         </div>
     }
+
 </div>
+}
+
+
+<style>
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .dashboard-card {
+        border: none;
+        border-radius: 18px;
+        box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    }
+
+    .card-header-custom {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #eef1f4;
+        font-weight: 600;
+        background: #fff;
+    }
+
+    .form-control-modern {
+        border-radius: 12px;
+        min-height: 48px;
+    }
+
+    .upload-zone {
+        border: 2px dashed #d6dbe1;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        background: #fafbfc;
+        transition: .3s;
+    }
+
+        .upload-zone:hover {
+            border-color: #0d6efd;
+            background: #f6f9ff;
+        }
+
+    .upload-icon {
+        font-size: 3rem;
+        color: #0d6efd;
+    }
+
+    .selected-file {
+        margin-top: 10px;
+        background: #e8f4ff;
+        padding: 10px;
+        border-radius: 10px;
+    }
+
+    .suggestion-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #ececec;
+        border-radius: 12px;
+        margin-bottom: 10px;
+    }
+
+    .loading-container {
+        text-align: center;
+        padding: 100px 0;
+    }
+
+    .stat-box {
+        background: #f8f9fa;
+        border-radius: 14px;
+        padding: 15px;
+        text-align: center;
+    }
+
+</style>
 
 @code {
-    // ── Models ────────────────────────────────────────────────────────────────
     private class UploadDocumentModel
     {
         public Guid RecipientEmployeeId { get; set; }
@@ -314,49 +427,21 @@
         public bool RequiresAcknowledgment { get; set; } = true;
     }
 
-    private record DocNamePreset(string Name, string Category);
-
-    // ── Preset document names with auto-category mapping ─────────────────────
-    private static readonly List<DocNamePreset> DocumentNamePresets = new()
-    {
-        new("Offer Letter",           "Onboarding"),
-        new("Appointment Letter",     "Onboarding"),
-        new("Confirmation Letter",    "HR Policies"),
-        new("Promotion Letter",       "HR Policies"),
-        new("Increment Letter",       "HR Policies"),
-        new("Warning Letter",         "Performance"),
-        new("Show Cause Notice",      "Performance"),
-        new("PIP Letter",             "Performance"),
-        new("Experience Letter",      "Exit"),
-        new("Relieving Letter",       "Exit"),
-        new("Termination Letter",     "Exit"),
-        new("No Objection Certificate","General"),
-        new("Salary Certificate",     "General"),
-        new("Salary Slip",            "General"),
-        new("Joining Letter",         "Onboarding"),
-    };
-
-    // ── State ─────────────────────────────────────────────────────────────────
     private UploadDocumentModel uploadModel = new();
     private List<Employee> eligibleEmployees = new();
-    private Dictionary<Guid, string> employeeRoles = new();
-    private List<DashboardDocumentSuggestion> suggestions = new();
-    private List<OrgGeneratedDocument> recentForEmployee = new();
+    private List<DashboardDocumentSuggestion> dashboardSuggestions = new();
     private IBrowserFile? selectedFile;
     private string selectedFileName = string.Empty;
+
     private bool isLoading = true;
     private bool isUploading = false;
     private bool isOrgAdmin = false;
     private bool isSuccess = false;
     private string resultMessage = "";
-    private string prefillDocumentType = "";
-    private string autoCategoryHint = "";
-    private bool showNameSuggestions = false;
-    private List<DocNamePreset> filteredDocNameSuggestions = new();
+
     private ApplicationUser? _currentUser;
     private string _currentUserRole = "HR";
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync() => await LoadData();
 
     private async Task LoadData()
@@ -365,21 +450,21 @@
         {
             isLoading = true;
             _currentUser = await CurrentUserService.GetUserAsync();
-            if (_currentUser?.OrganizationId == null) return;
+
+            if (_currentUser?.OrganizationId == null)
+            {
+                ShowError("Your session has expired. Please log in again.");
+                return;
+            }
 
             isOrgAdmin = await CurrentUserService.IsInRoleAsync("OrgAdmin");
             _currentUserRole = isOrgAdmin ? "OrgAdmin" : "HR";
+
             var orgId = _currentUser.OrganizationId.Value;
 
             eligibleEmployees = await DocumentService.GetEligibleRecipientsForDocumentAsync(
                 orgId, _currentUser.Id, _currentUserRole);
-
-            // Build role tags map
-            employeeRoles = eligibleEmployees.ToDictionary(
-                e => e.EmployeeId,
-                e => "Employee"); // default; override below if you have a role lookup
-
-            suggestions = await DocumentService.GetDashboardSuggestionsAsync(
+            dashboardSuggestions = await DocumentService.GetDashboardSuggestionsAsync(
                 orgId, _currentUser.Id, _currentUserRole);
         }
         catch (Exception ex)
@@ -392,108 +477,6 @@
         }
     }
 
-    // ── Employee selection → load recent docs ────────────────────────────────
-    private async Task OnEmployeeChanged(ChangeEventArgs e)
-    {
-        recentForEmployee.Clear();
-        if (Guid.TryParse(e.Value?.ToString(), out var empId) && empId != Guid.Empty)
-        {
-            uploadModel.RecipientEmployeeId = empId;
-            try
-            {
-                recentForEmployee = await DocumentService.GetDocumentsForEmployeeAsync(
-                    empId, _currentUser!.OrganizationId!.Value);
-            }
-            catch { /* non-blocking */ }
-        }
-        else
-        {
-            uploadModel.RecipientEmployeeId = Guid.Empty;
-        }
-        StateHasChanged();
-    }
-
-    // ── Document name autocomplete ────────────────────────────────────────────
-    private void OnDocumentNameInput(ChangeEventArgs e)
-    {
-        uploadModel.DocumentName = e.Value?.ToString() ?? string.Empty;
-        AutoDetectCategory(uploadModel.DocumentName);
-        FilterNameSuggestions(uploadModel.DocumentName);
-        showNameSuggestions = filteredDocNameSuggestions.Any();
-    }
-
-    private void FilterNameSuggestions(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            filteredDocNameSuggestions = DocumentNamePresets.ToList();
-        }
-        else
-        {
-            filteredDocNameSuggestions = DocumentNamePresets
-                .Where(p => p.Name.Contains(input, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-        }
-    }
-
-    private void ShowNameSuggestions()
-    {
-        FilterNameSuggestions(uploadModel.DocumentName);
-        showNameSuggestions = true;
-    }
-
-    private async void HideNameSuggestionsDelayed()
-    {
-        await Task.Delay(200);
-        showNameSuggestions = false;
-        StateHasChanged();
-    }
-
-    private void SelectDocumentName(DocNamePreset preset)
-    {
-        uploadModel.DocumentName = preset.Name;
-        uploadModel.Category = preset.Category;
-        autoCategoryHint = preset.Category;
-        showNameSuggestions = false;
-        StateHasChanged();
-    }
-
-    private void AutoDetectCategory(string docName)
-    {
-        var match = DocumentNamePresets
-            .FirstOrDefault(p => docName.Contains(p.Name, StringComparison.OrdinalIgnoreCase));
-
-        if (match != null)
-        {
-            uploadModel.Category = match.Category;
-            autoCategoryHint = match.Category;
-        }
-        else
-        {
-            autoCategoryHint = string.Empty;
-        }
-    }
-
-    // ── Apply suggestion ──────────────────────────────────────────────────────
-    private async Task ApplySuggestion(DashboardDocumentSuggestion s)
-    {
-        uploadModel.RecipientEmployeeId = s.EmployeeId;
-        uploadModel.DocumentName = s.DocumentType;
-        uploadModel.Category = s.Category;
-        autoCategoryHint = s.Category;
-        prefillDocumentType = s.DocumentType;
-
-        try
-        {
-            recentForEmployee = await DocumentService.GetDocumentsForEmployeeAsync(
-                s.EmployeeId, _currentUser!.OrganizationId!.Value);
-        }
-        catch { /* non-blocking */ }
-
-        StateHasChanged();
-    }
-
-    // ── File selection ────────────────────────────────────────────────────────
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         selectedFile = e.File;
@@ -501,20 +484,24 @@
         await Task.CompletedTask;
     }
 
-    // ── Upload ────────────────────────────────────────────────────────────────
     private async Task HandleUpload()
     {
         if (uploadModel.RecipientEmployeeId == Guid.Empty)
         {
-            ShowError("Please select an employee."); return;
+            ShowError("Please select an employee.");
+            return;
         }
+
         if (string.IsNullOrWhiteSpace(uploadModel.DocumentName))
         {
-            ShowError("Please enter a document name."); return;
+            ShowError("Please enter a document name.");
+            return;
         }
+
         if (selectedFile == null)
         {
-            ShowError("Please select a file to upload."); return;
+            ShowError("Please select a file to upload.");
+            return;
         }
 
         isUploading = true;
@@ -522,34 +509,39 @@
 
         try
         {
-            using var ms = new MemoryStream();
-            await selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+            using var memoryStream = new MemoryStream();
+            await selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(memoryStream);
+            var fileBytes = memoryStream.ToArray();
+
+            var dto = new ManualDocumentUploadDto
+            {
+                RecipientEmployeeId = uploadModel.RecipientEmployeeId,
+                DocumentName = uploadModel.DocumentName,
+                Description = uploadModel.Description,
+                Category = uploadModel.Category,
+                Remarks = uploadModel.Remarks,
+                RequiresAcknowledgment = uploadModel.RequiresAcknowledgment
+            };
 
             var result = await DocumentService.UploadDocumentManuallyAsync(
-                new ManualDocumentUploadDto
-                {
-                    RecipientEmployeeId = uploadModel.RecipientEmployeeId,
-                    DocumentName = uploadModel.DocumentName,
-                    Description = uploadModel.Description,
-                    Category = uploadModel.Category,
-                    Remarks = uploadModel.Remarks,
-                    RequiresAcknowledgment = uploadModel.RequiresAcknowledgment
-                },
+                dto,
                 _currentUser!.OrganizationId!.Value,
                 _currentUser.Id,
                 _currentUserRole,
                 selectedFile.Name,
                 selectedFile.ContentType,
-                ms.ToArray());
+                fileBytes);
 
-            ShowSuccess($"Document '{result.DocumentTypeName}' issued successfully to {result.EmployeeName}.");
-            prefillDocumentType = string.Empty;
-
-            // Reload suggestions (exit doc may now be marked issued)
-            suggestions = await DocumentService.GetDashboardSuggestionsAsync(
-                _currentUser.OrganizationId.Value, _currentUser.Id, _currentUserRole);
-
+            ShowSuccess($"✅ Document '{result.DocumentTypeName}' uploaded successfully for {result.EmployeeName}.");
+            await RefreshSuggestions();
             ResetForm();
+        }
+        catch (DbUpdateException ex)
+        {
+            // This will show the actual database error
+            var innerMessage = ex.InnerException?.Message ?? ex.Message;
+            ShowError($"Database error: {innerMessage}");
+            Console.WriteLine($"Full error: {ex}");
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -557,33 +549,50 @@
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            ShowError($"{ex.Message}");
+            Console.WriteLine($"Full error: {ex}");
         }
         finally
         {
             isUploading = false;
         }
     }
+    private void PrefillForm(DashboardDocumentSuggestion suggestion)
+    {
+        uploadModel.DocumentName = suggestion.DocumentType;
+        uploadModel.RecipientEmployeeId = suggestion.EmployeeId;
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+        if (suggestion.SuggestedData != null && suggestion.SuggestedData.Any())
+        {
+            uploadModel.Description = $"Auto-suggested: {suggestion.Reason}. " +
+                                      string.Join("; ", suggestion.SuggestedData.Select(kv => $"{kv.Key}: {kv.Value}"));
+        }
+        else
+        {
+            uploadModel.Description = suggestion.Reason;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task RefreshSuggestions()
+    {
+        try
+        {
+            dashboardSuggestions = await DocumentService.GetDashboardSuggestionsAsync(
+                _currentUser!.OrganizationId!.Value, _currentUser.Id, _currentUserRole);
+        }
+        catch { }
+    }
+
     private void ResetForm()
     {
         uploadModel = new UploadDocumentModel();
         selectedFile = null;
         selectedFileName = string.Empty;
-        autoCategoryHint = string.Empty;
-        recentForEmployee.Clear();
         StateHasChanged();
     }
 
     private void ShowSuccess(string msg) { resultMessage = msg; isSuccess = true; }
     private void ShowError(string msg) { resultMessage = msg; isSuccess = false; }
-
-    private static string GetStatusBadge(string status) => status switch
-    {
-        "Acknowledged" => "bg-success",
-        "Issued" => "bg-warning text-dark",
-        "Revoked" => "bg-danger",
-        _ => "bg-secondary"
-    };
 }

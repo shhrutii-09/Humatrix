@@ -218,11 +218,11 @@ namespace Humatrix_HRMS.Services.Assets
         /// Atomically: creates AssetAssignment, sets Status=Assigned, sets CurrentEmployeeId.
         /// </summary>
         public async Task<AssignmentDto> AssignAssetAsync(
-            Guid organizationId,
-            AssignAssetDto dto,
-            string actorUserId,
-            string actorRole,
-            Guid? callerDepartmentId = null)   // required when actorRole == "HR"
+     Guid organizationId,
+     AssignAssetDto dto,
+     string actorUserId,
+     string actorRole,
+     Guid? callerDepartmentId = null)
         {
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -236,6 +236,7 @@ namespace Humatrix_HRMS.Services.Assets
                 if (asset.Status != AssetStatus.Available)
                     throw new InvalidOperationException(
                         $"Asset '{asset.AssetCode}' is not available for assignment (current status: {asset.Status}).");
+
                 var employee = await _db.Employees
                     .Include(e => e.Department)
                     .FirstOrDefaultAsync(e =>
@@ -245,6 +246,23 @@ namespace Humatrix_HRMS.Services.Assets
                         (e.DepartmentId == null || e.Department.IsActive))
                     ?? throw new KeyNotFoundException(
                         "Active employee not found or employee belongs to an inactive department.");
+
+                // ============================================================
+                // ADD THIS CHECK - PREVENT ASSIGNING ASSETS TO EXITING EMPLOYEES
+                // ============================================================
+                var hasActiveExit = await _db.EmployeeExits.AnyAsync(x =>
+                    x.EmployeeId == employee.EmployeeId &&
+                    x.Status != ExitStatus.Completed &&
+                    x.Status != ExitStatus.Rejected &&
+                    x.Status != ExitStatus.Cancelled);
+
+                if (hasActiveExit)
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot assign assets to {employee.FirstName} {employee.LastName} because they have an active exit request. " +
+                        $"Please resolve the exit process first.");
+                }
+
                 // HR scope: can only assign to employees in their department
                 if (actorRole == "HR" && callerDepartmentId.HasValue &&
                     employee.DepartmentId != callerDepartmentId.Value)
@@ -257,6 +275,7 @@ namespace Humatrix_HRMS.Services.Assets
                     throw new InvalidOperationException(
                         "This asset is restricted to a specific department. The selected employee is not in that department.");
 
+                // Rest of your existing code...
                 AssetStatusMachine.EnsureCanTransition(asset.Status, AssetStatus.Assigned);
 
                 var assignment = new AssetAssignment
@@ -298,7 +317,6 @@ namespace Humatrix_HRMS.Services.Assets
                 throw;
             }
         }
-
         /// <summary>
         /// Directly returns an asset (admin/HR action without a request).
         /// Use this for forced returns. Employee-initiated returns go through CreateAssetRequestAsync.
@@ -1692,29 +1710,41 @@ namespace Humatrix_HRMS.Services.Assets
         /// DIRECT FILTER: Only returns active employees belonging to active departments.
         /// </summary>
         public async Task<List<EmployeeDropdownDto>> GetAssignableEmployeesAsync(
-            Guid organizationId,
-            Guid assetId,
-            string? callerRole = null,
-            Guid? callerDepartmentId = null,
-            string? actorUserId = null)
+      Guid organizationId,
+      Guid assetId,
+      string? callerRole = null,
+      Guid? callerDepartmentId = null,
+      string? actorUserId = null)
         {
             var asset = await _db.Assets
                 .Include(a => a.Department)
                 .FirstOrDefaultAsync(a => a.AssetId == assetId && a.OrganizationId == organizationId)
                 ?? throw new KeyNotFoundException("Asset not found.");
 
-            // If the asset belongs to an inactive department, return nothing (it shouldn't be assigned)
+            // If the asset belongs to an inactive department, return nothing
             if (asset.DepartmentId.HasValue && asset.Department != null && !asset.Department.IsActive)
             {
                 return new List<EmployeeDropdownDto>();
             }
 
-            // FILTER: Employee status must equal "Active" and their department must be active
+            // ============================================================
+            // ADD THIS - GET EMPLOYEE IDs WITH ACTIVE EXIT REQUESTS
+            // ============================================================
+            var employeesWithActiveExit = await _db.EmployeeExits
+                .Where(x => x.OrganizationId == organizationId &&
+                            x.Status != ExitStatus.Completed &&
+                            x.Status != ExitStatus.Rejected &&
+                            x.Status != ExitStatus.Cancelled)
+                .Select(x => x.EmployeeId)
+                .ToListAsync();
+
+            // FILTER: Employee status must equal "Active", department active, and NO active exit
             IQueryable<Employee> q = _db.Employees
                 .Include(e => e.Department)
                 .Where(e => e.OrganizationId == organizationId
                             && e.Status == "Active"
-                            && (e.DepartmentId == null || e.Department.IsActive));
+                            && (e.DepartmentId == null || e.Department.IsActive)
+                            && !employeesWithActiveExit.Contains(e.EmployeeId)); // ← ADD THIS LINE
 
             // Asset dept restriction
             if (asset.DepartmentId.HasValue)

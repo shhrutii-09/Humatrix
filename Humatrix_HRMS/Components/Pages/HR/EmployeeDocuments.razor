@@ -71,14 +71,34 @@
                     <div class="col-md-5 mt-3 mt-md-0">
                         <div class="d-flex justify-content-between small text-muted mb-1">
                             <span>Profile Compliance Status</span>
-                            <span class="fw-bold text-dark">@(dashboardData?.ProfileCompletionPercentage ?? 0)%</span>
+                            @if (dashboardData?.ProfileCompletionPercentage.HasValue == true)
+                            {
+                                <span class="fw-bold text-dark">@dashboardData.ProfileCompletionPercentage.Value%</span>
+                            }
+                            else
+                            {
+                                <span class="fw-bold text-muted">No requirements set</span>
+                            }
                         </div>
                         <div class="progress mb-2" style="height: 10px;">
-                            <div class="progress-bar bg-success" role="progressbar"
-                                 style="width: @(dashboardData?.ProfileCompletionPercentage ?? 0)%"
-                                 aria-valuenow="@(dashboardData?.ProfileCompletionPercentage ?? 0)"
-                                 aria-valuemin="0"
-                                 aria-valuemax="100"></div>
+                            @if (dashboardData?.ProfileCompletionPercentage.HasValue == true)
+                            {
+                                <div class="progress-bar bg-success" role="progressbar"
+                                     style="width: @dashboardData.ProfileCompletionPercentage.Value%"
+                                     aria-valuenow="@dashboardData.ProfileCompletionPercentage.Value"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100"></div>
+                            }
+                            else
+                            {
+                                <div class="progress-bar bg-secondary" role="progressbar"
+                                     style="width: 100%"
+                                     aria-valuenow="100"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    <span class="small text-white">No mandatory docs defined</span>
+                                </div>
+                            }
                         </div>
                         <div class="d-flex gap-3 flex-wrap small text-muted">
                             <div>📄 @(dashboardData?.UploadedDocuments ?? 0) / @(dashboardData?.TotalRequiredDocuments ?? 0) Uploaded</div>
@@ -86,7 +106,13 @@
                             <div>⏳ @(dashboardData?.PendingDocuments ?? 0) Pending</div>
                         </div>
 
-                        @if (dashboardData?.MissingMandatoryCount > 0)
+                        @if (dashboardData?.TotalRequiredDocuments == 0)
+                        {
+                            <div class="alert alert-info mt-2 p-1 small mb-0">
+                                <i class="bi bi-info-circle me-1"></i> No mandatory document requirements configured for this organization.
+                            </div>
+                        }
+                        else if (dashboardData?.MissingMandatoryCount > 0)
                         {
                             <div class="alert alert-warning mt-2 p-1 small mb-0">
                                 ⚠️ @dashboardData.MissingMandatoryCount mandatory document(s) missing
