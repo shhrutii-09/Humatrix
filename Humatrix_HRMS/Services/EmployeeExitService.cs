@@ -2,6 +2,7 @@
 using Humatrix_HRMS.Data;
 using Humatrix_HRMS.Infrastructure.Constants;
 using Humatrix_HRMS.Models;
+using Humatrix_HRMS.Models.Documents;
 using Humatrix_HRMS.Services.Documents;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -853,19 +854,27 @@ namespace Humatrix_HRMS.Services
                 if (exit.Status == ExitStatus.Pending)
                 {
                     _db.EmployeeExits.Remove(exit);
+
+                    await AutoRevokeExitDocumentsAsync(
+                        exit.EmployeeId,
+                        exit.OrganizationId);
+
                     revertedItems.Add("Removed pending exit request.");
                 }
                 else
                 {
-                    // Set status to Cancelled
                     exit.Status = ExitStatus.Cancelled;
 
-                    // Set cancellation audit fields
                     exit.CancelledAt = DateTime.UtcNow;
                     exit.CancelledByEmployeeId = employee.EmployeeId;
                     exit.CancellationReason = $"Cancelled by {cancelledBy} on {DateTime.UtcNow:dd MMM yyyy}";
 
                     await _db.SaveChangesAsync();
+
+                    await AutoRevokeExitDocumentsAsync(
+                        exit.EmployeeId,
+                        exit.OrganizationId);
+
                     revertedItems.Add($"Marked exit request as cancelled (was {originalStatus}).");
                 }
 
@@ -1374,6 +1383,40 @@ namespace Humatrix_HRMS.Services
             return 15;
         }
 
+
+        private async Task AutoRevokeExitDocumentsAsync(Guid employeeId, Guid organizationId)
+        {
+            var exitDocs = await _db.OrgGeneratedDocuments
+                .Where(d =>
+                    d.EmployeeId == employeeId &&
+                    d.OrganizationId == organizationId &&
+                    !d.IsDeleted &&
+                    d.Status == "Issued" &&
+                    (
+                        d.DocumentName.Contains("Experience Letter") ||
+                        d.DocumentName.Contains("Relieving Letter")
+                    ))
+                .ToListAsync();
+
+            foreach (var doc in exitDocs)
+            {
+                doc.Status = "Revoked";
+                doc.IsLatestVersion = false;
+
+                _db.OrgDocumentHistories.Add(new OrgDocumentHistory
+                {
+                    DocumentId = doc.DocumentId,
+                    Action = "Revoked",
+                    PerformedByUserId = "SYSTEM",
+                    PerformedByRole = "System",
+                    PerformedAt = DateTime.UtcNow,
+                    Remarks = "Auto-revoked because resignation was cancelled."
+                });
+            }
+
+            if (exitDocs.Any())
+                await _db.SaveChangesAsync();
+        }
         private async Task NotifyExitSubmittedAsync(EmployeeExit exit, Employee employee)
         {
             var pendingAssets = await _db.AssetAssignments.CountAsync(a =>

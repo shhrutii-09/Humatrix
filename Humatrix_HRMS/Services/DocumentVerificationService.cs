@@ -1,6 +1,8 @@
 ﻿using Humatrix_HRMS.Data;
 using Humatrix_HRMS.Models.Documents;
 using Microsoft.EntityFrameworkCore;
+using Humatrix_HRMS.Services;
+
 
 namespace Humatrix_HRMS.Services.Documents;
 
@@ -9,13 +11,17 @@ public class DocumentVerificationService
 {
     private readonly ApplicationDbContext _db;
     private readonly IDocumentHistoryService _historyService;
+    private readonly NotificationService _notificationService;
+
 
     public DocumentVerificationService(
         ApplicationDbContext db,
-        IDocumentHistoryService historyService)
+        IDocumentHistoryService historyService,
+        NotificationService notificationService)
     {
         _db = db;
         _historyService = historyService;
+        _notificationService = notificationService;
     }
 
     public async Task<EmployeeDocument>
@@ -45,7 +51,15 @@ public class DocumentVerificationService
         document.VerifiedByRole = reviewerRole;
 
         await _db.SaveChangesAsync();
-
+        var employee = await _db.Employees.FirstOrDefaultAsync(e => e.EmployeeId == document.EmployeeId);
+        if (employee != null)
+        {
+            await _notificationService.CreateNotificationAsync(
+                employee.UserId,
+                "Document Verified ✓",
+                $"Your {document.DocumentType?.Name ?? "document"} has been verified successfully.",
+                "/employee/documents");
+        }
         await _historyService.LogAsync(
             document,
             DocumentAction.Verified,
@@ -88,7 +102,15 @@ public class DocumentVerificationService
             reviewerUserId;
 
         await _db.SaveChangesAsync();
-
+        var employeeReject = await _db.Employees.FirstOrDefaultAsync(e => e.EmployeeId == document.EmployeeId);
+        if (employeeReject != null)
+        {
+            await _notificationService.CreateNotificationAsync(
+                employeeReject.UserId,
+                "Document Rejected ✗",
+                $"Your {document.DocumentType?.Name ?? "document"} was rejected.\nReason: {rejectionReason}\nPlease upload a corrected version.",
+                "/employee/documents");
+        }
         await _historyService.LogAsync(
             document,
             DocumentAction.Rejected,

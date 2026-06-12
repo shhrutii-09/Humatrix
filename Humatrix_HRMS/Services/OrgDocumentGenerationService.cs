@@ -1,20 +1,10 @@
 ﻿// Services/Documents/OrgDocumentGenerationService.cs
-// Production-grade document generation service.
-//
-// Key design decisions:
-//   • Uses IDbContextFactory<ApplicationDbContext> throughout — no scoped DbContext leak.
-//   • GenerateDocumentSystemAsync is a dedicated method for background/auto-generation:
-//     it does NOT send any notification. The caller (AIEventMonitor) owns the notification.
-//   • GenerateDocumentAsync (manual, HR/OrgAdmin-initiated) sends ONE in-app notification.
-//   • GenerateDocumentWithAIAsync (manual, AI-enhanced) sends ONE in-app notification.
-//   • No duplicate document-number generation inside GenerateDocumentFileAsync.
-//   • CanGenerateDocumentForEmployeeAsync is pure and does not mutate state.
-
 using Humatrix_HRMS.Data;
 using Humatrix_HRMS.DTOs.Documents;
 using Humatrix_HRMS.Models;
 using Humatrix_HRMS.Models.Documents;
 using Humatrix_HRMS.Services.AI;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -27,7 +17,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly NotificationService _notificationService;
     private readonly IWebHostEnvironment _webHostEnvironment;
-    private readonly IAIDocumentService _aiDocumentService;
+    private readonly IAIDocumentService _aiDocumentService; // ONLY for suggestions
 
     public OrgDocumentGenerationService(
         IDbContextFactory<ApplicationDbContext> dbFactory,
@@ -44,7 +34,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  TEMPLATE MANAGEMENT
+    //  TEMPLATE MANAGEMENT (Keep as is - optional feature)
     // ══════════════════════════════════════════════════════════
 
     public async Task<OrgDocumentTemplate> CreateTemplateAsync(
@@ -70,7 +60,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             Category = dto.Category,
             TemplateContent = dto.TemplateContent,
             PlaceholderSchema = dto.PlaceholderDescriptions != null
-                ? JsonSerializer.Serialize(dto.PlaceholderDescriptions) : null,
+                                        ? JsonSerializer.Serialize(dto.PlaceholderDescriptions) : null,
             IsActive = true,
             DisplayOrder = dto.DisplayOrder,
             RequiresAcknowledgment = dto.RequiresAcknowledgment,
@@ -108,7 +98,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         template.Category = dto.Category;
         template.TemplateContent = dto.TemplateContent;
         template.PlaceholderSchema = dto.PlaceholderDescriptions != null
-            ? JsonSerializer.Serialize(dto.PlaceholderDescriptions) : null;
+                                             ? JsonSerializer.Serialize(dto.PlaceholderDescriptions) : null;
         template.DisplayOrder = dto.DisplayOrder;
         template.IsActive = dto.IsActive;
         template.RequiresAcknowledgment = dto.RequiresAcknowledgment;
@@ -160,37 +150,45 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         using var db = _dbFactory.CreateDbContext();
         var query = db.OrgDocumentTemplates.Where(x => x.OrganizationId == organizationId);
         if (!includeInactive) query = query.Where(x => x.IsActive);
-        return await query.OrderBy(x => x.Category).ThenBy(x => x.DisplayOrder).ThenBy(x => x.Name).ToListAsync();
+        return await query
+            .OrderBy(x => x.Category)
+            .ThenBy(x => x.DisplayOrder)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
     }
 
     // ══════════════════════════════════════════════════════════
-    //  DOCUMENT GENERATION — MANUAL (HR / OrgAdmin initiated)
+    //  MANUAL DOCUMENT UPLOAD (No AI generation, just file upload)
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Manual generation from UI. Validates permissions, replaces placeholders from
-    /// the stored template, saves the document, and sends ONE in-app notification.
-    /// </summary>
-    public async Task<OrgDocumentGenerationResponseDto> GenerateDocumentAsync(
-        OrgDocumentGenerationDto dto,
-        Guid organizationId,
-        string userId,
-        string userRole)
+    public async Task<OrgDocumentGenerationResponseDto> UploadDocumentManuallyAsync(
+    ManualDocumentUploadDto dto,
+    Guid organizationId,
+    string userId,
+    string userRole,
+    string fileName,
+    string contentType,
+    byte[] fileContent)
     {
-        var canGenerate = await CanGenerateDocumentForEmployeeAsync(
-            dto.RecipientEmployeeId, organizationId, userId, userRole);
+        // ── Permission check ────────────────────────────────────────
+        var permissionResult = await CheckPermissionAsync(dto.RecipientEmployeeId, organizationId, userId);
+        if (!permissionResult.Allowed)
+            throw new UnauthorizedAccessException(permissionResult.Reason);
 
-        if (!canGenerate)
-            throw new UnauthorizedAccessException(
-                "You do not have permission to generate documents for this employee.");
+        if (fileContent == null || fileContent.Length == 0)
+            throw new InvalidOperationException("Please select a file to upload.");
+
+        // Validate file type
+        var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
+        var allowedExtensions = new[] { ".pdf", ".docx", ".doc", ".txt", ".html", ".jpg", ".png" };
+        if (!allowedExtensions.Contains(fileExtension))
+            throw new InvalidOperationException("Invalid file type. Allowed: PDF, DOCX, DOC, TXT, HTML, JPG, PNG");
+
+        // Max file size: 10MB
+        if (fileContent.Length > 10 * 1024 * 1024)
+            throw new InvalidOperationException("File size exceeds 10MB limit.");
 
         using var db = _dbFactory.CreateDbContext();
-
-        var template = await db.OrgDocumentTemplates.FirstOrDefaultAsync(x =>
-            x.TemplateId == dto.TemplateId &&
-            x.OrganizationId == organizationId &&
-            x.IsActive)
-            ?? throw new InvalidOperationException("Template not found or inactive.");
 
         var recipient = await db.Employees
             .Include(e => e.Department)
@@ -199,234 +197,170 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             .FirstOrDefaultAsync(e => e.EmployeeId == dto.RecipientEmployeeId)
             ?? throw new InvalidOperationException("Recipient employee not found.");
 
-        var actor = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
-        var actorName = actor != null ? $"{actor.FirstName} {actor.LastName}" : userRole;
+        var actorName = await ResolveActorNameAsync(db, userId, userRole);
 
-        var placeholderData = BuildPlaceholderData(recipient, actorName, dto.CustomData);
-        var processedContent = ReplacePlaceholders(template.TemplateContent, placeholderData);
+        // Generate document number
+        var documentNumber = GenerateManualDocumentNumber(dto.DocumentName, recipient.EmployeeCode);
 
-        var documentNumber = GenerateDocumentNumber(template.Name, recipient.EmployeeCode);
-        var (fileName, filePath, fullPath) = await GenerateDocumentFileAsync(
-            processedContent, template.Name, recipient.EmployeeCode ?? recipient.EmployeeId.ToString()[..8], documentNumber);
+        // Save the uploaded file
+        var (savedFileName, filePath, fullPath) = await SaveUploadedFileFromBytesAsync(
+            fileContent, fileName, dto.DocumentName,
+            recipient.EmployeeCode ?? recipient.EmployeeId.ToString()[..8],
+            documentNumber);
 
-        var document = BuildDocumentRecord(
-            organizationId, recipient.EmployeeId, template.TemplateId,
-            documentNumber, template.Name, dto.Remarks ?? $"Generated by {actorName}",
-            fileName, recipient, filePath, fullPath, userId, userRole, placeholderData);
+        // Build document record - NO TemplateId for manual uploads
+        var document = new OrgGeneratedDocument
+        {
+            DocumentId = Guid.NewGuid(),
+            OrganizationId = organizationId,
+            EmployeeId = recipient.EmployeeId,
+            TemplateId = null,  // Manual upload - no template
+            DocumentNumber = documentNumber,
+            DocumentName = dto.DocumentName,
+            //Description = dto.Description ?? dto.Remarks ?? $"Uploaded by {actorName}",
+            Description = string.IsNullOrEmpty(dto.Category)? dto.Description : $"{dto.Category} | {dto.Description}",
+            FileName = savedFileName,
+            OriginalFileName = fileName,
+            FilePath = filePath,
+            FileSize = fileContent.Length,
+            MimeType = GetMimeType(fileExtension),
+            Status = "Issued",
+            GeneratedByUserId = userId,
+            GeneratedByRole = userRole,
+            GeneratedAt = DateTime.UtcNow,
+            IsLatestVersion = true,
+            Version = 1,
+            ContentSnapshot = JsonSerializer.Serialize(new
+            {
+                dto.DocumentName,
+                dto.Category,
+                dto.CustomMetadata,
+                UploadedBy = actorName,
+                OriginalFileName = fileName
+            })
+        };
 
+        // Add document FIRST
         db.OrgGeneratedDocuments.Add(document);
-        db.OrgDocumentHistories.Add(BuildHistory(document.DocumentId, "Generated", userId, userRole,
-            $"Document generated using template '{template.Name}'"));
+
+        // IMPORTANT: Save the document FIRST so it gets a real DocumentId in the database
         await db.SaveChangesAsync();
 
-        // ONE in-app notification to the employee.
+        // NOW add the history record AFTER document is saved
+        var history = new OrgDocumentHistory
+        {
+            DocumentId = document.DocumentId,  // Now this ID exists in the database
+            Action = "Uploaded",
+            PerformedByUserId = userId,
+            PerformedByRole = userRole,
+            PerformedAt = DateTime.UtcNow,
+            Remarks = $"Manual document upload: {dto.DocumentName} (File: {fileName})"
+        };
+
+        db.OrgDocumentHistories.Add(history);
+        await db.SaveChangesAsync();  // Save history separately
+
+        // Send notification to employee
         await _notificationService.CreateNotificationAsync(
             recipient.UserId,
-            $"New Document Issued: {template.Name}",
-            $"A new document '{template.Name}' (Ref: {documentNumber}) has been issued to you by {actorName}. " +
-            $"Please review it in the Documents section.",
+            $"New Document: {dto.DocumentName}",
+            $"A document '{dto.DocumentName}' (Ref: {documentNumber}) has been uploaded for you by {actorName}. " +
+            "Please review it in the Documents section.",
             "/employee/docu");
 
-        return MapToResponseDto(document, recipient, actorName);
+        return new OrgDocumentGenerationResponseDto
+        {
+            DocumentId = document.DocumentId,
+            EmployeeId = recipient.EmployeeId,
+            EmployeeName = $"{recipient.FirstName} {recipient.LastName}",
+            DocumentTypeName = document.DocumentName,
+            FilePath = document.FilePath,
+            OriginalFileName = document.OriginalFileName,
+            GeneratedAt = document.GeneratedAt,
+            GeneratedBy = actorName,
+            Status = document.Status,
+            EmailSent = false
+        };
     }
 
-    /// <summary>
-    /// Manual generation from UI, with AI-generated content.
-    /// Sends ONE in-app notification.
-    /// </summary>
-    public async Task<OrgDocumentGenerationResponseDto> GenerateDocumentWithAIAsync(
-        Guid templateId,
-        Guid recipientEmployeeId,
-        string userId,
-        string userRole,
-        Dictionary<string, string>? customData = null,
-        bool sendEmail = false)
+    public async Task MarkAsViewedAsync(Guid documentId, Guid employeeId)
     {
         using var db = _dbFactory.CreateDbContext();
 
-        var recipient = await db.Employees
-            .Include(e => e.Department)
-            .Include(e => e.Designation)
-            .Include(e => e.Organization)
-            .FirstOrDefaultAsync(e => e.EmployeeId == recipientEmployeeId)
-            ?? throw new InvalidOperationException("Recipient employee not found.");
+        var document = await db.OrgGeneratedDocuments
+            .FirstOrDefaultAsync(x => x.DocumentId == documentId && x.EmployeeId == employeeId);
 
-        var template = await db.OrgDocumentTemplates.FirstOrDefaultAsync(x =>
-            x.TemplateId == templateId &&
-            x.OrganizationId == recipient.OrganizationId &&
-            x.IsActive)
-            ?? throw new InvalidOperationException("Template not found or inactive.");
+        if (document == null)
+            throw new InvalidOperationException("Document not found.");
 
-        // Idempotency guard: prevent duplicate generation within 5 minutes.
-        var recentExists = await db.OrgGeneratedDocuments.AnyAsync(d =>
-            d.EmployeeId == recipientEmployeeId &&
-            d.TemplateId == templateId &&
-            d.GeneratedAt > DateTime.UtcNow.AddMinutes(-5));
-
-        if (recentExists)
-            throw new InvalidOperationException("This document was already generated recently. Please wait a few minutes.");
-
-        var actor = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
-        var actorName = actor != null ? $"{actor.FirstName} {actor.LastName}" : userRole;
-
-        var aiContent = await _aiDocumentService.GenerateDocumentContentAsync(
-            template.Name, template.Category, recipient, customData, actorName);
-
-        var placeholderData = BuildPlaceholderData(recipient, actorName, customData);
-        var processedContent = ReplacePlaceholders(aiContent, placeholderData);
-
-        var documentNumber = GenerateDocumentNumber(template.Name, recipient.EmployeeCode);
-        var (fileName, filePath, fullPath) = await GenerateDocumentFileAsync(
-            processedContent, template.Name, recipient.EmployeeCode ?? recipient.EmployeeId.ToString()[..8], documentNumber);
-
-        var document = BuildDocumentRecord(
-            recipient.OrganizationId, recipient.EmployeeId, template.TemplateId,
-            documentNumber, template.Name, $"AI-generated by {actorName}",
-            fileName, recipient, filePath, fullPath, userId, userRole, placeholderData,
-            originalFileNameSuffix: "_AI");
-
-        db.OrgGeneratedDocuments.Add(document);
-        db.OrgDocumentHistories.Add(BuildHistory(document.DocumentId, "Generated (AI)", userId, userRole,
-            $"AI-generated document using template '{template.Name}'"));
-        await db.SaveChangesAsync();
-
-        // ONE notification.
-        await _notificationService.CreateNotificationAsync(
-            recipient.UserId,
-            $"New Document Issued: {template.Name}",
-            $"A new document '{template.Name}' (Ref: {documentNumber}) has been issued to you by {actorName}. " +
-            $"Please review it in the Documents section.",
-            "/employee/docu");
-
-        return MapToResponseDto(document, recipient, actorName);
+        if (!document.IsViewed)
+        {
+            document.IsViewed = true;
+            document.ViewedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  DOCUMENT GENERATION — SYSTEM (Background / AIEventMonitor)
-    //
-    //  IMPORTANT: This method does NOT send any notification.
-    //  The caller (AIEventMonitor) is responsible for sending
-    //  a single consolidated notification after all docs are done.
-    // ══════════════════════════════════════════════════════════
+    // Add this new helper method to save from byte array
+    private async Task<(string fileName, string filePath, string fullPath)> SaveUploadedFileFromBytesAsync(
+        byte[] fileContent,
+        string originalFileName,
+        string documentName,
+        string employeeCode,
+        string documentNumber)
+    {
+        var folder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "documents", "organization");
+        Directory.CreateDirectory(folder);
 
-    public async Task<OrgDocumentGenerationResponseDto> GenerateDocumentSystemAsync(
-        Guid templateId,
-        Guid recipientEmployeeId,
-        string actorUserId,
-        string actorRole,
-        Dictionary<string, string>? customData = null)
+        var safeDocumentName = documentName.Replace(" ", "_").Replace("/", "_");
+        var fileExtension = Path.GetExtension(originalFileName);
+        var fileName = $"{safeDocumentName}_{employeeCode}_{documentNumber}{fileExtension}";
+        var filePath = $"/uploads/documents/organization/{fileName}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await System.IO.File.WriteAllBytesAsync(fullPath, fileContent);
+
+        return (fileName, filePath, fullPath);
+    }
+
+
+    public async Task<Dictionary<Guid, string>> GetEmployeeRolesAsync(Guid organizationId)
     {
         using var db = _dbFactory.CreateDbContext();
 
-        var recipient = await db.Employees
-            .Include(e => e.Department)
-            .Include(e => e.Designation)
-            .Include(e => e.Organization)
-            .FirstOrDefaultAsync(e => e.EmployeeId == recipientEmployeeId)
-            ?? throw new InvalidOperationException($"Employee {recipientEmployeeId} not found.");
-
-        var template = await db.OrgDocumentTemplates.FirstOrDefaultAsync(x =>
-            x.TemplateId == templateId &&
-            x.OrganizationId == recipient.OrganizationId &&
-            x.IsActive)
-            ?? throw new InvalidOperationException($"Template {templateId} not found or inactive.");
-
-        // Idempotency: exact same template + employee combo already exists?
-        var alreadyExists = await db.OrgGeneratedDocuments.AnyAsync(d =>
-            d.EmployeeId == recipientEmployeeId &&
-            d.TemplateId == templateId &&
-            !d.IsDeleted);
-
-        if (alreadyExists)
-            throw new InvalidOperationException(
-                $"Document '{template.Name}' already exists for this employee.");
-
-        // Resolve actor name from the database rather than using a raw "SYSTEM" string.
-        var actor = await db.Employees.FirstOrDefaultAsync(e => e.UserId == actorUserId);
-        var actorName = actor != null ? $"{actor.FirstName} {actor.LastName}" : "HR Department";
-
-        // Use AI to generate content for a richer output.
-        string processedContent;
-        try
-        {
-            var aiContent = await _aiDocumentService.GenerateDocumentContentAsync(
-                template.Name, template.Category, recipient, customData, actorName);
-            var placeholderData = BuildPlaceholderData(recipient, actorName, customData);
-            processedContent = ReplacePlaceholders(aiContent, placeholderData);
-        }
-        catch
-        {
-            // Fallback to template-based generation if AI is unavailable.
-            var placeholderData = BuildPlaceholderData(recipient, actorName, customData);
-            processedContent = ReplacePlaceholders(template.TemplateContent, placeholderData);
-        }
-
-        var documentNumber = GenerateDocumentNumber(template.Name, recipient.EmployeeCode);
-        var (fileName, filePath, fullPath) = await GenerateDocumentFileAsync(
-            processedContent, template.Name, recipient.EmployeeCode ?? recipient.EmployeeId.ToString()[..8], documentNumber);
-
-        var finalPlaceholders = BuildPlaceholderData(recipient, actorName, customData);
-        var document = BuildDocumentRecord(
-            recipient.OrganizationId, recipient.EmployeeId, template.TemplateId,
-            documentNumber, template.Name, $"Auto-generated by system",
-            fileName, recipient, filePath, fullPath, actorUserId, actorRole, finalPlaceholders);
-
-        db.OrgGeneratedDocuments.Add(document);
-        db.OrgDocumentHistories.Add(BuildHistory(document.DocumentId, "Generated (System)", actorUserId, actorRole,
-            $"System auto-generated using template '{template.Name}'"));
-        await db.SaveChangesAsync();
-
-        return MapToResponseDto(document, recipient, actorName);
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  BULK GENERATION
-    // ══════════════════════════════════════════════════════════
-
-    public async Task<List<OrgDocumentGenerationResponseDto>> GenerateDocumentsBulkAsync(
-        Guid templateId,
-        List<Guid> employeeIds,
-        Dictionary<string, string>? commonCustomData,
-        Guid organizationId,
-        string userId,
-        string userRole)
-    {
-        var results = new List<OrgDocumentGenerationResponseDto>();
-        var errors = new List<string>();
-
-        foreach (var employeeId in employeeIds)
-        {
-            try
+        var result = await (
+            from emp in db.Employees
+            join u in db.Users on emp.UserId equals u.Id
+            join ur in db.UserRoles on u.Id equals ur.UserId into urGroup
+            from ur in urGroup.DefaultIfEmpty()
+            join r in db.Roles on ur.RoleId equals r.Id into rGroup
+            from r in rGroup.DefaultIfEmpty()
+            where emp.OrganizationId == organizationId
+                  && emp.Status == "Active"
+            select new
             {
-                var result = await GenerateDocumentAsync(
-                    new OrgDocumentGenerationDto
-                    {
-                        TemplateId = templateId,
-                        RecipientEmployeeId = employeeId,
-                        CustomData = commonCustomData,
-                        SendEmailNotification = false // bulk: no per-doc notifications
-                    },
-                    organizationId, userId, userRole);
-
-                results.Add(result);
+                emp.EmployeeId,
+                Role = r == null ? "Employee" : r.Name
             }
-            catch (Exception ex)
-            {
-                errors.Add($"Employee {employeeId}: {ex.Message}");
-            }
-        }
+        ).ToListAsync();
 
-        if (!results.Any() && errors.Any())
-            throw new InvalidOperationException($"Bulk generation failed for all employees: {string.Join("; ", errors)}");
-
-        return results;
+        return result
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Any(x => x.Role == "OrgAdmin")
+                    ? "OrgAdmin"
+                    : g.Any(x => x.Role == "HR")
+                        ? "HR"
+                        : "Employee");
     }
 
     // ══════════════════════════════════════════════════════════
     //  VIEWING
     // ══════════════════════════════════════════════════════════
 
-    public async Task<List<OrgGeneratedDocument>> GetDocumentsForEmployeeAsync(Guid employeeId, Guid organizationId)
+    public async Task<List<OrgGeneratedDocument>> GetDocumentsForEmployeeAsync(
+        Guid employeeId, Guid organizationId)
     {
         using var db = _dbFactory.CreateDbContext();
         return await db.OrgGeneratedDocuments
@@ -439,7 +373,8 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             .ToListAsync();
     }
 
-    public async Task<List<OrgGeneratedDocument>> GetDocumentsGeneratedByUserAsync(string userId, Guid organizationId)
+    public async Task<List<OrgGeneratedDocument>> GetDocumentsGeneratedByUserAsync(
+        string userId, Guid organizationId)
     {
         using var db = _dbFactory.CreateDbContext();
         return await db.OrgGeneratedDocuments
@@ -452,20 +387,53 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             .ToListAsync();
     }
 
+    public async Task<List<OrgGeneratedDocument>> GetOrganizationDocumentsAsync(
+        Guid organizationId, string userId, string userRole)
+    {
+        using var db = _dbFactory.CreateDbContext();
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) return new List<OrgGeneratedDocument>();
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        IQueryable<OrgGeneratedDocument> query = db.OrgGeneratedDocuments
+            .Include(x => x.Template)
+            .Include(x => x.Employee).ThenInclude(e => e!.Department)
+            .Where(x => x.OrganizationId == organizationId && !x.IsDeleted);
+
+        if (roles.Contains("HR") && !roles.Contains("OrgAdmin"))
+        {
+            var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+            if (hrEmployee == null) return new List<OrgGeneratedDocument>();
+
+            var hrUserIds = await GetHrUserIdsInOrgAsync(db, organizationId);
+
+            query = query.Where(x =>
+                x.Employee != null &&
+                x.Employee.DepartmentId == hrEmployee.DepartmentId &&
+                !hrUserIds.Contains(x.Employee.UserId));
+        }
+
+        return await query.OrderByDescending(x => x.GeneratedAt).ToListAsync();
+    }
+
     public async Task<OrgGeneratedDocument?> GetDocumentByIdAsync(Guid documentId, Guid organizationId)
     {
         using var db = _dbFactory.CreateDbContext();
         return await db.OrgGeneratedDocuments
             .Include(x => x.Template)
             .Include(x => x.Employee)
-            .FirstOrDefaultAsync(x => x.DocumentId == documentId && x.OrganizationId == organizationId);
+            .FirstOrDefaultAsync(x =>
+                x.DocumentId == documentId && x.OrganizationId == organizationId);
     }
 
     // ══════════════════════════════════════════════════════════
-    //  ACKNOWLEDGMENT
+    //  ACKNOWLEDGMENT & REVOKE
     // ══════════════════════════════════════════════════════════
 
-    public async Task<bool> AcknowledgeDocumentAsync(Guid documentId, Guid employeeId, string? remarks = null)
+    public async Task<bool> AcknowledgeDocumentAsync(
+        Guid documentId, Guid employeeId, string? remarks = null)
     {
         using var db = _dbFactory.CreateDbContext();
 
@@ -473,7 +441,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             x.DocumentId == documentId && x.EmployeeId == employeeId);
 
         if (document == null) return false;
-        if (document.Status == "Acknowledged") return true; // idempotent
+        if (document.Status == "Acknowledged") return true;
 
         var employee = await db.Employees.FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
 
@@ -481,22 +449,21 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         document.AcknowledgedAt = DateTime.UtcNow;
         document.AcknowledgmentRemarks = remarks;
 
-        db.OrgDocumentHistories.Add(BuildHistory(document.DocumentId, "Acknowledged",
-            employee?.UserId ?? "SYSTEM", "Employee", remarks: remarks));
+        db.OrgDocumentHistories.Add(BuildHistory(
+            document.DocumentId, "Acknowledged",
+            employee?.UserId ?? "SYSTEM", "Employee", remarks));
 
         await db.SaveChangesAsync();
         return true;
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  REVOKE
-    // ══════════════════════════════════════════════════════════
-
-    public async Task<bool> RevokeDocumentAsync(Guid documentId, string userId, string userRole, string reason)
+    public async Task<bool> RevokeDocumentAsync(
+        Guid documentId, string userId, string userRole, string reason)
     {
         using var db = _dbFactory.CreateDbContext();
 
-        var document = await db.OrgGeneratedDocuments.FirstOrDefaultAsync(x => x.DocumentId == documentId);
+        var document = await db.OrgGeneratedDocuments.FirstOrDefaultAsync(x =>
+            x.DocumentId == documentId);
         if (document == null) return false;
 
         document.Status = "Revoked";
@@ -511,41 +478,14 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
     //  PERMISSIONS
     // ══════════════════════════════════════════════════════════
 
-    public async Task<bool> CanGenerateDocumentForEmployeeAsync(
+    public async Task<bool> CanUploadDocumentForEmployeeAsync(
         Guid employeeId,
         Guid organizationId,
         string userId,
         string userRole)
     {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null) return false;
-
-        var roles = await _userManager.GetRolesAsync(user);
-
-        if (roles.Contains("OrgAdmin")) return true;
-
-        if (roles.Contains("HR"))
-        {
-            using var db = _dbFactory.CreateDbContext();
-
-            var currentEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
-            if (currentEmployee == null) return false;
-
-            var targetEmployee = await db.Employees.FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
-            if (targetEmployee == null) return false;
-
-            // HR cannot generate docs for other HR members.
-            var targetUser = await _userManager.FindByIdAsync(targetEmployee.UserId);
-            if (targetUser != null)
-            {
-                var targetRoles = await _userManager.GetRolesAsync(targetUser);
-                if (targetRoles.Contains("HR")) return false;
-            }
-
-            return targetEmployee.DepartmentId == currentEmployee.DepartmentId;
-        }
-
-        return false;
+        var result = await CheckPermissionAsync(employeeId, organizationId, userId);
+        return result.Allowed;
     }
 
     public async Task<List<Employee>> GetEligibleRecipientsForDocumentAsync(
@@ -563,23 +503,27 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         {
             return await db.Employees
                 .Include(e => e.Department)
+                .Include(e => e.Designation)
                 .Where(e => e.OrganizationId == organizationId && e.Status == "Active")
-                .OrderBy(e => e.FirstName)
+                .OrderBy(e => e.Department!.Name)
+                .ThenBy(e => e.FirstName)
                 .ToListAsync();
         }
 
         if (roles.Contains("HR"))
         {
-            var currentEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
-            if (currentEmployee == null) return new List<Employee>();
+            var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+            if (hrEmployee == null) return new List<Employee>();
 
             var hrUserIds = await GetHrUserIdsInOrgAsync(db, organizationId);
 
             return await db.Employees
                 .Include(e => e.Department)
+                .Include(e => e.Designation)
                 .Where(e => e.OrganizationId == organizationId &&
-                            e.DepartmentId == currentEmployee.DepartmentId &&
+                            e.DepartmentId == hrEmployee.DepartmentId &&
                             e.Status == "Active" &&
+                            e.UserId != userId &&
                             !hrUserIds.Contains(e.UserId))
                 .OrderBy(e => e.FirstName)
                 .ToListAsync();
@@ -598,7 +542,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  AI SUGGESTIONS (used by the UI)
+    //  AI SUGGESTIONS ONLY (Just recommendations, no auto-sending)
     // ══════════════════════════════════════════════════════════
 
     public async Task<List<AIDocumentSuggestion>> GetAIDocumentSuggestionsAsync(Guid employeeId)
@@ -615,141 +559,327 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         return await _aiDocumentService.SuggestDocumentsAsync(employee);
     }
 
+    public async Task<List<DashboardDocumentSuggestion>> GetDashboardSuggestionsAsync(
+    Guid organizationId, string userId, string userRole)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) return new List<DashboardDocumentSuggestion>();
+
+        var roles = await _userManager.GetRolesAsync(user);
+        using var db = _dbFactory.CreateDbContext();
+
+        IQueryable<Employee> employeeQuery = db.Employees
+            .Include(e => e.Department)
+            .Include(e => e.Designation)
+            .Where(e => e.OrganizationId == organizationId && e.Status == "Active");
+
+        if (roles.Contains("HR") && !roles.Contains("OrgAdmin"))
+        {
+            var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+            if (hrEmployee == null) return new List<DashboardDocumentSuggestion>();
+            var hrUserIds = await GetHrUserIdsInOrgAsync(db, organizationId);
+            employeeQuery = employeeQuery.Where(e =>
+                e.DepartmentId == hrEmployee.DepartmentId &&
+                e.UserId != userId &&
+                !hrUserIds.Contains(e.UserId));
+        }
+
+        var employees = await employeeQuery.ToListAsync();
+        var suggestions = new List<DashboardDocumentSuggestion>();
+        var today = DateTime.UtcNow;
+
+        // ── 1. RECENTLY JOINED (≤ 7 days): Offer Letter ──────────────────────────
+        foreach (var emp in employees.Where(e => (today - e.JoiningDate).Days <= 7))
+        {
+            var hasOfferLetter = await db.OrgGeneratedDocuments.AnyAsync(d =>
+                d.EmployeeId == emp.EmployeeId &&
+                d.DocumentName.Contains("Offer Letter") && !d.IsDeleted);
+
+            if (!hasOfferLetter)
+                suggestions.Add(new DashboardDocumentSuggestion
+                {
+                    EmployeeId = emp.EmployeeId,
+                    EmployeeName = $"{emp.FirstName} {emp.LastName}",
+                    Department = emp.Department?.Name ?? "N/A",
+                    DocumentType = "Offer Letter",
+                    Reason = $"🆕 {emp.FirstName} joined {(today - emp.JoiningDate).Days} day(s) ago — upload Offer Letter",
+                    Priority = 10,
+                    Category = "Onboarding",
+                    SuggestedData = new Dictionary<string, string>
+                {
+                    { "JoiningDate", emp.JoiningDate.ToString("dd MMM yyyy") },
+                    { "Designation", emp.Designation?.Name ?? "" },
+                    { "Department", emp.Department?.Name ?? "" }
+                }
+                });
+        }
+
+        // ── 2. PROBATION ENDING (173–183 days): Confirmation Letter ──────────────
+        foreach (var emp in employees)
+        {
+            var tenure = (today - emp.JoiningDate).Days;
+            if (tenure >= 173 && tenure <= 183)
+            {
+                var hasCfm = await db.OrgGeneratedDocuments.AnyAsync(d =>
+                    d.EmployeeId == emp.EmployeeId &&
+                    d.DocumentName.Contains("Confirmation Letter") && !d.IsDeleted);
+
+                if (!hasCfm)
+                    suggestions.Add(new DashboardDocumentSuggestion
+                    {
+                        EmployeeId = emp.EmployeeId,
+                        EmployeeName = $"{emp.FirstName} {emp.LastName}",
+                        Department = emp.Department?.Name ?? "N/A",
+                        DocumentType = "Confirmation Letter",
+                        Reason = $"⏳ {emp.FirstName}'s probation ends in {183 - tenure} day(s) — upload Confirmation Letter",
+                        Priority = 9,
+                        Category = "HR Policies",
+                        SuggestedData = new Dictionary<string, string>
+                    {
+                        { "ConfirmationDate", today.AddDays(183 - tenure).ToString("dd MMM yyyy") }
+                    }
+                    });
+            }
+        }
+
+        // ── 3. APPROVED RESIGNATION: Experience + Relieving Letter ────────────────
+        var approvedExits = await db.EmployeeExits
+            .Include(x => x.Employee).ThenInclude(e => e!.Department)
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                (x.Status == ExitStatus.Approved || x.Status == ExitStatus.ClearanceInProgress))
+            .ToListAsync();
+
+        foreach (var exit in approvedExits)
+        {
+            if (exit.Employee == null) continue;
+
+            if (!exit.ExperienceLetterIssued)
+                suggestions.Add(new DashboardDocumentSuggestion
+                {
+                    EmployeeId = exit.EmployeeId,
+                    EmployeeName = $"{exit.Employee.FirstName} {exit.Employee.LastName}",
+                    Department = exit.Employee.Department?.Name ?? "N/A",
+                    DocumentType = "Experience Letter",
+                    Reason = $"📤 {exit.Employee.FirstName}'s resignation is approved (LWD: {exit.LastWorkingDay:dd MMM yyyy}) — upload Experience Letter",
+                    Priority = 8,
+                    Category = "Exit",
+                    ExitId = exit.ExitId,
+                    IsExitRelated = true
+                });
+
+            if (!exit.RelievingLetterIssued)
+                suggestions.Add(new DashboardDocumentSuggestion
+                {
+                    EmployeeId = exit.EmployeeId,
+                    EmployeeName = $"{exit.Employee.FirstName} {exit.Employee.LastName}",
+                    Department = exit.Employee.Department?.Name ?? "N/A",
+                    DocumentType = "Relieving Letter",
+                    Reason = $"📤 {exit.Employee.FirstName}'s resignation is approved — upload Relieving Letter",
+                    Priority = 7,
+                    Category = "Exit",
+                    ExitId = exit.ExitId,
+                    IsExitRelated = true
+                });
+        }
+
+        // ── 4. CANCELLED RESIGNATION: Notify that exit docs are now void ──────────
+        // (We surface a warning, not an upload suggestion)
+        var cancelledExits = await db.EmployeeExits
+            .Include(x => x.Employee)
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.Status == ExitStatus.Cancelled &&
+                x.CancelledAt.HasValue &&
+                x.CancelledAt.Value >= DateTime.UtcNow.AddDays(-3)) // Only recent cancellations
+            .ToListAsync();
+
+        foreach (var exit in cancelledExits)
+        {
+            if (exit.Employee == null) continue;
+
+            // Check if any exit docs were issued for this employee
+            var exitDocsIssued = await db.OrgGeneratedDocuments.AnyAsync(d =>
+                d.EmployeeId == exit.EmployeeId &&
+                (d.DocumentName.Contains("Experience Letter") || d.DocumentName.Contains("Relieving Letter")) &&
+                d.Status == "Issued" &&
+                !d.IsDeleted &&
+                d.GeneratedAt >= exit.CancelledAt!.Value.AddDays(-30));
+
+            if (exitDocsIssued)
+                suggestions.Add(new DashboardDocumentSuggestion
+                {
+                    EmployeeId = exit.EmployeeId,
+                    EmployeeName = $"{exit.Employee.FirstName} {exit.Employee.LastName}",
+                    Department = exit.Employee?.Department?.Name ?? "N/A",
+                    DocumentType = "Exit Document",
+                    Reason = $"⚠️ {exit.Employee.FirstName}'s resignation was cancelled — review and revoke previously issued exit documents",
+                    Priority = 10,
+                    Category = "Exit",
+                    IsRevocationWarning = true,
+                    ExitId = exit.ExitId,
+                    IsExitRelated = true
+                });
+        }
+
+        // ── 5. BIRTHDAY TODAY ────────────────────────────────────────────────────
+        foreach (var emp in employees.Where(e =>
+            e.DateOfBirth.HasValue &&
+            e.DateOfBirth.Value.Month == today.Month &&
+            e.DateOfBirth.Value.Day == today.Day))
+        {
+            suggestions.Add(new DashboardDocumentSuggestion
+            {
+                EmployeeId = emp.EmployeeId,
+                EmployeeName = $"{emp.FirstName} {emp.LastName}",
+                Department = emp.Department?.Name ?? "N/A",
+                DocumentType = "Birthday Card",
+                Reason = $"🎂 {emp.FirstName} has a birthday today — consider sending a greeting",
+                Priority = 5,
+                Category = "General"
+            });
+        }
+
+        // ── 6. TERMINATED EMPLOYEE: FnF + Termination Letter ─────────────────────
+        var terminatedExits = await db.EmployeeExits
+            .Include(x => x.Employee)
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.Status == ExitStatus.Terminated &&
+                x.TerminationDate.HasValue &&
+                x.TerminationDate.Value >= DateTime.UtcNow.AddDays(-7))
+            .ToListAsync();
+
+        foreach (var exit in terminatedExits)
+        {
+            if (exit.Employee == null) continue;
+
+            var hasTermLetter = await db.OrgGeneratedDocuments.AnyAsync(d =>
+                d.EmployeeId == exit.EmployeeId &&
+                d.DocumentName.Contains("Termination") && !d.IsDeleted);
+
+            if (!hasTermLetter)
+                suggestions.Add(new DashboardDocumentSuggestion
+                {
+                    EmployeeId = exit.EmployeeId,
+                    EmployeeName = $"{exit.Employee.FirstName} {exit.Employee.LastName}",
+                    Department = exit.Employee.Department?.Name ?? "N/A",
+                    DocumentType = "Termination Letter",
+                    Reason = $"🔴 {exit.Employee.FirstName} was terminated on {exit.TerminationDate!.Value:dd MMM yyyy} — upload Termination Letter",
+                    Priority = 10,
+                    Category = "Exit",
+                    ExitId = exit.ExitId,
+                    IsExitRelated = true
+                });
+        }
+
+        return suggestions.OrderByDescending(s => s.Priority).ThenBy(s => s.EmployeeName).ToList();
+    }
+
     // ══════════════════════════════════════════════════════════
     //  PRIVATE HELPERS
     // ══════════════════════════════════════════════════════════
 
-    private static Dictionary<string, string> BuildPlaceholderData(
-        Employee employee,
-        string actorName,
-        Dictionary<string, string>? customData)
+    private async Task<(bool Allowed, string Reason)> CheckPermissionAsync(
+        Guid targetEmployeeId,
+        Guid organizationId,
+        string actorUserId)
     {
-        var data = new Dictionary<string, string>
+        var user = await _userManager.FindByIdAsync(actorUserId);
+        if (user == null)
+            return (false, "Actor user not found.");
+
+        if (user.OrganizationId != organizationId)
+            return (false, "You can only manage documents within your own organization.");
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        if (roles.Contains("OrgAdmin"))
+            return (true, string.Empty);
+
+        if (roles.Contains("HR"))
         {
-            { "EmployeeName",    $"{employee.FirstName} {employee.LastName}" },
-            { "FirstName",       employee.FirstName },
-            { "LastName",        employee.LastName },
-            { "EmployeeCode",    employee.EmployeeCode ?? "N/A" },
-            { "Department",      employee.Department?.Name ?? "N/A" },
-            { "Designation",     employee.Designation?.Name ?? "N/A" },
-            { "JoiningDate",     employee.JoiningDate.ToString("dd MMM yyyy") },
-            { "CurrentDate",     DateTime.UtcNow.ToString("dd MMM yyyy") },
-            { "CurrentYear",     DateTime.UtcNow.Year.ToString() },
-            { "GeneratedBy",     actorName },
-            { "OrganizationName", employee.Organization?.Name ?? "Our Organization" }
-        };
+            using var db = _dbFactory.CreateDbContext();
 
-        if (customData != null)
-            foreach (var kvp in customData)
-                data[kvp.Key] = kvp.Value;
+            var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == actorUserId);
+            if (hrEmployee == null)
+                return (false, "Your employee profile was not found.");
 
-        return data;
+            var target = await db.Employees.FirstOrDefaultAsync(e => e.EmployeeId == targetEmployeeId);
+            if (target == null)
+                return (false, "Recipient employee not found.");
+
+            if (target.UserId == actorUserId)
+                return (false, "You cannot upload documents for yourself.");
+
+            var targetAppUser = await _userManager.FindByIdAsync(target.UserId);
+            if (targetAppUser != null)
+            {
+                var targetRoles = await _userManager.GetRolesAsync(targetAppUser);
+                if (targetRoles.Contains("HR") || targetRoles.Contains("OrgAdmin"))
+                    return (false, "You do not have permission to upload documents for this user.");
+            }
+
+            if (target.DepartmentId != hrEmployee.DepartmentId)
+                return (false, "You can only upload documents for employees in your own department.");
+
+            return (true, string.Empty);
+        }
+
+        return (false, "You do not have permission to upload documents.");
     }
 
-    private static string ReplacePlaceholders(string content, Dictionary<string, string> data)
+    private static async Task<string> ResolveActorNameAsync(
+        ApplicationDbContext db, string userId, string fallbackRole)
     {
-        var result = content;
-        foreach (var kvp in data)
-            result = result.Replace($"{{{{{kvp.Key}}}}}", kvp.Value);
-        return result;
+        var actor = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+        return actor != null ? $"{actor.FirstName} {actor.LastName}" : fallbackRole;
     }
 
-    private async Task<(string fileName, string filePath, string fullPath)> GenerateDocumentFileAsync(
-        string htmlContent,
-        string templateName,
+    private async Task<(string fileName, string filePath, string fullPath)> SaveUploadedFileAsync(
+        IFormFile file,
+        string documentName,
         string employeeCode,
         string documentNumber)
     {
         var folder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "documents", "organization");
         Directory.CreateDirectory(folder);
 
-        var safeTemplateName = templateName.Replace(" ", "_");
-        var fileName = $"{safeTemplateName}_{employeeCode}_{DateTime.UtcNow:yyyyMMddHHmmss}.html";
+        var safeDocumentName = documentName.Replace(" ", "_").Replace("/", "_");
+        var fileExtension = Path.GetExtension(file.FileName);
+        var fileName = $"{safeDocumentName}_{employeeCode}_{documentNumber}{fileExtension}";
         var filePath = $"/uploads/documents/organization/{fileName}";
         var fullPath = Path.Combine(folder, fileName);
 
-        var html = $@"<!DOCTYPE html>
-<html lang=""en"">
-<head>
-    <meta charset=""utf-8"">
-    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
-    <title>{templateName}</title>
-    <style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 40px; line-height: 1.7; color: #333; background: #fff; }}
-        .doc-wrapper {{ max-width: 800px; margin: 0 auto; }}
-        .doc-meta {{ font-size: 12px; color: #888; text-align: right; margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
-        .doc-content {{ margin: 20px 0; }}
-        .doc-footer {{ text-align: center; margin-top: 60px; padding-top: 15px; border-top: 1px solid #eee; font-size: 11px; color: #aaa; }}
-        @media print {{ body {{ padding: 20px; }} .doc-footer {{ position: fixed; bottom: 0; width: 100%; }} }}
-    </style>
-</head>
-<body>
-    <div class=""doc-wrapper"">
-        <div class=""doc-meta"">
-            Document Number: {documentNumber} | Generated: {DateTime.UtcNow:dd MMM yyyy HH:mm} UTC
-        </div>
-        <div class=""doc-content"">
-            {htmlContent}
-        </div>
-        <div class=""doc-footer"">
-            This is a system-generated document. For queries, please contact HR.
-        </div>
-    </div>
-</body>
-</html>";
+        using var stream = new FileStream(fullPath, FileMode.Create);
+        await file.CopyToAsync(stream);
 
-        await File.WriteAllTextAsync(fullPath, html);
         return (fileName, filePath, fullPath);
     }
 
-    private static string GenerateDocumentNumber(string templateName, string? employeeCode)
+    private static string GenerateManualDocumentNumber(string documentName, string? employeeCode)
     {
-        var prefix = new string(templateName.Split(' ')
+        var prefix = new string(documentName.Split(' ')
             .Where(w => w.Length > 0)
             .Select(w => char.ToUpper(w[0]))
-            .ToArray()); // e.g. "Offer Letter" → "OL"
+            .ToArray());
 
         var code = string.IsNullOrEmpty(employeeCode) ? "EMP" : employeeCode;
-        return $"{prefix}-{code}-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
+        return $"MAN-{prefix}-{code}-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..4].ToUpper()}";
     }
 
-    private static OrgGeneratedDocument BuildDocumentRecord(
-        Guid organizationId,
-        Guid employeeId,
-        Guid templateId,
-        string documentNumber,
-        string documentName,
-        string description,
-        string fileName,
-        Employee recipient,
-        string filePath,
-        string fullPath,
-        string generatedByUserId,
-        string generatedByRole,
-        Dictionary<string, string> placeholderData,
-        string originalFileNameSuffix = "")
+    private static string GetMimeType(string extension)
     {
-        return new OrgGeneratedDocument
+        return extension.ToLower() switch
         {
-            DocumentId = Guid.NewGuid(),
-            OrganizationId = organizationId,
-            EmployeeId = employeeId,
-            TemplateId = templateId,
-            DocumentNumber = documentNumber,
-            DocumentName = documentName,
-            Description = description,
-            FileName = fileName,
-            OriginalFileName = $"{documentName.Replace(" ", "_")}_{recipient.FirstName}_{recipient.LastName}{originalFileNameSuffix}.html",
-            FilePath = filePath,
-            FileSize = new FileInfo(fullPath).Length,
-            MimeType = "text/html",
-            Status = "Issued",
-            GeneratedByUserId = generatedByUserId,
-            GeneratedByRole = generatedByRole,
-            GeneratedAt = DateTime.UtcNow,
-            IsLatestVersion = true,
-            Version = 1,
-            ContentSnapshot = JsonSerializer.Serialize(placeholderData)
+            ".pdf" => "application/pdf",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc" => "application/msword",
+            ".txt" => "text/plain",
+            ".html" => "text/html",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream"
         };
     }
 
@@ -771,33 +901,17 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         };
     }
 
-    private static OrgDocumentGenerationResponseDto MapToResponseDto(
-        OrgGeneratedDocument document,
-        Employee recipient,
-        string actorName)
-    {
-        return new OrgDocumentGenerationResponseDto
-        {
-            DocumentId = document.DocumentId,
-            EmployeeId = recipient.EmployeeId,
-            EmployeeName = $"{recipient.FirstName} {recipient.LastName}",
-            DocumentTypeName = document.DocumentName,
-            FilePath = document.FilePath,
-            OriginalFileName = document.OriginalFileName,
-            GeneratedAt = document.GeneratedAt,
-            GeneratedBy = actorName,
-            Status = document.Status,
-            EmailSent = false
-        };
-    }
 
-    private static async Task<HashSet<string>> GetHrUserIdsInOrgAsync(ApplicationDbContext db, Guid organizationId)
+
+    private static async Task<HashSet<string>> GetHrUserIdsInOrgAsync(
+        ApplicationDbContext db, Guid organizationId)
     {
         var ids = await (
             from u in db.Users
             join ur in db.UserRoles on u.Id equals ur.UserId
             join r in db.Roles on ur.RoleId equals r.Id
-            where u.OrganizationId == organizationId && r.Name == "HR"
+            where u.OrganizationId == organizationId &&
+                  (r.Name == "HR" || r.Name == "OrgAdmin")
             select u.Id
         ).ToListAsync();
 

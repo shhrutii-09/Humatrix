@@ -158,7 +158,7 @@ builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<NotificationService>();
 //builder.Services.AddHostedService<DocumentEventMonitor>();
 // Add this with your other hosted services
-builder.Services.AddHostedService<AIEventMonitor>();
+//builder.Services.AddHostedService<AIEventMonitor>();
 // Add AI Service
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAIDocumentService, AIDocumentService>();
@@ -200,10 +200,6 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine(ex.StackTrace);
     }
 }
-
-
-
-
 
 // Middleware Pipeline
 if (app.Environment.IsDevelopment())

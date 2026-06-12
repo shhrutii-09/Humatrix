@@ -1,470 +1,514 @@
 ﻿@page "/employee/documents"
 @rendermode InteractiveServer
-
+@attribute [Authorize(Roles = "Employee,HR")]
 @using Humatrix_HRMS.DTOs.Dashboard
 @using Humatrix_HRMS.DTOs.Documents
+@using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Models.Documents
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Services.Documents
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
-@using Microsoft.JSInterop
 @using System.IO
-
-@attribute [Authorize(Roles = "Employee,HR")]
-
 @inject IEmployeeDocumentService EmployeeDocumentService
+@inject IOrgDocumentGenerationService OrgDocumentService
 @inject IDocumentTypeService DocumentTypeService
 @inject CurrentUserService CurrentUserService
 @inject NavigationManager Nav
 @inject IJSRuntime JsRuntime
+@inject EmployeeService EmployeeServiceHelper
 
 <PageTitle>My Documents | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <!-- Header -->
+    @* Header Section *@
     <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <div>
             <h2 class="fw-bold">📄 My Documents</h2>
-            <p class="text-muted small mb-0">
-                Manage your employee documents. Upload, replace, and track verification status.
-            </p>
+            <p class="text-muted small mb-0">View, upload, and acknowledge your documents</p>
         </div>
-        <button class="btn btn-secondary" @onclick="GoBack">
-            Dashboard
+        <button class="btn btn-secondary btn-sm" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
+            ← Dashboard
         </button>
     </div>
 
-    <!-- Profile Completion Card -->
-    @if (Dashboard != null)
+    @if (isLoading)
     {
-        <div class="card shadow-sm border-0 mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h4 class="fw-bold mb-2 text-white">Profile Completion</h4>
-                        <div class="progress mb-3" style="height: 12px; background-color: rgba(255,255,255,0.3);">
-                            <div class="progress-bar bg-white"
-                                 role="progressbar"
-                                 style="width: @Dashboard.ProfileCompletionPercentage%;"
-                                 aria-valuenow="@Dashboard.ProfileCompletionPercentage"
-                                 aria-valuemin="0"
-                                 aria-valuemax="100">
-                            </div>
-                        </div>
-                        <div class="d-flex gap-4 flex-wrap text-white">
-                            <div><span class="fw-bold">@Dashboard.ProfileCompletionPercentage%</span> Complete</div>
-                            <div>📄 @Dashboard.UploadedDocuments / @Dashboard.TotalRequiredDocuments Uploaded</div>
-                            <div>✓ @Dashboard.VerifiedDocuments Verified</div>
-                            <div>⏳ @Dashboard.PendingDocuments Pending</div>
-                            <div>✗ @Dashboard.RejectedDocuments Rejected</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        @if (Dashboard.MissingMandatoryCount > 0)
-                        {
-                            <div class="alert alert-warning mb-0 p-2 bg-warning text-dark">
-                                ⚠️ @Dashboard.MissingMandatoryCount mandatory document(s) missing
-                            </div>
-                        }
-                        else if (Dashboard.ProfileCompletionPercentage == 100)
-                        {
-                            <div class="alert alert-success mb-0 p-2 bg-white text-success">
-                                ✓ All documents verified!
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2 text-muted">Loading documents...</p>
         </div>
     }
-
-    <!-- Upload Modal -->
-    <div class="modal fade" id="uploadModal" tabindex="-1" data-bs-backdrop="static">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                    <h5 class="modal-title text-white">Upload @SelectedDocumentType?.DocumentTypeName</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <EditForm Model="@UploadModel" OnValidSubmit="@HandleUpload">
-                        <DataAnnotationsValidator />
-                        <ValidationSummary class="alert alert-danger" />
-
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Document Type</label>
-                            <input type="text" class="form-control" value="@SelectedDocumentType?.DocumentTypeName" disabled />
-                            <small class="text-muted">
-                                @if (SelectedDocumentType?.IsMandatory == true)
-                                {
-                                    <span class="text-danger">* Mandatory document</span>
-                                }
-                                @if (SelectedDocumentType?.RequiresVerification == true)
-                                {
-                                    <span class="text-warning ms-2">⏳ Requires verification</span>
-                                }
-                                @if (SelectedDocumentType?.TrackExpiry == true)
-                                {
-                                    <span class="text-info ms-2">📅 Expiry tracking enabled</span>
-                                }
-                            </small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Document File</label>
-                            <InputFile id="documentFile" OnChange="@OnFileSelected" class="form-control" />
-                            <small class="text-muted">
-                                Allowed: @SelectedDocumentType?.AllowedFileTypes |
-                                Max Size: @SelectedDocumentType?.MaxFileSizeMB MB
-                            </small>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Document Number (Optional)</label>
-                                <InputText class="form-control" @bind-Value="UploadModel.DocumentNumber"
-                                           placeholder="e.g., ABC123XYZ" />
+    else
+    {
+        @* Profile completion banner *@
+        @if (employeeDashboard != null)
+        {
+            <div class="card shadow-sm border-0 mb-4" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+                <div class="card-body text-white">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="fw-bold mb-2">Profile Completion</h5>
+                            <div class="progress mb-3" style="height: 10px; background: rgba(255, 255, 255, 0.3)">
+                                <div class="progress-bar bg-white" style="width: @(employeeDashboard.ProfileCompletionPercentage)%"></div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Issuing Authority (Optional)</label>
-                                <InputText class="form-control" @bind-Value="UploadModel.IssuingAuthority"
-                                           placeholder="e.g., Government of India" />
+                            <div class="d-flex gap-4 flex-wrap small">
+                                <span>📄 @employeeDashboard.UploadedDocuments / @employeeDashboard.TotalRequiredDocuments uploaded</span>
+                                <span>✓ @employeeDashboard.VerifiedDocuments verified</span>
+                                <span>⏳ @employeeDashboard.PendingDocuments pending</span>
+                                <span>✗ @employeeDashboard.RejectedDocuments rejected</span>
                             </div>
                         </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Issue Date</label>
-                                <InputDate class="form-control" @bind-Value="UploadModel.IssueDate"
-                                           ParsingErrorMessage="Invalid date" />
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Expiry Date</label>
-                                <InputDate class="form-control" @bind-Value="UploadModel.ExpiryDate" />
-                                @if (SelectedDocumentType?.TrackExpiry == true)
-                                {
-                                    <small class="text-warning d-block">⚠️ Expiry tracking is enabled for this document</small>
-                                }
-                            </div>
+                        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                            @if (employeeDashboard.MissingMandatoryCount > 0)
+                            {
+                                <div class="badge bg-warning text-dark px-3 py-2 fs-6">
+                                    ⚠️ @employeeDashboard.MissingMandatoryCount required doc(s) missing
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="badge bg-white text-success px-3 py-2 fs-6">✓ All required documents uploaded</div>
+                            }
                         </div>
-
-                        <div class="modal-footer px-0 pb-0">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-primary" disabled="@isUploading">
-                                @if (isUploading)
-                                {
-                                    <span>
-                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                        Uploading...
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span>Upload Document</span>
-                                }
-                            </button>
-                        </div>
-                    </EditForm>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Documents Table -->
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white border-0 pt-3">
-            <div class="row align-items-center">
-                <div class="col">
-                    <h5 class="mb-0">Document Center</h5>
-                </div>
-                <div class="col-auto">
-                    <div class="input-group">
-                        <span class="input-group-text">🔍</span>
-                        <input type="text" class="form-control" placeholder="Search documents..."
-                               @bind="SearchText" @bind:event="oninput" />
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Document Type</th>
-                            <th>Category</th>
-                            <th>Status</th>
-                            <th>Version</th>
-                            <th>Uploaded Date</th>
-                            <th>Expiry</th>
-                            <th style="width: 200px">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (FilteredDocuments.Any())
-                        {
-                            @foreach (var doc in FilteredDocuments)
+        }
+
+        @* Alert Messages *@
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="alert alert-@(messageIsError ? "danger" : "success") alert-dismissible fade show mb-3">
+                @message
+                <button type="button" class="btn-close" @onclick="() => message = null"></button>
+            </div>
+        }
+
+        @* Navigation Tabs *@
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "mine" ? "active fw-bold" : "")" @onclick='() => SetTab("mine")'>
+                    My Uploads
+                    <span class="badge bg-secondary ms-1">@employeeDocuments.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(activeTab == "org" ? "active fw-bold" : "") position-relative" @onclick='() => SetTab("org")'>
+                    Company Documents
+                    <span class="badge bg-secondary ms-1">@orgDocuments.Count</span>
+                    @if (pendingAckCount > 0)
+                    {
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">
+                            @pendingAckCount
+                        </span>
+                    }
+                </button>
+            </li>
+        </ul>
+
+        @* TAB 1 — MY UPLOADS *@
+        @if (activeTab == "mine")
+        {
+            @* Upload Form *@
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white border-bottom py-3">
+                    <h6 class="mb-0 fw-semibold">📤 Upload a Document</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Document Type <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="selectedDocumentTypeId">
+                                <option value="">— Select Document Type —</option>
+                                @foreach (var t in uploadableDocumentTypes)
+                                {
+                                    <option value="@t.DocumentTypeId">
+                                        @t.Name @(t.IsMandatory ? " (Required)" : "")
+                                    </option>
+                                }
+                            </select>
+
+                            @if (!uploadableDocumentTypes.Any())
                             {
+                                <div class="form-text text-warning">
+                                    No uploadable document types configured. Contact HR.
+                                </div>
+                            }
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">File <span class="text-danger">*</span></label>
+                            <InputFile OnChange="@OnFileSelected" class="form-control" />
+                            <div class="form-text">PDF, JPG, PNG — max 5 MB</div>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-primary w-100" @onclick="UploadDocument" disabled="@isUploading">
+                                @(isUploading ? "Uploading…" : "Upload")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* My Documents Table *@
+            @if (!employeeDocuments.Any())
+            {
+                <div class="alert alert-info">
+                    No documents uploaded yet. Use the form above to get started.
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white border-bottom py-3">
+                        <h6 class="mb-0 fw-semibold">My Uploaded Documents</h6>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
                                 <tr>
-                                    <td>
-                                        <div class="fw-bold">
-                                            @doc.DocumentTypeName
+                                    <th class="ps-4">Document Type</th>
+                                    <th>Category</th>
+                                    <th>Status</th>
+                                    <th>Uploaded</th>
+                                    <th class="pe-4">File</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var doc in employeeDocuments)
+                                {
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="fw-bold">@doc.DocumentTypeName</div>
                                             @if (doc.IsMandatory)
                                             {
-                                                <span class="badge bg-danger ms-1">Required</span>
+                                                <span class="badge bg-danger" style="font-size: 0.7rem;">Required</span>
                                             }
-                                        </div>
-                                        @if (!string.IsNullOrEmpty(doc.RejectionRemarks) && doc.Status == "Rejected")
-                                        {
-                                            <small class="text-danger d-block mt-1">
-                                                <strong>Reason:</strong> @doc.RejectionRemarks
-                                            </small>
-                                        }
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-secondary">@doc.Category</span>
-                                    </td>
-                                    <td>
-                                        <span class="badge @doc.StatusBadgeClass">
-                                            @doc.StatusIcon @doc.Status
-                                        </span>
-                                        @if (doc.Status == "Verified" && !string.IsNullOrEmpty(doc.VerifiedByName))
-                                        {
-                                            <small class="d-block text-muted mt-1">by @doc.VerifiedByName</small>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (doc.Version > 0)
-                                        {
-                                            <span class="badge bg-info">v@(doc.Version)</span>
-                                        }
-                                        else
-                                        {
-                                            <span>-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (doc.UploadedAt.HasValue)
-                                        {
-                                            <span title="@doc.UploadedAt.Value.ToString("yyyy-MM-dd HH:mm")">
-                                                @doc.UploadedAt.Value.ToString("dd MMM yyyy")
+                                        </td>
+                                        <td><span class="badge bg-light text-dark border">@doc.Category</span></td>
+                                        <td>
+                                            <span class="badge @GetStatusBadge(doc.Status)">
+                                                @GetStatusIcon(doc.Status) @doc.Status
                                             </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Not uploaded</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        @if (doc.ExpiryDate.HasValue)
-                                        {
-                                            var daysUntilExpiry = (doc.ExpiryDate.Value.ToDateTime(TimeOnly.MinValue) - DateTime.UtcNow).Days;
-                                            if (daysUntilExpiry < 0)
+                                            @if (doc.Status == "Rejected" && !string.IsNullOrEmpty(doc.RejectionRemarks))
                                             {
-                                                <span class="text-danger fw-bold">Expired</span>
+                                                <div class="text-danger small mt-1">
+                                                    <i>Reason: @doc.RejectionRemarks</i>
+                                                </div>
                                             }
-                                            else if (daysUntilExpiry < 30)
+                                        </td>
+                                        <td class="small text-muted">@doc.UploadedAt?.ToString("dd MMM yyyy")</td>
+                                        @* <td class="pe-4">
+                                            <a href="api/documents/download/@doc.DocumentId" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                📄 View
+                                            </a>
+                                        </td> *@
+                                        <td class="pe-4 text-end">
+                                            @if (doc.DocumentId != Guid.Empty && !string.IsNullOrWhiteSpace(doc.FilePath))
                                             {
-                                                <span class="text-warning fw-bold">@daysUntilExpiry days left</span>
+                                                <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-primary">
+                                                    📄 View File
+                                                </a>
+                                            }
+                                            else if (doc.DocumentId != Guid.Empty)
+                                            {
+                                                @* Fallback to API route if FilePath string isn't populated on the DTO yet *@
+                                                <a href="api/documents/download/@doc.DocumentId" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                    📄 Download
+                                                </a>
                                             }
                                             else
                                             {
-                                                <span>@doc.ExpiryDate.Value.ToString("dd MMM yyyy")</span>
+                                                <span class="text-muted small">No file attached</span>
                                             }
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">-</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            @if (doc.Status != "NotUploaded")
-                                            {
-                                                <button class="btn btn-outline-primary"
-                                                        @onclick="() => DownloadDocument(doc.DocumentId)">
-                                                    📥 View
-                                                </button>
-                                            }
-                                            <button class="btn btn-outline-secondary"
-                                                    @onclick="() => OpenUploadModal(doc)">
-                                                @(doc.Status == "NotUploaded" ? "Upload" : "Replace")
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                        }
-                        else
-                        {
-                            <tr>
-                                <td colspan="7" class="text-center py-5">
-                                    <div class="text-muted">
-                                        <h5>No documents found</h5>
-                                        <p>Try adjusting your search or upload your first document</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-@code {
-    private EmployeeDocumentDashboardDto? Dashboard { get; set; }
-    private EmployeeDocumentViewDto? SelectedDocumentType { get; set; }
-    private DocumentUploadDto UploadModel { get; set; } = new();
-    private IBrowserFile? SelectedFile { get; set; }
-    private bool isUploading = false;
-    private string SearchText = string.Empty;
-
-    private IEnumerable<EmployeeDocumentViewDto> FilteredDocuments =>
-        string.IsNullOrWhiteSpace(SearchText)
-            ? Dashboard?.Documents ?? new List<EmployeeDocumentViewDto>()
-            : Dashboard?.Documents.Where(x =>
-                x.DocumentTypeName.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-                x.Status.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-                x.Category.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                ?? new List<EmployeeDocumentViewDto>();
-
-    private EmployeeDashboardContextDto? EmployeeContext { get; set; }
-
-    protected override async Task OnInitializedAsync()
-    {
-        EmployeeContext = await CurrentUserService.GetEmployeeDashboardContextAsync();
-
-        if (EmployeeContext == null)
-        {
-            Nav.NavigateTo("/login");
-            return;
-        }
-
-        await LoadDashboard();
-    }
-
-    private async Task LoadDashboard()
-    {
-        Dashboard = await EmployeeDocumentService.GetEmployeeDocumentDashboardAsync(
-            EmployeeContext!.EmployeeId,
-            EmployeeContext.OrganizationId);
-
-        StateHasChanged();
-    }
-
-    private void OpenUploadModal(EmployeeDocumentViewDto documentType)
-    {
-        SelectedDocumentType = documentType;
-        UploadModel = new DocumentUploadDto
-        {
-            EmployeeId = EmployeeContext!.EmployeeId,
-            DocumentTypeId = documentType.DocumentTypeId
-        };
-        SelectedFile = null;
-
-        JsRuntime.InvokeVoidAsync("window.showModal", "uploadModal");
-    }
-
-    private async Task OnFileSelected(InputFileChangeEventArgs e)
-    {
-        SelectedFile = e.File;
-
-        if (SelectedFile == null) return;
-
-        // Validate file size
-        if (SelectedDocumentType != null && SelectedFile.Size > SelectedDocumentType.MaxFileSizeMB * 1024 * 1024)
-        {
-            await JsRuntime.InvokeVoidAsync("alert",
-                $"File size exceeds maximum allowed size of {SelectedDocumentType.MaxFileSizeMB} MB.\n" +
-                $"Your file size: {SelectedFile.Size / 1024 / 1024} MB");
-            SelectedFile = null;
-            return;
-        }
-
-        // Validate file extension
-        if (SelectedDocumentType != null && !string.IsNullOrEmpty(SelectedDocumentType.AllowedFileTypes))
-        {
-            var allowedExtensions = SelectedDocumentType.AllowedFileTypes
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(ext => ext.Trim().ToLower());
-
-            var fileExtension = Path.GetExtension(SelectedFile.Name).ToLower();
-
-            if (!allowedExtensions.Contains(fileExtension))
-            {
-                await JsRuntime.InvokeVoidAsync("alert",
-                    $"File type '{fileExtension}' not allowed.\n" +
-                    $"Allowed types: {SelectedDocumentType.AllowedFileTypes}");
-                SelectedFile = null;
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             }
         }
 
-        StateHasChanged();
+        @* TAB 2 — COMPANY DOCUMENTS (org-issued) *@
+        @if (activeTab == "org")
+        {
+            @if (!orgDocuments.Any())
+            {
+                <div class="alert alert-info">No company documents have been issued to you yet.</div>
+            }
+            else
+            {
+                var pendingAck = orgDocuments.Where(d => d.Status == "Issued").ToList();
+                var acknowledged = orgDocuments.Where(d => d.Status == "Acknowledged").ToList();
+                var revoked = orgDocuments.Where(d => d.Status == "Revoked").ToList();
+
+                @if (pendingAck.Any())
+                {
+                    <h6 class="fw-bold text-warning mb-3">⏳ Awaiting Your Acknowledgment (@pendingAck.Count)</h6>
+                    <div class="row g-3 mb-4">
+                        @foreach (var doc in pendingAck)
+                        {
+                            <div class="col-md-6 col-xl-4">
+                                @OrgDocCard(doc, canAcknowledge: true)
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (acknowledged.Any())
+                {
+                    <h6 class="fw-bold text-success mb-3">✓ Acknowledged (@acknowledged.Count)</h6>
+                    <div class="row g-3 mb-4">
+                        @foreach (var doc in acknowledged)
+                        {
+                            <div class="col-md-6 col-xl-4">
+                                @OrgDocCard(doc, canAcknowledge: false)
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (revoked.Any())
+                {
+                    <h6 class="fw-bold text-danger mb-3">🚫 Revoked Documents (@revoked.Count)</h6>
+                    <div class="alert alert-danger py-2 small mb-3">
+                        These documents have been <strong>revoked</strong> by your organisation. They are no longer valid. If you have questions, contact HR.
+                    </div>
+                    <div class="row g-3 mb-4">
+                        @foreach (var doc in revoked)
+                        {
+                            <div class="col-md-6 col-xl-4">
+                                @OrgDocCard(doc, canAcknowledge: false)
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        }
+    }
+</div>
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────────────
+    private bool isLoading = true;
+    private bool isUploading = false;
+    private string activeTab = "mine";
+    private string? message;
+    private bool messageIsError = false;
+    private EmployeeDocumentDashboardDto? employeeDashboard;
+    private List<EmployeeDocumentViewDto> employeeDocuments = new();
+    private List<OrgGeneratedDocument> orgDocuments = new();
+    private List<DocumentType> uploadableDocumentTypes = new();
+    private Guid selectedDocumentTypeId;
+    private IBrowserFile? selectedFile;
+    private Employee? currentEmployee;
+    private Guid organizationId;
+    private int pendingAckCount => orgDocuments.Count(d => d.Status == "Issued");
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null)
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+            organizationId = user.OrganizationId.Value;
+
+            currentEmployee = await EmployeeServiceHelper.GetEmployeeByUserIdAsync(user.Id);
+            if (currentEmployee == null) return;
+
+            employeeDashboard = await EmployeeDocumentService.GetEmployeeDocumentDashboardAsync(
+                currentEmployee.EmployeeId, organizationId);
+            employeeDocuments = employeeDashboard?.Documents ?? new();
+
+            orgDocuments = await OrgDocumentService.GetDocumentsForEmployeeAsync(
+                currentEmployee.EmployeeId, organizationId);
+
+            var allTypes = await DocumentTypeService.GetOrganizationDocumentTypesAsync(organizationId);
+            uploadableDocumentTypes = allTypes
+                .Where(t => t.IsEmployeeUploadAllowed && t.IsActive)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            message = $"Error loading data: {ex.Message}";
+            messageIsError = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
-    private async Task HandleUpload()
+    private void SetTab(string tab) => activeTab = tab;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
-        if (SelectedFile == null)
+        selectedFile = e.File;
+        await Task.CompletedTask;
+    }
+
+    private async Task UploadDocument()
+    {
+        if (selectedDocumentTypeId == Guid.Empty)
         {
-            await JsRuntime.InvokeVoidAsync("alert", "Please select a file to upload");
+            message = "Please select a document type.";
+            messageIsError = true;
+            return;
+        }
+        if (selectedFile == null)
+        {
+            message = "Please select a file.";
+            messageIsError = true;
             return;
         }
 
         isUploading = true;
-        StateHasChanged();
-
+        message = null;
         try
         {
-            UploadModel.File = SelectedFile;
+            var user = await CurrentUserService.GetUserAsync();
+            await EmployeeDocumentService.UploadDocumentAsync(
+                new DocumentUploadDto
+                {
+                    EmployeeId = currentEmployee!.EmployeeId,
+                    DocumentTypeId = selectedDocumentTypeId,
+                    File = selectedFile
+                },
+                organizationId, user!.Id, "Employee");
 
-            var currentUser = await CurrentUserService.GetUserAsync();
-            if (currentUser == null)
-            {
-                throw new Exception("User not found");
-            }
-
-            // Get user role - you might want to inject UserManager for this
-            var userRole = "Employee"; // You can get this from claims
-
-            var result = await EmployeeDocumentService.UploadDocumentAsync(
-                UploadModel,
-                EmployeeContext!.OrganizationId,
-                currentUser.Id,
-                userRole
-            );
-
-            // Close modal
-            await JsRuntime.InvokeVoidAsync("hideModal", "uploadModal");
-
-            // Reload dashboard
-            await LoadDashboard();
-
-            // Show success message
-            await JsRuntime.InvokeVoidAsync("showToast", "success", "Document uploaded successfully!");
+            message = "Document uploaded successfully. HR will review it shortly.";
+            messageIsError = false;
+            selectedDocumentTypeId = Guid.Empty;
+            selectedFile = null;
+            await LoadData();
         }
         catch (Exception ex)
         {
-            await JsRuntime.InvokeVoidAsync("showToast", "error", ex.Message);
+            message = $"Upload failed: {ex.Message}";
+            messageIsError = true;
         }
         finally
         {
             isUploading = false;
-            StateHasChanged();
         }
     }
 
-    private async Task DownloadDocument(Guid documentId)
+    private async Task MarkAsViewed(Guid documentId)
     {
-        // Navigate to download endpoint
-        Nav.NavigateTo($"/api/documents/download/{documentId}", forceLoad: true);
+        try
+        {
+            await OrgDocumentService.MarkAsViewedAsync(documentId, currentEmployee!.EmployeeId);
+        }
+        catch
+        {
+            /* non-blocking */
+        }
     }
 
-    private void GoBack()
+    private async Task AcknowledgeOrgDocument(Guid documentId)
     {
-        Nav.NavigateTo("/employee/dashboard");
+        try
+        {
+            await OrgDocumentService.AcknowledgeDocumentAsync(
+                documentId, currentEmployee!.EmployeeId, "Acknowledged via employee portal");
+            message = "Document acknowledged.";
+            messageIsError = false;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            message = $"Error: {ex.Message}";
+            messageIsError = true;
+        }
     }
+
+    // ── Render helper for org doc cards ──────────────────────────────────────
+    private RenderFragment OrgDocCard(OrgGeneratedDocument doc, bool canAcknowledge) =>
+        @<div class="card h-100 shadow-sm @(doc.Status == "Revoked" ? "border-danger" : doc.Status == "Acknowledged" ? "border-success" : "border-warning")">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <span class="badge bg-light text-muted border small">@doc.GeneratedAt.ToString("dd MMM yyyy")</span>
+            <span class="badge @GetIssuedBadge(doc.Status)">
+                @GetIssuedIcon(doc.Status) @doc.Status
+            </span>
+        </div>
+        <h6 class="fw-bold">@doc.DocumentName</h6>
+        <small class="text-muted d-block">Ref: @doc.DocumentNumber</small>
+        @if (!string.IsNullOrEmpty(doc.Description))
+                {
+        <p class="small text-muted mt-1 mb-0">@doc.Description</p>
+                }
+        @if (doc.Status == "Revoked")
+                {
+        <div class="alert alert-danger py-1 small mt-2 mb-0">
+            🚫 This document has been revoked by your organisation.
+        </div>
+                }
+        @if (doc.AcknowledgedAt.HasValue)
+                {
+        <small class="text-success d-block mt-2">
+            ✓ You acknowledged this on @doc.AcknowledgedAt.Value.ToString("dd MMM yyyy")
+        </small>
+                }
+    </div>
+    <div class="card-footer bg-transparent d-flex gap-2">
+        @if (doc.Status != "Revoked")
+        {
+            <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => MarkAsViewed(doc.DocumentId)">
+                📄 View / Download
+            </a>
+        }
+        @if (canAcknowledge)
+        {
+            <button class="btn btn-sm btn-success flex-fill" @onclick="() => AcknowledgeOrgDocument(doc.DocumentId)">
+                ✓ Acknowledge
+            </button>
+        }
+    </div>
+</div>;
+
+// ── Badge helpers ─────────────────────────────────────────────────────────
+private static string GetStatusBadge(string s) => s switch
+{
+    "Verified" => "bg-success",
+    "Pending" => "bg-warning text-dark",
+    "PageTitle" => "bg-danger",
+    "Rejected" => "bg-danger",
+    _ => "bg-secondary"
+};
+
+private static string GetStatusIcon(string s) => s switch
+{
+    "Verified" => "✓",
+    "Pending" => "⏳",
+    "Rejected" => "✗",
+    _ => "📄"
+};
+
+private static string GetIssuedBadge(string s) => s switch
+{
+    "Acknowledged" => "bg-success",
+    "Issued" => "bg-warning text-dark",
+    "Revoked" => "bg-danger",
+    _ => "bg-secondary"
+};
+
+private static string GetIssuedIcon(string s) => s switch
+{
+    "Acknowledged" => "✓",
+    "Issued" => "⏳",
+    "Revoked" => "🚫",
+    _ => "📄"
+};
 }

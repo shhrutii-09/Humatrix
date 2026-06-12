@@ -17,8 +17,12 @@ public class OrgGeneratedDocument
 
     [Required]
     public Guid EmployeeId { get; set; }  // Recipient
-    [Required]
-    public Guid TemplateId { get; set; }  // Now references OrgDocumentTemplate
+    
+    public Guid? TemplateId { get; set; }  // ← CHANGE HERE
+
+    // Add with other properties (around line 40-50)
+    public bool IsViewed { get; set; }
+    public DateTime? ViewedAt { get; set; }
 
     // Document metadata
     [Required, MaxLength(200)]

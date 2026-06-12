@@ -3,12 +3,15 @@ using Humatrix_HRMS.DTOs.Documents;
 using Humatrix_HRMS.Models;
 using Humatrix_HRMS.Models.Documents;
 using Humatrix_HRMS.Services.AI;
+using Microsoft.AspNetCore.Http;
 
 namespace Humatrix_HRMS.Services.Documents;
 
 public interface IOrgDocumentGenerationService
 {
-    // ── Template management ───────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  TEMPLATE MANAGEMENT (Optional - can keep or remove)
+    // ══════════════════════════════════════════════════════════
     Task<OrgDocumentTemplate> CreateTemplateAsync(OrgDocumentTemplateDto dto, Guid organizationId, string userId, string userRole);
     Task<OrgDocumentTemplate> UpdateTemplateAsync(Guid templateId, UpdateOrgDocumentTemplateDto dto, Guid organizationId, string userId);
     Task<bool> DeleteTemplateAsync(Guid templateId, Guid organizationId);
@@ -16,33 +19,46 @@ public interface IOrgDocumentGenerationService
     Task<List<OrgDocumentTemplate>> GetTemplatesByCategoryAsync(Guid organizationId, string category);
     Task<List<OrgDocumentTemplate>> GetAllTemplatesAsync(Guid organizationId, bool includeInactive = false);
 
-    // ── Document generation — manual (from UI) ────────────────
-    Task<OrgDocumentGenerationResponseDto> GenerateDocumentAsync(OrgDocumentGenerationDto dto, Guid organizationId, string userId, string userRole);
-    Task<OrgDocumentGenerationResponseDto> GenerateDocumentWithAIAsync(Guid templateId, Guid recipientEmployeeId, string userId, string userRole, Dictionary<string, string>? customData = null, bool sendEmail = false);
-    Task<List<OrgDocumentGenerationResponseDto>> GenerateDocumentsBulkAsync(Guid templateId, List<Guid> employeeIds, Dictionary<string, string>? commonCustomData, Guid organizationId, string userId, string userRole);
+    Task<Dictionary<Guid, string>> GetEmployeeRolesAsync(Guid organizationId);
 
-    // ── Document generation — system (background jobs only) ───
-    /// <summary>
-    /// Generates a document without sending any notification.
-    /// Used exclusively by background services (AIEventMonitor).
-    /// The caller is responsible for sending a consolidated notification.
-    /// </summary>
-    Task<OrgDocumentGenerationResponseDto> GenerateDocumentSystemAsync(Guid templateId, Guid recipientEmployeeId, string actorUserId, string actorRole, Dictionary<string, string>? customData = null);
+    // ══════════════════════════════════════════════════════════
+    //  MANUAL DOCUMENT UPLOAD (New - replaces AI generation)
+    // ══════════════════════════════════════════════════════════
+    Task<OrgDocumentGenerationResponseDto> UploadDocumentManuallyAsync(
+        ManualDocumentUploadDto dto,
+        Guid organizationId,
+        string userId,
+        string userRole,
+        string fileName,
+        string contentType,
+        byte[] fileContent);
 
-    // ── Viewing ───────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  VIEWING
+    // ══════════════════════════════════════════════════════════
+
+    Task MarkAsViewedAsync(Guid documentId, Guid employeeId);
     Task<List<OrgGeneratedDocument>> GetDocumentsForEmployeeAsync(Guid employeeId, Guid organizationId);
     Task<List<OrgGeneratedDocument>> GetDocumentsGeneratedByUserAsync(string userId, Guid organizationId);
+    Task<List<OrgGeneratedDocument>> GetOrganizationDocumentsAsync(Guid organizationId, string userId, string userRole);
     Task<OrgGeneratedDocument?> GetDocumentByIdAsync(Guid documentId, Guid organizationId);
-    Task<List<OrgDocumentHistory>> GetDocumentHistoryAsync(Guid documentId);
 
-    // ── State transitions ─────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  ACKNOWLEDGMENT & REVOKE
+    // ══════════════════════════════════════════════════════════
     Task<bool> AcknowledgeDocumentAsync(Guid documentId, Guid employeeId, string? remarks = null);
     Task<bool> RevokeDocumentAsync(Guid documentId, string userId, string userRole, string reason);
 
-    // ── Permissions ───────────────────────────────────────────
-    Task<bool> CanGenerateDocumentForEmployeeAsync(Guid employeeId, Guid organizationId, string userId, string userRole);
+    // ══════════════════════════════════════════════════════════
+    //  PERMISSIONS
+    // ══════════════════════════════════════════════════════════
+    Task<bool> CanUploadDocumentForEmployeeAsync(Guid employeeId, Guid organizationId, string userId, string userRole);
     Task<List<Employee>> GetEligibleRecipientsForDocumentAsync(Guid organizationId, string userId, string userRole);
+    Task<List<OrgDocumentHistory>> GetDocumentHistoryAsync(Guid documentId);
 
-    // ── AI ────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  AI SUGGESTIONS ONLY (No generation, just recommendations)
+    // ══════════════════════════════════════════════════════════
     Task<List<AIDocumentSuggestion>> GetAIDocumentSuggestionsAsync(Guid employeeId);
+    Task<List<DashboardDocumentSuggestion>> GetDashboardSuggestionsAsync(Guid organizationId, string userId, string userRole);
 }
