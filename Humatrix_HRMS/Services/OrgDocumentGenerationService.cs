@@ -489,9 +489,9 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
     }
 
     public async Task<List<Employee>> GetEligibleRecipientsForDocumentAsync(
-        Guid organizationId,
-        string userId,
-        string userRole)
+    Guid organizationId,
+    string userId,
+    string userRole)
     {
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null) return new List<Employee>();
@@ -499,12 +499,19 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         var roles = await _userManager.GetRolesAsync(user);
         using var db = _dbFactory.CreateDbContext();
 
+        // Get ALL user IDs that are HR or OrgAdmin (these should NEVER be recipients)
+        var excludedRoleUserIds = await GetHrAndAdminUserIdsInOrgAsync(db, organizationId);
+
         if (roles.Contains("OrgAdmin"))
         {
+            // OrgAdmin can see all NON-HR, NON-ADMIN employees
             return await db.Employees
                 .Include(e => e.Department)
                 .Include(e => e.Designation)
-                .Where(e => e.OrganizationId == organizationId && e.Status == "Active")
+                .Where(e => e.OrganizationId == organizationId &&
+                            e.Status == "Active" &&
+                            !excludedRoleUserIds.Contains(e.UserId) &&  // Exclude ALL HR & Admins
+                            e.UserId != userId)  // Exclude self
                 .OrderBy(e => e.Department!.Name)
                 .ThenBy(e => e.FirstName)
                 .ToListAsync();
@@ -515,8 +522,7 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
             if (hrEmployee == null) return new List<Employee>();
 
-            var hrUserIds = await GetHrUserIdsInOrgAsync(db, organizationId);
-
+            // HR can see only NON-HR, NON-ADMIN employees in their department
             return await db.Employees
                 .Include(e => e.Department)
                 .Include(e => e.Designation)
@@ -524,14 +530,27 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
                             e.DepartmentId == hrEmployee.DepartmentId &&
                             e.Status == "Active" &&
                             e.UserId != userId &&
-                            !hrUserIds.Contains(e.UserId))
+                            !excludedRoleUserIds.Contains(e.UserId))  // Exclude ALL HR & Admins
                 .OrderBy(e => e.FirstName)
                 .ToListAsync();
         }
 
         return new List<Employee>();
     }
+    private static async Task<HashSet<string>> GetHrAndAdminUserIdsInOrgAsync(
+      ApplicationDbContext db, Guid organizationId)
+    {
+        var ids = await (
+            from u in db.Users
+            join ur in db.UserRoles on u.Id equals ur.UserId
+            join r in db.Roles on ur.RoleId equals r.Id
+            where u.OrganizationId == organizationId &&
+                  (r.Name == "HR" || r.Name == "OrgAdmin")
+            select u.Id
+        ).ToListAsync();
 
+        return ids.ToHashSet();
+    }
     public async Task<List<OrgDocumentHistory>> GetDocumentHistoryAsync(Guid documentId)
     {
         using var db = _dbFactory.CreateDbContext();
@@ -559,6 +578,90 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         return await _aiDocumentService.SuggestDocumentsAsync(employee);
     }
 
+    public async Task<List<EmployeeWithRoleDto>> GetEligibleRecipientsWithRolesAsync(
+    Guid organizationId, string userId, string userRole)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null) return new List<EmployeeWithRoleDto>();
+
+        var roles = await _userManager.GetRolesAsync(user);
+        using var db = _dbFactory.CreateDbContext();
+
+        // Get all users in the organization
+        var allUsers = await db.Users
+            .Where(u => u.OrganizationId == organizationId)
+            .ToListAsync();
+
+        // Get roles for all users
+        var userRolesMap = new Dictionary<string, List<string>>();
+        foreach (var u in allUsers)
+        {
+            var userRoles = await _userManager.GetRolesAsync(u);
+            userRolesMap[u.Id] = userRoles.ToList();
+        }
+
+        // Get all employees
+        var employees = await db.Employees
+            .Include(e => e.Department)
+            .Where(e => e.OrganizationId == organizationId && e.Status == "Active")
+            .ToListAsync();
+
+        var result = new List<EmployeeWithRoleDto>();
+
+        foreach (var emp in employees)
+        {
+            if (!userRolesMap.ContainsKey(emp.UserId)) continue;
+
+            var empRoles = userRolesMap[emp.UserId];
+            bool isHR = empRoles.Contains("HR");
+            bool isOrgAdmin = empRoles.Contains("OrgAdmin");
+
+            // For HR users: can see everyone in their department (including other HR)
+            // For OrgAdmin: can see everyone
+            // Skip self
+            if (emp.UserId == userId) continue;
+
+            if (roles.Contains("OrgAdmin"))
+            {
+                // OrgAdmin sees everyone
+                result.Add(new EmployeeWithRoleDto
+                {
+                    EmployeeId = emp.EmployeeId,
+                    UserId = emp.UserId,
+                    FirstName = emp.FirstName,
+                    LastName = emp.LastName,
+                    EmployeeCode = emp.EmployeeCode,
+                    Role = isHR ? "HR" : (isOrgAdmin ? "OrgAdmin" : "Employee"),
+                    IsHR = isHR,
+                    IsOrgAdmin = isOrgAdmin,
+                    DepartmentName = emp.Department?.Name ?? "N/A"
+                });
+            }
+            else if (roles.Contains("HR"))
+            {
+                var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+                if (hrEmployee != null && emp.DepartmentId == hrEmployee.DepartmentId)
+                {
+                    // HR sees everyone in their department (including other HR)
+                    result.Add(new EmployeeWithRoleDto
+                    {
+                        EmployeeId = emp.EmployeeId,
+                        UserId = emp.UserId,
+                        FirstName = emp.FirstName,
+                        LastName = emp.LastName,
+                        EmployeeCode = emp.EmployeeCode,
+                        Role = isHR ? "HR" : (isOrgAdmin ? "OrgAdmin" : "Employee"),
+                        IsHR = isHR,
+                        IsOrgAdmin = isOrgAdmin,
+                        DepartmentName = emp.Department?.Name ?? "N/A"
+                    });
+                }
+            }
+        }
+
+        return result.OrderBy(e => e.DepartmentName).ThenBy(e => e.FirstName).ToList();
+    }
+
     public async Task<List<DashboardDocumentSuggestion>> GetDashboardSuggestionsAsync(
     Guid organizationId, string userId, string userRole)
     {
@@ -568,11 +671,15 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         var roles = await _userManager.GetRolesAsync(user);
         using var db = _dbFactory.CreateDbContext();
 
+        // Get HR and Admin user IDs to exclude them from suggestions
+        var excludedUserIds = await GetHrAndAdminUserIdsInOrgAsync(db, organizationId);
+
         IQueryable<Employee> employeeQuery = db.Employees
             .Include(e => e.Department)
             .Include(e => e.Designation)
-            .Where(e => e.OrganizationId == organizationId && e.Status == "Active");
-
+            .Where(e => e.OrganizationId == organizationId &&
+                        e.Status == "Active" &&
+                        !excludedUserIds.Contains(e.UserId));  // Exclude HR & Admins from suggestions
         if (roles.Contains("HR") && !roles.Contains("OrgAdmin"))
         {
             var hrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
@@ -904,14 +1011,14 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
 
 
     private static async Task<HashSet<string>> GetHrUserIdsInOrgAsync(
-        ApplicationDbContext db, Guid organizationId)
+       ApplicationDbContext db, Guid organizationId)
     {
         var ids = await (
             from u in db.Users
             join ur in db.UserRoles on u.Id equals ur.UserId
             join r in db.Roles on ur.RoleId equals r.Id
             where u.OrganizationId == organizationId &&
-                  (r.Name == "HR" || r.Name == "OrgAdmin")
+                  r.Name == "HR"  // Only HR, not OrgAdmin
             select u.Id
         ).ToListAsync();
 

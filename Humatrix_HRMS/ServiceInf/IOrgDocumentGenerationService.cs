@@ -19,6 +19,9 @@ public interface IOrgDocumentGenerationService
     Task<List<OrgDocumentTemplate>> GetTemplatesByCategoryAsync(Guid organizationId, string category);
     Task<List<OrgDocumentTemplate>> GetAllTemplatesAsync(Guid organizationId, bool includeInactive = false);
 
+    Task<List<EmployeeWithRoleDto>> GetEligibleRecipientsWithRolesAsync(
+    Guid organizationId, string userId, string userRole);
+
     Task<Dictionary<Guid, string>> GetEmployeeRolesAsync(Guid organizationId);
 
     // ══════════════════════════════════════════════════════════

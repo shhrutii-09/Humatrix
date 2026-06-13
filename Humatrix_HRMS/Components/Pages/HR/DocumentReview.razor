@@ -38,9 +38,13 @@
         </div>
         @if (isOrgAdmin)  // Only OrgAdmin can see the Terminate button
         {
-            <button class="btn btn-secondary px-4"
+            <button class="btn btn-secondary "
                     @onclick='() => Nav.NavigateTo("/org/document-types")'>
                  Add document-types
+            </button>
+            <button class="btn btn-secondary"
+                    @onclick='() => Nav.NavigateTo("/org/documents/upload")'>
+                 Upload Document
             </button>
         }
         <button class="btn btn-secondary" @onclick="GoBack">

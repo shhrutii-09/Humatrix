@@ -10,6 +10,7 @@
 @using Humatrix_HRMS.Services.Documents
 @using Humatrix_HRMS.DTOs.Documents
 @using Microsoft.AspNetCore.Authorization
+@using Humatrix_HRMS.DTOs.Documents
 @using Microsoft.AspNetCore.Components.Forms
 @using System.IO
 @inject IOrgDocumentGenerationService DocumentService
@@ -34,7 +35,7 @@
 
         <div>
             <span class="badge bg-primary px-3 py-2">
-                @eligibleEmployees.Count Employees
+                @eligibleEmployeesWithRoles.Count Employees
             </span>
         </div>
     </div>
@@ -122,22 +123,43 @@
                                         Employee
                                     </label>
 
-                                    <InputSelect class="form-select form-control-modern"
-                                                 @bind-Value="uploadModel.RecipientEmployeeId">
+                                    <select class="form-select form-control-modern"
+                                            @bind="uploadModel.RecipientEmployeeId">
 
-                                        <option value="">
+                                        <option value="@Guid.Empty">
                                             Select Employee
                                         </option>
 
-                                        @foreach (var emp in eligibleEmployees.OrderBy(x => x.FirstName))
+                                        @foreach (var emp in eligibleEmployeesWithRoles.OrderBy(x => x.DepartmentName).ThenBy(x => x.FirstName))
                                         {
-                                            <option value="@emp.EmployeeId">
-                                                @emp.FirstName @emp.LastName
-                                                (@emp.EmployeeCode)
-                                            </option>
+                                            if (emp.IsHR)
+                                            {
+                                                <option value="@emp.EmployeeId" style="background-color: floralwhite;">
+                                                    @emp.DisplayName - @emp.DepartmentName (HR)
+                                                </option>
+                                            }
+                                            else if (emp.IsOrgAdmin)
+                                            {
+                                                <option value="@emp.EmployeeId" style="background-color: #d1ecf1;">
+                                                    @emp.DisplayName - @emp.DepartmentName (Admin)
+                                                </option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@emp.EmployeeId">
+                                                    @emp.DisplayName - @emp.DepartmentName
+                                                </option>
+                                            }
                                         }
 
-                                    </InputSelect>
+                                    </select>
+
+                                    @* @if (eligibleEmployeesWithRoles.Any(e => e.IsHR))
+                                    {
+                                        <small class="text-muted mt-1 d-block">
+                                            <span class="badge bg-warning text-dark">HR</span> = HR Staff
+                                        </small>
+                                    } *@
                                 </div>
 
                                 <div class="col-md-6 mb-3">
@@ -318,7 +340,7 @@
                     <div class="card-body">
 
                         <div class="stat-box">
-                            <h4>@eligibleEmployees.Count</h4>
+                            <h4>@eligibleEmployeesWithRoles.Count</h4>  <!-- Changed from eligibleEmployees -->
                             <span>Eligible Employees</span>
                         </div>
 
@@ -428,7 +450,7 @@
     }
 
     private UploadDocumentModel uploadModel = new();
-    private List<Employee> eligibleEmployees = new();
+    private List<EmployeeWithRoleDto> eligibleEmployeesWithRoles = new();  // CHANGED: Use the DTO type
     private List<DashboardDocumentSuggestion> dashboardSuggestions = new();
     private IBrowserFile? selectedFile;
     private string selectedFileName = string.Empty;
@@ -462,8 +484,10 @@
 
             var orgId = _currentUser.OrganizationId.Value;
 
-            eligibleEmployees = await DocumentService.GetEligibleRecipientsForDocumentAsync(
+            // Use the new method that includes role information
+            eligibleEmployeesWithRoles = await DocumentService.GetEligibleRecipientsWithRolesAsync(
                 orgId, _currentUser.Id, _currentUserRole);
+
             dashboardSuggestions = await DocumentService.GetDashboardSuggestionsAsync(
                 orgId, _currentUser.Id, _currentUserRole);
         }
@@ -538,7 +562,6 @@
         }
         catch (DbUpdateException ex)
         {
-            // This will show the actual database error
             var innerMessage = ex.InnerException?.Message ?? ex.Message;
             ShowError($"Database error: {innerMessage}");
             Console.WriteLine($"Full error: {ex}");
@@ -557,6 +580,7 @@
             isUploading = false;
         }
     }
+
     private void PrefillForm(DashboardDocumentSuggestion suggestion)
     {
         uploadModel.DocumentName = suggestion.DocumentType;
