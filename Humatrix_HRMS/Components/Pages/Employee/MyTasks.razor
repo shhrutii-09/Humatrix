@@ -40,6 +40,7 @@
             <p class="text-muted small mb-0">Track and update your assigned operational tasks.</p>
         </div>
         <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+            <i class="bi bi-speedometer2"></i>
             DASHBOARD
         </button>
     </div>
@@ -175,10 +176,17 @@
                                disabled="@(t.Status == "Completed")" @onchange="(e) => UpdateProgress(t, e)" />
 
                         <div class="mt-auto pt-2 border-top">
-                            <div class="d-flex justify-content-between">
-                                <small class="text-muted"><i class="bi bi-calendar3 me-1"></i> Due: @(t.DueDate?.ToString("dd MMM yyyy") ?? "N/A")</small>
-                                <small class="text-primary fw-bold">
-                                    <i class="bi bi-person-badge"></i> @t.AssignedByName
+                            <div class="d-flex flex-column gap-1">
+                                @* Due Date *@
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    <strong>Due:</strong> @(t.DueDate?.ToString("dd MMM yyyy") ?? "N/A")
+                                </small>
+
+                                @* Assigned By *@
+                                <small class="text-primary">
+                                    <i class="bi bi-person-badge-fill me-1"></i>
+                                    <strong>Assigned By:</strong> @t.AssignedByName
                                 </small>
                             </div>
                         </div>
@@ -226,6 +234,7 @@
         border-radius: 12px;
     }
 
+    /* Updated Dashboard Button CSS */
     .btn-interactive-back {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
@@ -234,14 +243,11 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
-        transition: all 0.2s ease;
     }
 
         .btn-interactive-back:hover {
-            background-color: #f8fafc !important;
             border-color: #5c4ac7 !important;
             color: #5c4ac7 !important;
-            transform: translateY(-1px);
         }
 
     .priority-badge {

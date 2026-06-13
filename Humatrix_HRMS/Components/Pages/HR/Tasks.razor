@@ -36,21 +36,17 @@
 <div class="container-fluid px-4 mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold tracking-tight text-dark mb-1">
-                Task Management
-            </h2>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Task Management</h2>
             <p class="text-muted small mb-0">Monitor, assign, and track organizational operational tasks.</p>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-add-task d-flex align-items-center gap-2 shadow-sm"
                     @onclick='() => Nav.NavigateTo("/hr/assign-task")'>
-                <i class="bi bi-plus-circle"></i>
-                ASSIGN TASK
+                <i class="bi bi-plus-circle"></i> ASSIGN TASK
             </button>
             <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2"
                     @onclick='() => Nav.NavigateTo(dashboardPath)'>
-                <i class="bi bi-speedometer2"></i>
-                DASHBOARD
+                <i class="bi bi-speedometer2"></i> DASHBOARD
             </button>
         </div>
     </div>
@@ -179,7 +175,13 @@
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
                                         <div class="avatar-circle">@(!string.IsNullOrEmpty(t.AssignedToName) ? t.AssignedToName[0].ToString() : "?")</div>
-                                        <span class="text-primary fw-semibold link-hover" @onclick="@(() => Nav.NavigateTo($"/hr/employee/{t.AssignedToName}"))">@t.AssignedToName</span>
+                                        <div>
+                                            <div class="text-primary fw-semibold">@t.AssignedToName</div>
+                                            @if (userRoles != null && userRoles.Contains("orgadmin"))
+                                            {
+                                                <div class="text-muted small" style="font-size: 0.7rem;">@t.DepartmentName</div>
+                                            }
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
@@ -201,20 +203,22 @@
                                 <td>
                                     @if (t.DueDate.HasValue)
                                     {
-                                        <div class="fw-medium @(IsOverdue(t) ? "text-danger fw-bold" : "text-dark")">
-                                            <i class="bi bi-calendar3 me-1"></i> @t.DueDate.Value.ToString("dd MMM yyyy")
+                                        <div class="small fw-medium @(IsOverdue(t) ? "text-danger fw-bold" : "text-dark")">
+                                            @t.DueDate.Value.ToString("dd MMM yyyy")
                                         </div>
                                         @if (IsOverdue(t))
                                         {
-                                            <span class="badge bg-danger-soft text-danger overdue-tag">Overdue</span>
+                                            <span class="badge bg-danger-soft text-danger overdue-tag" style="font-size: 0.65rem; padding: 2px 6px;">Overdue</span>
                                         }
                                     }
                                     else
                                     {
-                                        <span class="text-muted">-</span>
+                                        <span class="text-muted small">-</span>
                                     }
                                 </td>
-                                <td class="pe-4 text-muted small">@t.CreatedAt.ToString("dd MMM yyyy")</td>
+                                <td class="pe-4 text-dark small fw-medium">
+                                    @t.CreatedAt.ToString("dd MMM yyyy")
+                                </td>
                             </tr>
                         }
                     }
@@ -225,10 +229,6 @@
 </div>
 
 <style>
-    .text-premium {
-        color: #5c4ac7 !important;
-    }
-
     .tracking-tight {
         letter-spacing: -0.025em;
     }
@@ -332,17 +332,7 @@
         text-transform: uppercase;
     }
 
-    .link-hover {
-        cursor: pointer;
-    }
-
-        .link-hover:hover {
-            text-decoration: underline;
-        }
-
     .overdue-tag {
-        font-size: 0.65rem;
-        padding: 3px 6px;
         margin-left: 5px;
     }
 
@@ -365,6 +355,8 @@
 
 @code {
     private List<TaskDto> tasks = new();
+    private List<string>? userRoles; // Nullable banaya
+
     private string? searchText;
     private string? selectedStatus;
     private string? selectedPriority;
@@ -384,14 +376,12 @@
         var sessionUser = await CurrentUser.GetUserAsync();
         if (sessionUser == null) return;
 
-        var userRoles = await (from ur in db.UserRoles
-                               join r in db.Roles on ur.RoleId equals r.Id
-                               where ur.UserId == sessionUser.Id
-                               select r.Name.ToLower()).ToListAsync();
+        userRoles = await (from ur in db.UserRoles
+                           join r in db.Roles on ur.RoleId equals r.Id
+                           where ur.UserId == sessionUser.Id
+                           select r.Name.ToLower()).ToListAsync();
 
-        bool isOrgAdmin = userRoles.Contains("orgadmin");
-        bool isHr = userRoles.Contains("hr");
-
+        bool isOrgAdmin = userRoles != null && userRoles.Contains("orgadmin");
         dashboardPath = isOrgAdmin ? "/org/dashboard" : "/hr/dashboard";
         tasks = await TaskService.GetTasksAssignedByMeAsync();
     }
