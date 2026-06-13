@@ -281,10 +281,10 @@ namespace Humatrix_HRMS.Services
                 AttendanceId = record.AttendanceId,
                 EmployeeName = $"{employee.FirstName} {employee.LastName}",
                 Date = record.WorkDate,
-                // Change these lines:
-                CheckIn = record.CheckIn.HasValue ? record.CheckIn.Value.ToLocalTime() : null,
-                CheckOut = record.CheckOut.HasValue ? record.CheckOut.Value.ToLocalTime() : null,
-                SystemCheckOut = record.SystemCheckOut.HasValue ? record.SystemCheckOut.Value.ToLocalTime() : null,
+                // ✅ RETURN UTC - let UI handle conversion
+                CheckIn = record.CheckIn,  // Keep as UTC
+                CheckOut = record.CheckOut,  // Keep as UTC
+                SystemCheckOut = record.SystemCheckOut,
                 OvertimeHours = record.OvertimeHours ?? 0,
                 ApprovedOvertimeHours = record.ApprovedOvertimeHours,
                 Status = record.Status,
@@ -326,8 +326,9 @@ namespace Humatrix_HRMS.Services
                 AttendanceId = r.AttendanceId,
                 EmployeeName = $"{employee.FirstName} {employee.LastName}",
                 Date = r.WorkDate,
-                CheckIn = r.CheckIn.HasValue ? r.CheckIn.Value.ToLocalTime() : null,
-                CheckOut = r.CheckOut.HasValue ? r.CheckOut.Value.ToLocalTime() : null,
+                // KEEP AS UTC - let UI handle conversion
+                CheckIn = r.CheckIn,
+                CheckOut = r.CheckOut,
                 Status = r.Status,
                 TotalHours = r.TotalHours,
                 IsManual = r.IsManual,
@@ -335,7 +336,6 @@ namespace Humatrix_HRMS.Services
                 ApprovedOvertimeHours = r.ApprovedOvertimeHours
             }).ToList();
         }
-
         public async Task<List<AttendanceListDto>> GetMyAttendanceAsync()
         {
             var user = await _currentUser.GetUserAsync()
@@ -372,8 +372,9 @@ namespace Humatrix_HRMS.Services
                     AttendanceId = r.AttendanceId,
                     EmployeeName = $"{employee.FirstName} {employee.LastName}",
                     Date = r.WorkDate,
-                    CheckIn = r.CheckIn.HasValue ? r.CheckIn.Value.ToLocalTime() : null,
-                    CheckOut = r.CheckOut.HasValue ? r.CheckOut.Value.ToLocalTime() : null,
+                    // FIX: Use organization timezone
+                    CheckIn = r.CheckIn.HasValue ? TimeZoneInfo.ConvertTimeFromUtc(r.CheckIn.Value, tz) : null,
+                    CheckOut = r.CheckOut.HasValue ? TimeZoneInfo.ConvertTimeFromUtc(r.CheckOut.Value, tz) : null,
                     Status = r.Status,
                     TotalHours = r.TotalHours,
                     IsManual = r.IsManual,
@@ -386,9 +387,9 @@ namespace Humatrix_HRMS.Services
         }
 
         public async Task<List<AttendanceListDto>> GetAttendanceForDateAsync(
-    DateTime date,
-    Guid? departmentId = null,
-    string? role = null)
+     DateTime date,
+     Guid? departmentId = null,
+     string? role = null)
         {
             var currentUser = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
@@ -421,14 +422,14 @@ namespace Humatrix_HRMS.Services
             {
                 if (attendances.TryGetValue(emp.EmployeeId, out var att))
                 {
-                    // FIX: Use .ToLocalTime() to prevent double timezone addition (+5.30 hours)
+                    // FIX: Convert UTC to Organization's local time, NOT server local time
                     list.Add(new AttendanceListDto
                     {
                         AttendanceId = att.AttendanceId,
                         EmployeeName = $"{emp.FirstName} {emp.LastName}",
                         Date = targetDate,
-                        CheckIn = att.CheckIn.HasValue ? att.CheckIn.Value.ToLocalTime() : null,
-                        CheckOut = att.CheckOut.HasValue ? att.CheckOut.Value.ToLocalTime() : null,
+                        CheckIn = att.CheckIn,
+                        CheckOut = att.CheckOut,
                         Status = att.Status,
                         TotalHours = att.TotalHours,
                         IsManual = att.IsManual,

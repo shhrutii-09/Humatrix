@@ -531,6 +531,10 @@
         isUploading = true;
         resultMessage = "";
 
+        // Store these before resetting
+        var uploadedEmployeeId = uploadModel.RecipientEmployeeId;
+        var uploadedDocumentName = uploadModel.DocumentName;
+
         try
         {
             using var memoryStream = new MemoryStream();
@@ -557,8 +561,24 @@
                 fileBytes);
 
             ShowSuccess($"✅ Document '{result.DocumentTypeName}' uploaded successfully for {result.EmployeeName}.");
-            await RefreshSuggestions();
+
+            // Remove the suggestion immediately from UI (no database call needed)
+            RemoveUploadedSuggestion(uploadedEmployeeId, uploadedDocumentName);
+
+            // Reset the form
             ResetForm();
+
+            // Optional: Refresh from database in background to ensure consistency
+            // But don't await it immediately to avoid UI flicker
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100); // Small delay to let UI update first
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSuggestions();
+                    StateHasChanged();
+                });
+            });
         }
         catch (DbUpdateException ex)
         {
@@ -580,6 +600,62 @@
             isUploading = false;
         }
     }
+    // Add this helper method to remove uploaded suggestions
+    private void RemoveUploadedSuggestion(Guid employeeId, string documentName)
+    {
+        // Find and remove suggestions that match the exact uploaded document
+        var suggestionsToRemove = dashboardSuggestions
+            .Where(s => s.EmployeeId == employeeId &&
+                       s.DocumentType.Equals(documentName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var suggestion in suggestionsToRemove)
+        {
+            dashboardSuggestions.Remove(suggestion);
+        }
+
+        // Also remove related suggestions for the same employee
+        // For example: if "Experience Letter" uploaded, remove "Experience Letter" and "Relieving Letter" suggestions
+        var relatedDocs = new List<string>();
+        if (documentName.Contains("Experience", StringComparison.OrdinalIgnoreCase))
+        {
+            relatedDocs.Add("Experience Letter");
+            relatedDocs.Add("Relieving Letter");
+        }
+        else if (documentName.Contains("Relieving", StringComparison.OrdinalIgnoreCase))
+        {
+            relatedDocs.Add("Relieving Letter");
+            relatedDocs.Add("Experience Letter");
+        }
+        else if (documentName.Contains("Offer", StringComparison.OrdinalIgnoreCase))
+        {
+            relatedDocs.Add("Offer Letter");
+        }
+        else if (documentName.Contains("Confirmation", StringComparison.OrdinalIgnoreCase))
+        {
+            relatedDocs.Add("Confirmation Letter");
+        }
+        else if (documentName.Contains("Termination", StringComparison.OrdinalIgnoreCase))
+        {
+            relatedDocs.Add("Termination Letter");
+        }
+
+        if (relatedDocs.Any())
+        {
+            var relatedSuggestions = dashboardSuggestions
+                .Where(s => s.EmployeeId == employeeId &&
+                           relatedDocs.Contains(s.DocumentType))
+                .ToList();
+
+            foreach (var suggestion in relatedSuggestions)
+            {
+                dashboardSuggestions.Remove(suggestion);
+            }
+        }
+
+        // Update the suggestions count in UI
+        StateHasChanged();
+    }   
 
     private void PrefillForm(DashboardDocumentSuggestion suggestion)
     {
@@ -603,10 +679,26 @@
     {
         try
         {
-            dashboardSuggestions = await DocumentService.GetDashboardSuggestionsAsync(
-                _currentUser!.OrganizationId!.Value, _currentUser.Id, _currentUserRole);
+            // Force a fresh query from database
+            var orgId = _currentUser!.OrganizationId!.Value;
+
+            // Clear existing suggestions first
+            dashboardSuggestions.Clear();
+
+            // Get fresh suggestions
+            var freshSuggestions = await DocumentService.GetDashboardSuggestionsAsync(
+                orgId, _currentUser.Id, _currentUserRole);
+
+            // Update the list
+            dashboardSuggestions = freshSuggestions;
+
+            // Refresh the UI
+            StateHasChanged();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing suggestions: {ex.Message}");
+        }
     }
 
     private void ResetForm()

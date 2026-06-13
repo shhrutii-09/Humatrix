@@ -162,13 +162,13 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
     // ══════════════════════════════════════════════════════════
 
     public async Task<OrgDocumentGenerationResponseDto> UploadDocumentManuallyAsync(
-    ManualDocumentUploadDto dto,
-    Guid organizationId,
-    string userId,
-    string userRole,
-    string fileName,
-    string contentType,
-    byte[] fileContent)
+     ManualDocumentUploadDto dto,
+     Guid organizationId,
+     string userId,
+     string userRole,
+     string fileName,
+     string contentType,
+     byte[] fileContent)
     {
         // ── Permission check ────────────────────────────────────────
         var permissionResult = await CheckPermissionAsync(dto.RecipientEmployeeId, organizationId, userId);
@@ -214,11 +214,10 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
             DocumentId = Guid.NewGuid(),
             OrganizationId = organizationId,
             EmployeeId = recipient.EmployeeId,
-            TemplateId = null,  // Manual upload - no template
+            TemplateId = null,
             DocumentNumber = documentNumber,
             DocumentName = dto.DocumentName,
-            //Description = dto.Description ?? dto.Remarks ?? $"Uploaded by {actorName}",
-            Description = string.IsNullOrEmpty(dto.Category)? dto.Description : $"{dto.Category} | {dto.Description}",
+            Description = string.IsNullOrEmpty(dto.Category) ? dto.Description : $"{dto.Category} | {dto.Description}",
             FileName = savedFileName,
             OriginalFileName = fileName,
             FilePath = filePath,
@@ -242,14 +241,12 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
 
         // Add document FIRST
         db.OrgGeneratedDocuments.Add(document);
-
-        // IMPORTANT: Save the document FIRST so it gets a real DocumentId in the database
         await db.SaveChangesAsync();
 
         // NOW add the history record AFTER document is saved
         var history = new OrgDocumentHistory
         {
-            DocumentId = document.DocumentId,  // Now this ID exists in the database
+            DocumentId = document.DocumentId,
             Action = "Uploaded",
             PerformedByUserId = userId,
             PerformedByRole = userRole,
@@ -258,7 +255,32 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         };
 
         db.OrgDocumentHistories.Add(history);
-        await db.SaveChangesAsync();  // Save history separately
+        await db.SaveChangesAsync();
+
+        // ========== ADD NEW CODE HERE ==========
+        if (dto.DocumentName.Contains("Experience Letter", StringComparison.OrdinalIgnoreCase))
+        {
+            var exit = await db.EmployeeExits
+                .FirstOrDefaultAsync(x => x.EmployeeId == recipient.EmployeeId &&
+                                          (x.Status == ExitStatus.Approved || x.Status == ExitStatus.ClearanceInProgress));
+            if (exit != null)
+            {
+                exit.ExperienceLetterIssued = true;
+                await db.SaveChangesAsync();
+            }
+        }
+        else if (dto.DocumentName.Contains("Relieving Letter", StringComparison.OrdinalIgnoreCase))
+        {
+            var exit = await db.EmployeeExits
+                .FirstOrDefaultAsync(x => x.EmployeeId == recipient.EmployeeId &&
+                                          (x.Status == ExitStatus.Approved || x.Status == ExitStatus.ClearanceInProgress));
+            if (exit != null)
+            {
+                exit.RelievingLetterIssued = true;
+                await db.SaveChangesAsync();
+            }
+        }
+        // ========== END OF NEW CODE ==========
 
         // Send notification to employee
         await _notificationService.CreateNotificationAsync(
@@ -750,12 +772,71 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         }
 
         // ── 3. APPROVED RESIGNATION: Experience + Relieving Letter ────────────────
-        var approvedExits = await db.EmployeeExits
+        // ── 3. APPROVED RESIGNATION: Experience + Relieving Letter ────────────────
+        var allApprovedExits = await db.EmployeeExits
             .Include(x => x.Employee).ThenInclude(e => e!.Department)
             .Where(x =>
                 x.OrganizationId == organizationId &&
-                (x.Status == ExitStatus.Approved || x.Status == ExitStatus.ClearanceInProgress))
+                (x.Status == ExitStatus.Approved || x.Status == ExitStatus.ClearanceInProgress) &&
+                x.Employee != null &&
+                x.Employee.Status == "Active")
             .ToListAsync();
+
+        // Filter exits based on viewer's role
+        var approvedExits = new List<EmployeeExit>();
+
+        foreach (var exit in allApprovedExits)
+        {
+            var exitingEmployee = exit.Employee;
+            if (exitingEmployee == null) continue;
+
+            // Get the exiting employee's roles
+            var exitingUser = await _userManager.FindByIdAsync(exitingEmployee.UserId);
+            if (exitingUser == null) continue;
+
+            var exitingRoles = await _userManager.GetRolesAsync(exitingUser);
+            bool isExitingHR = exitingRoles.Contains("HR");
+            bool isExitingAdmin = exitingRoles.Contains("OrgAdmin");
+
+            // If the exiting employee is HR or Admin
+            if (isExitingHR || isExitingAdmin)
+            {
+                // Only show to Org Admin
+                if (roles.Contains("OrgAdmin"))
+                {
+                    approvedExits.Add(exit);
+                }
+                // Or show to HR from same department (excluding self)
+                else if (roles.Contains("HR") && !roles.Contains("OrgAdmin"))
+                {
+                    var currentHrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+                    if (currentHrEmployee != null && exit.Employee.DepartmentId == currentHrEmployee.DepartmentId)
+                    {
+                        // Don't show if the exiting HR is the same person viewing
+                        if (exit.Employee.UserId != userId)
+                        {
+                            approvedExits.Add(exit);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Regular employee exit - show based on existing permissions
+                if (roles.Contains("OrgAdmin"))
+                {
+                    approvedExits.Add(exit);
+                }
+                else if (roles.Contains("HR") && !roles.Contains("OrgAdmin"))
+                {
+                    var currentHrEmployee = await db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+                    if (currentHrEmployee != null && exit.Employee.DepartmentId == currentHrEmployee.DepartmentId)
+                    {
+                        approvedExits.Add(exit);
+                    }
+                }
+            }
+        }
 
         foreach (var exit in approvedExits)
         {
@@ -793,13 +874,15 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
         // ── 4. CANCELLED RESIGNATION: Notify that exit docs are now void ──────────
         // (We surface a warning, not an upload suggestion)
         var cancelledExits = await db.EmployeeExits
-            .Include(x => x.Employee)
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.Status == ExitStatus.Cancelled &&
-                x.CancelledAt.HasValue &&
-                x.CancelledAt.Value >= DateTime.UtcNow.AddDays(-3)) // Only recent cancellations
-            .ToListAsync();
+     .Include(x => x.Employee)
+     .Where(x =>
+         x.OrganizationId == organizationId &&
+         x.Status == ExitStatus.Cancelled &&
+         x.Employee != null &&
+         x.Employee.Status == "Active" &&  // ← ADD THIS LINE
+         x.CancelledAt.HasValue &&
+         x.CancelledAt.Value >= DateTime.UtcNow.AddDays(-3))
+     .ToListAsync();
 
         foreach (var exit in cancelledExits)
         {
@@ -849,13 +932,15 @@ public class OrgDocumentGenerationService : IOrgDocumentGenerationService
 
         // ── 6. TERMINATED EMPLOYEE: FnF + Termination Letter ─────────────────────
         var terminatedExits = await db.EmployeeExits
-            .Include(x => x.Employee)
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.Status == ExitStatus.Terminated &&
-                x.TerminationDate.HasValue &&
-                x.TerminationDate.Value >= DateTime.UtcNow.AddDays(-7))
-            .ToListAsync();
+     .Include(x => x.Employee)
+     .Where(x =>
+         x.OrganizationId == organizationId &&
+         x.Status == ExitStatus.Terminated &&
+         x.Employee != null &&
+         x.Employee.Status == "Active" &&  // ← ADD THIS LINE
+         x.TerminationDate.HasValue &&
+         x.TerminationDate.Value >= DateTime.UtcNow.AddDays(-7))
+     .ToListAsync();
 
         foreach (var exit in terminatedExits)
         {

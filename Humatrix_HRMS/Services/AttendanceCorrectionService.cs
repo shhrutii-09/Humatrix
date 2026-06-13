@@ -778,7 +778,6 @@ namespace Humatrix_HRMS.Services
 
                     r.ReviewLevel == CorrectionReviewLevels.OrgAdmin
                     || r.SubmittedByRole == "HR"
-                    || r.SubmittedByRole == "Employee"
                 );
             }
             // =========================================================
@@ -865,7 +864,8 @@ namespace Humatrix_HRMS.Services
                     IsHrInitiated = r.InitiatedByHrEmployeeId != null,
                     HasAttachment =
                         r.AttachmentPath != null &&
-                        r.AttachmentPath != ""
+                        r.AttachmentPath != "",
+                    CanOrgAdminReview = r.ReviewLevel == CorrectionReviewLevels.OrgAdmin || r.SubmittedByRole == "HR"
                 })
                 .ToListAsync();
 
@@ -1157,8 +1157,7 @@ namespace Humatrix_HRMS.Services
             {
                 query = query.Where(r =>
                     r.ReviewLevel == CorrectionReviewLevels.OrgAdmin
-                    || r.SubmittedByRole == "HR"
-                    || r.SubmittedByRole == "Employee");
+                    || r.SubmittedByRole == "HR");   
             }
 
             return new CorrectionQueueSummaryDto
@@ -1254,31 +1253,40 @@ namespace Humatrix_HRMS.Services
             }
 
             var shift = attendance.Employee?.Shift;
+
             switch (request.CorrectionType)
             {
                 case CorrectionTypes.ForgotCheckIn:
-                    attendance.CheckIn = request.ApprovedCheckIn;
+                    // Ensure the UTC time is stored as UTC
+                    attendance.CheckIn = request.ApprovedCheckIn.HasValue
+                        ? DateTime.SpecifyKind(request.ApprovedCheckIn.Value, DateTimeKind.Utc)
+                        : null;
                     break;
 
                 case CorrectionTypes.ForgotCheckOut:
-                    attendance.CheckOut = request.ApprovedCheckOut;
-                    attendance.ActualCheckOut = request.ApprovedCheckOut;
+                    attendance.CheckOut = request.ApprovedCheckOut.HasValue
+                        ? DateTime.SpecifyKind(request.ApprovedCheckOut.Value, DateTimeKind.Utc)
+                        : null;
+                    attendance.ActualCheckOut = attendance.CheckOut;
                     break;
 
                 case CorrectionTypes.WrongTime:
                 case CorrectionTypes.AbsentButWorked:
                 case CorrectionTypes.HrManualCorrection:
-                    if (request.ApprovedCheckIn.HasValue) attendance.CheckIn = request.ApprovedCheckIn;
+                    if (request.ApprovedCheckIn.HasValue)
+                        attendance.CheckIn = DateTime.SpecifyKind(request.ApprovedCheckIn.Value, DateTimeKind.Utc);
                     if (request.ApprovedCheckOut.HasValue)
                     {
-                        attendance.CheckOut = request.ApprovedCheckOut;
-                        attendance.ActualCheckOut = request.ApprovedCheckOut;
+                        attendance.CheckOut = DateTime.SpecifyKind(request.ApprovedCheckOut.Value, DateTimeKind.Utc);
+                        attendance.ActualCheckOut = attendance.CheckOut;
                     }
                     break;
 
                 case CorrectionTypes.OvertimeCorrection:
-                    attendance.CheckOut = request.ApprovedCheckOut;
-                    attendance.ActualCheckOut = request.ApprovedCheckOut;
+                    attendance.CheckOut = request.ApprovedCheckOut.HasValue
+                        ? DateTime.SpecifyKind(request.ApprovedCheckOut.Value, DateTimeKind.Utc)
+                        : null;
+                    attendance.ActualCheckOut = attendance.CheckOut;
                     attendance.IsAutoCheckedOut = false;
                     break;
 
@@ -1286,6 +1294,8 @@ namespace Humatrix_HRMS.Services
                     throw new CorrectionValidationException(
                         $"Unknown correction type: '{request.CorrectionType}'.");
             }
+
+
             attendance.IsPresent = true;
             attendance.IsManual = true;
             attendance.IsHrCorrected = true;

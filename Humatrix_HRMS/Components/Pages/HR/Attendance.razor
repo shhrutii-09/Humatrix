@@ -416,10 +416,8 @@
 
     private string FormatTime(DateTime? utcTime)
     {
-        if (utcTime == null)
-            return "--";
-
-        return utcTime.Value.ToLocalTime().ToString("hh:mm tt");
+        if (utcTime == null) return "--:--";
+        return TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
     }
 
     private void NavigateToDashboard() => Nav.NavigateTo("/org/dashboard");

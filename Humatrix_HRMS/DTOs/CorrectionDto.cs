@@ -138,6 +138,7 @@ namespace Humatrix_HRMS.DTOs
         public string EmployeeName { get; set; } = string.Empty;
         public string? Department { get; set; }
         public string? EmployeeCode { get; set; }
+        public bool CanOrgAdminReview { get; set; } 
         public DateTime WorkDate { get; set; }
         public string CorrectionType { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;

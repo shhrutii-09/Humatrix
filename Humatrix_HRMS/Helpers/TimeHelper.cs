@@ -37,6 +37,8 @@ namespace Humatrix_HRMS.Helpers
         public static DateTime? ToOrgLocal(DateTime? utcTime, TimeZoneInfo tz)
             => utcTime.HasValue ? ToOrgLocal(utcTime.Value, tz) : null;
 
+
+
      
         public static DateTime ToUtc(DateTime localTime, TimeZoneInfo tz)
         {
@@ -85,6 +87,20 @@ namespace Humatrix_HRMS.Helpers
         {
             if (!utcTime.HasValue) return "--";
             return ToOrgLocal(utcTime.Value, tz).ToString("dd MMM yyyy hh:mm tt");
+        }
+
+
+        // Convert UTC to Organization Local Time for DISPLAY
+
+        // Convert Local (Organization) to UTC for STORAGE
+        public static DateTime? ToUtc(DateTime? localTime, TimeZoneInfo tz)
+            => localTime.HasValue ? ToUtc(localTime.Value, tz) : null;
+
+        // Format for display - USE THIS EVERYWHERE FOR DISPLAY
+        public static string FormatTime(DateTime? utcTime, TimeZoneInfo tz)
+        {
+            if (!utcTime.HasValue) return "--:--";
+            return ToOrgLocal(utcTime.Value, tz).ToString("hh:mm tt");
         }
 
         public static string FormatOrgDateTime(DateTime? utcTime, string? timeZoneId = null)

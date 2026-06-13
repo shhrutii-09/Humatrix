@@ -45,7 +45,10 @@ namespace Humatrix_HRMS.Services
                     Name = dto.Name,
                     Email = dto.Email,
                     Phone = dto.Phone,
-                    Address = dto.Address
+                    Address = dto.Address,
+                    TimeZoneId = "India Standard Time",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Organizations.Add(org);

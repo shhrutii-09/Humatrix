@@ -19,63 +19,83 @@
 
 <PageTitle>Attendance | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 py-4">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+<div class="container-fluid px-4 mt-4">
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
-            <h3 class="fw-bold mb-1">Attendance Dashboard</h3>
-            <p class="text-muted mb-0">Monitor work logs, attendance history and overtime.</p>
+            <h2 class="fw-bold">
+                Attendance Dashboard
+            </h2>
+            <p class="text-muted mb-0">
+                Monitor work logs, attendance history and overtime.
+            </p>
         </div>
-        <div class="d-flex gap-2">
-            <input type="month" class="form-control" style="max-width:220px" value="@selectedMonth" @onchange="OnMonthChanged" />
-            <button class="btn btn-primary" @onclick="LoadAttendance">
+
+        <div class="d-flex align-items-center gap-3">
+            <!-- MONTH SELECTOR -->
+            <div class="input-group shadow-sm" style="max-width: 260px;">
+                <span class="input-group-text bg-white border-end-0">
+                    <i class="bi bi-calendar-month"></i>
+                </span>
+                <input type="month" class="form-control border-start-0 ps-0" value="@selectedMonth" @onchange="OnMonthChanged" />
+            </div>
+
+            <button class="btn btn-primary shadow-sm" @onclick="LoadAttendance">
                 <i class="bi bi-search me-2"></i>Load
             </button>
         </div>
     </div>
 
+    <!-- ERROR ALERT -->
     @if (!string.IsNullOrEmpty(errorMessage))
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
             <i class="bi bi-exclamation-triangle-fill me-2"></i>
             @errorMessage
             <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
         </div>
     }
 
+    <!-- TODAY'S PUNCH CARD -->
     <div class="card border-0 shadow-sm mb-4 overflow-hidden">
         <div class="card-body p-4">
             <div class="row align-items-center">
+                <!-- CLOCK -->
                 <div class="col-lg-4 text-center text-lg-start">
-                    <div class="clock-display">@currentTime.ToString("hh:mm:ss tt")</div>
+                    <div class="clock-display fw-bold">@currentTime.ToString("hh:mm:ss tt")</div>
                     <div class="text-muted">@currentTime.ToString("dddd, dd MMMM yyyy")</div>
                 </div>
+
+                <!-- PUNCH BUTTONS -->
                 <div class="col-lg-4 text-center mt-4 mt-lg-0">
                     @if (!isCheckedIn)
                     {
-                        <button class="btn btn-primary btn-lg px-5 punch-btn" @onclick="HandleCheckIn" disabled="@isActionLoading">
+                        <button class="btn btn-primary btn-lg px-5 punch-btn shadow-sm" @onclick="HandleCheckIn" disabled="@isActionLoading">
                             <i class="bi bi-box-arrow-in-right me-2"></i>Punch In
                         </button>
                     }
                     else if (!isCheckedOut)
                     {
-                        <button class="btn btn-danger btn-lg px-5 punch-btn" @onclick="HandleCheckOut" disabled="@isActionLoading">
+                        <button class="btn btn-danger btn-lg px-5 punch-btn shadow-sm" @onclick="HandleCheckOut" disabled="@isActionLoading">
                             <i class="bi bi-box-arrow-left me-2"></i>Punch Out
                         </button>
                     }
                     else
                     {
-                        <div class="alert alert-success mb-0">Shift completed successfully.</div>
+                        <div class="alert alert-success mb-0">✓ Shift completed successfully.</div>
                     }
                 </div>
+
+                <!-- TODAY'S STATUS -->
                 <div class="col-lg-4 mt-4 mt-lg-0">
                     @if (todayRecord != null)
                     {
                         <div class="small text-muted mb-1">Today's Status</div>
-                        <span class="badge @GetStatusClass(todayRecord.Status)">@todayRecord.Status</span>
-                        <div class="mt-3 small">
-                            <div><strong>Check-In:</strong> @FormatLocalTime(todayRecord.CheckIn)</div>
-                            <div><strong>Check-Out:</strong> @FormatLocalTime(todayRecord.CheckOut)</div>
-                            <div><strong>Total Hours:</strong> @(todayRecord.TotalHours?.ToString("F1") ?? "0.0")h</div>
+                        <span class="badge @GetStatusClass(todayRecord.Status) px-3 py-2 mb-2">@todayRecord.Status</span>
+                        <div class="mt-2 small">
+                            <div><i class="bi bi-clock-history me-1"></i> <strong>Check-In:</strong> @FormatLocalTime(todayRecord.CheckIn)</div>
+                            <div><i class="bi bi-clock-history me-1"></i> <strong>Check-Out:</strong> @FormatLocalTime(todayRecord.CheckOut)</div>
+                            <div><i class="bi bi-hourglass-split me-1"></i> <strong>Total Hours:</strong> @(todayRecord.TotalHours?.ToString("F1") ?? "0.0")h</div>
                         </div>
                     }
                 </div>
@@ -83,63 +103,75 @@
         </div>
     </div>
 
+    <!-- STATISTICS CARDS -->
     <div class="row g-4 mb-4">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm stat-card">
+            <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <div class="text-muted small mb-2">Present Days</div>
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="small text-muted fw-bold text-uppercase">Present</div>
+                        <i class="bi bi-check-circle-fill text-success fs-4"></i>
+                    </div>
                     <h3 class="fw-bold mb-0">@PresentCount</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm stat-card">
+            <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <div class="text-muted small mb-2">Late Days</div>
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="small text-muted fw-bold text-uppercase">Late</div>
+                        <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
+                    </div>
                     <h3 class="fw-bold text-warning mb-0">@LateCount</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm stat-card">
+            <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <div class="text-muted small mb-2">Absent Days</div>
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="small text-muted fw-bold text-uppercase">Absent</div>
+                        <i class="bi bi-x-circle-fill text-danger fs-4"></i>
+                    </div>
                     <h3 class="fw-bold text-danger mb-0">@AbsentCount</h3>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm stat-card">
+            <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                    <div class="text-muted small mb-2">Total Work Hours</div>
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="small text-muted fw-bold text-uppercase">Total Hours</div>
+                        <i class="bi bi-clock-fill text-primary fs-4"></i>
+                    </div>
                     <h3 class="fw-bold text-primary mb-0">@TotalHoursWorked.ToString("F1")h</h3>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body">
+    <!-- ATTENDANCE HISTORY CARD -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body pb-0">
             <div class="row align-items-center">
                 <div class="col-md-6">
-                    <div class="search-box">
-                        <i class="bi bi-search"></i>
-                        <input type="text" class="form-control ps-5" placeholder="Search attendance..." @bind="searchQuery" @bind:event="oninput" />
-                    </div>
+                    <h5 class="fw-bold mb-0">Attendance History</h5>
                 </div>
                 <div class="col-md-6 text-md-end mt-3 mt-md-0">
-                    <span class="text-muted small">Showing @PagedAttendance.Count() of @FilteredAttendance.Count()</span>
+                    <div class="search-box position-relative d-inline-block">
+                        <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                        <input type="text" class="form-control ps-5 pe-3 py-2 rounded-pill shadow-sm" style="min-width: 250px;" placeholder="Search by date or status..." @bind="searchQuery" @bind:event="oninput" />
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="card border-0 shadow-sm">
-        <div class="table-responsive">
+        <div class="table-responsive mt-3">
             <table class="table align-middle table-hover mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Date</th>
+                        <th class="ps-4">Date</th>
                         <th>Check-In</th>
                         <th>Check-Out</th>
                         <th>Hours</th>
@@ -152,14 +184,18 @@
                     {
                         <tr>
                             <td colspan="6" class="text-center py-5">
-                                <div class="spinner-border text-primary"></div>
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2 text-muted small">Loading records...</p>
                             </td>
                         </tr>
                     }
                     else if (!PagedAttendance.Any())
                     {
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">No attendance records found.</td>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>
+                                No attendance records found for this month.
+                            </td>
                         </tr>
                     }
                     else
@@ -167,14 +203,22 @@
                         @foreach (var att in PagedAttendance)
                         {
                             <tr>
-                                <td>
+                                <td class="ps-4">
                                     <div class="fw-semibold">@att.Date.ToString("dd MMM yyyy")</div>
                                     <div class="small text-muted">@att.Date.ToString("dddd")</div>
                                 </td>
-                                <td>@(att.CheckIn?.ToString("hh:mm tt") ?? "--")</td>
-                                <td>@(att.CheckOut?.ToString("hh:mm tt") ?? "--")</td>
+                                <td>
+                                    <span class="badge bg-light text-dark fw-normal px-3 py-2">
+                                        <i class="bi bi-box-arrow-in-right me-1"></i> @FormatLocalTime(att.CheckIn)
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark fw-normal px-3 py-2">
+                                        <i class="bi bi-box-arrow-left me-1"></i> @FormatLocalTime(att.CheckOut)
+                                    </span>
+                                </td>
                                 <td><strong>@(att.TotalHours?.ToString("F1") ?? "0.0")h</strong></td>
-                                <td><span class="badge @GetStatusClass(att.Status)">@att.Status</span></td>
+                                <td><span class="badge @GetStatusClass(att.Status) px-3 py-2">@att.Status</span></td>
                                 <td>
                                     @if (att.ApprovedOvertimeHours > 0)
                                     {
@@ -192,13 +236,25 @@
             </table>
         </div>
 
-        <div class="card-footer bg-white border-0 py-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <button class="btn btn-outline-secondary" disabled="@(currentPage == 1)" @onclick="PreviousPage">Previous</button>
-                <span class="small text-muted">Page @currentPage of @TotalPages</span>
-                <button class="btn btn-outline-secondary" disabled="@(currentPage >= TotalPages)" @onclick="NextPage">Next</button>
+        <!-- PAGINATION -->
+        @if (FilteredAttendance.Any())
+        {
+            <div class="card-footer bg-white border-0 py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <button class="btn btn-outline-secondary btn-sm shadow-sm" disabled="@(currentPage == 1)" @onclick="PreviousPage">
+                        <i class="bi bi-chevron-left me-1"></i> Previous
+                    </button>
+                    <span class="small text-muted">
+                        Page @currentPage of @TotalPages
+                        <span class="mx-2">•</span>
+                        Showing @PagedAttendance.Count() of @FilteredAttendance.Count() records
+                    </span>
+                    <button class="btn btn-outline-secondary btn-sm shadow-sm" disabled="@(currentPage >= TotalPages)" @onclick="NextPage">
+                        Next <i class="bi bi-chevron-right ms-1"></i>
+                    </button>
+                </div>
             </div>
-        </div>
+        }
     </div>
 </div>
 
@@ -207,39 +263,107 @@
         font-size: 2.8rem;
         font-weight: 800;
         letter-spacing: -1px;
+        font-family: 'Segoe UI', 'Monaco', monospace;
     }
 
     .punch-btn {
         border-radius: 14px;
-        padding: 14px 28px;
-        font-weight: 700;
-        transition: 0.2s;
+        padding: 12px 28px;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
 
         .punch-btn:hover {
             transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
         }
 
-    .stat-card {
-        border-radius: 18px;
+    .card {
+        border-radius: 16px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .search-box {
-        position: relative;
-    }
-
-        .search-box i {
-            position: absolute;
-            top: 50%;
-            left: 15px;
-            transform: translateY(-50%);
-            color: #999;
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.08) !important;
         }
+
+    .table th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        border-bottom-width: 1px;
+    }
+
+    .table td {
+        vertical-align: middle;
+        padding: 1rem 0.5rem;
+    }
 
     .badge {
-        padding: 10px 14px;
-        font-size: 0.8rem;
-        border-radius: 10px;
+        font-weight: 500;
+        border-radius: 30px;
+        font-size: 0.75rem;
+    }
+
+    .bg-light.badge {
+        background-color: #f8f9fa !important;
+        border: 1px solid #e9ecef;
+    }
+
+    /* Custom status badge colors */
+    .bg-success.text-white {
+        background-color: #198754 !important;
+    }
+
+    .bg-warning.text-dark {
+        background-color: #ffc107 !important;
+        color: #000 !important;
+    }
+
+    .bg-danger.text-white {
+        background-color: #dc3545 !important;
+    }
+
+    .bg-info.text-white {
+        background-color: #0dcaf0 !important;
+        color: #000 !important;
+    }
+
+    .bg-primary.text-white {
+        background-color: #0d6efd !important;
+    }
+
+    .bg-secondary.text-white {
+        background-color: #6c757d !important;
+    }
+
+    .search-box input {
+        width: 260px;
+        border: 1px solid #e9ecef;
+        transition: all 0.2s;
+    }
+
+        .search-box input:focus {
+            width: 300px;
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.25);
+        }
+
+    @@media (max-width: 768px) {
+        .clock-display {
+            font-size: 2rem;
+        }
+
+        .search-box input {
+            width: 100%;
+        }
+
+            .search-box input:focus {
+                width: 100%;
+            }
     }
 </style>
 
@@ -251,7 +375,6 @@
 
     private string errorMessage = "";
 
-
     private bool isLoading;
     private bool isActionLoading;
     private string searchQuery = "";
@@ -259,6 +382,7 @@
     private int pageSize = 10;
     private DateTime currentTime = DateTime.Now;
     private Timer? timer;
+    private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
     private string selectedMonth = DateTime.Now.ToString("yyyy-MM");
 
     private IEnumerable<AttendanceListDto> FilteredAttendance =>
@@ -279,6 +403,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadOrgTimezone();
         StartClock();
         await LoadData();
     }
@@ -331,7 +456,30 @@
         }
     }
 
-    // private string errorMessage = "";
+    private async Task LoadOrgTimezone()
+    {
+        try
+        {
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId == null) return;
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tzId = await db.Organizations
+                .AsNoTracking()
+                .Where(o => o.OrganizationId == user.OrganizationId)
+                .Select(o => o.TimeZoneId)
+                .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrWhiteSpace(tzId))
+            {
+                orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
+            }
+        }
+        catch
+        {
+            orgTimeZone = TimeZoneInfo.Utc;
+        }
+    }
 
     private async Task HandleCheckIn()
     {
@@ -366,6 +514,7 @@
         }
         catch (Exception ex)
         {
+            errorMessage = ex.Message;
             Console.WriteLine(ex.Message);
         }
         finally
@@ -384,10 +533,10 @@
         if (currentPage > 1) currentPage--;
     }
 
-    private string? FormatLocalTime(DateTime? dateTime)
+    private string FormatLocalTime(DateTime? utcTime)
     {
-        if (dateTime == null) return "--";
-        return dateTime.Value.ToString("hh:mm tt");
+        if (utcTime == null) return "--:--";
+        return TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
     }
 
     private string GetStatusClass(string? status) => status switch

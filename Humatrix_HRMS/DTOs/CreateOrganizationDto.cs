@@ -16,4 +16,7 @@ public class CreateOrganizationDto
 
     [Required, EmailAddress]
     public string AdminEmail { get; set; } = string.Empty;
+
+    public string? TimeZoneId { get; set; }  // Add this line
+
 }

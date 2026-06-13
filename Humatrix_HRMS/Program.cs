@@ -167,6 +167,9 @@ builder.Services.AddScoped<IAIDocumentService, AIDocumentService>();
 builder.Services.AddSignalR();
 builder.Services.AddHttpClient();
 
+// Set default timezone for India
+var indiaTz = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+
 var app = builder.Build();
 
 
