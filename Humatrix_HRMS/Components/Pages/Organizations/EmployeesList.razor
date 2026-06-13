@@ -49,9 +49,11 @@
 </div>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold text-dark mb-1" style="font-size: 2rem;">Employee Directory</h2>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">
+                Employee Directory
+            </h2>
             <p class="text-muted small mb-0">Manage, filter, and review team rosters and active directories.</p>
         </div>
         <div class="d-flex gap-2">
@@ -307,25 +309,45 @@
 }
 
 <style>
+    .text-premium {
+        color: #5c4ac7 !important;
+    }
+
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
     .btn-add-dept {
         background-color: #5c4ac7 !important;
         color: white !important;
         font-weight: 600 !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        border-radius: 10px !important;
+        font-size: 12px;
+        transition: all 0.2s ease;
     }
 
+        .btn-add-dept:hover {
+            background-color: #4b3ba6 !important;
+            transform: translateY(-1px);
+        }
+
     .btn-interactive-back {
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        color: #475569 !important;
-        font-weight: 600 !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 8px !important;
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
 
         .btn-interactive-back:hover {
             background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
         }
 
     .custom-search-input {
