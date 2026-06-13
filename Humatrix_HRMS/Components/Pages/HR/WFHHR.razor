@@ -209,6 +209,7 @@
                                    where ur.UserId == sessionUser.Id
                                    select r.Name.ToLower()).ToListAsync();
 
+            // Set dashboard navigation path based on role
             bool isOrgAdmin = userRoles.Contains("orgadmin");
             dashboardPath = isOrgAdmin ? "/org/dashboard" : "/hr/dashboard";
         }
@@ -219,6 +220,7 @@
     private async Task LoadData()
     {
         loading = true;
+        // WfhService.GetAllAsync now handles the visibility logic for both HR and OrgAdmin
         list = await WfhService.GetAllAsync(selectedStatus);
         loading = false;
     }
@@ -237,7 +239,12 @@
         await Task.Delay(3000); message = null;
     }
 
-    private void OpenRejectModal(WorkFromHomeRequest r) { selectedRequest = r; showRejectModal = true; }
+    private void OpenRejectModal(WorkFromHomeRequest r)
+    {
+        selectedRequest = r;
+        rejectReason = string.Empty;
+        showRejectModal = true;
+    }
 
     private async Task ConfirmReject()
     {
@@ -251,5 +258,10 @@
         }
     }
 
-    private string GetStatusClass(string s) => s switch { "Approved" => "bg-success-soft", "Rejected" => "bg-danger-soft", _ => "bg-warning-soft" };
+    private string GetStatusClass(string s) => s switch
+    {
+        "Approved" => "bg-success-soft",
+        "Rejected" => "bg-danger-soft",
+        _ => "bg-warning-soft"
+    };
 }

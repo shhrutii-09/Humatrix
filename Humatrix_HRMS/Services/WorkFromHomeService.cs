@@ -79,10 +79,8 @@ namespace Humatrix_HRMS.Services
             request.Status = "Pending";
             request.AppliedAt = DateTime.UtcNow;
             request.RequestedByRole = requesterRole;
-            request.ApprovalLevel = requesterRole == "HR" ? "OrgAdmin" : "HR";
-
-            if (string.IsNullOrWhiteSpace(request.RequestedByRole)) request.RequestedByRole = "Employee";
-            if (string.IsNullOrWhiteSpace(request.ApprovalLevel)) request.ApprovalLevel = "HR";
+            // Removed restrictive ApprovalLevel assignment to allow shared access
+            request.ApprovalLevel = "PendingApproval";
 
             using var tx = await _context.Database.BeginTransactionAsync();
             _context.WorkFromHomeRequests.Add(request);
@@ -127,25 +125,9 @@ namespace Humatrix_HRMS.Services
             if (req.Employee.OrganizationId != user.OrganizationId)
                 throw new Exception("Unauthorized");
 
-            var userRoles = await _userManager.GetRolesAsync(user);
-            var isOrgAdmin = userRoles.Contains("OrgAdmin");
-            var isHR = userRoles.Contains("HR");
-
-            if (isHR && !isOrgAdmin)
-            {
-                var currentEmployee = await _context.Employees
-                    .FirstOrDefaultAsync(e => e.UserId == user.Id)
-                    ?? throw new Exception("HR employee profile not found");
-
-                if (req.RequestedByRole != "Employee")
-                    throw new Exception("HR cannot process HR requests");
-
-                if (req.Employee.DepartmentId != currentEmployee.DepartmentId)
-                    throw new Exception("Unauthorized department access");
-            }
-
+            // Ensure request isn't already processed
             if (req.Status != "Pending")
-                throw new Exception("Already processed");
+                throw new Exception("Request already processed");
 
             using var tx = await _context.Database.BeginTransactionAsync();
 
@@ -235,6 +217,10 @@ namespace Humatrix_HRMS.Services
         {
             var user = await _currentUser.GetUserAsync() ?? throw new Exception("Unauthorized");
 
+            // Current user ka employee profile fetch karein taaki ID mil sake
+            var currentEmployee = await _context.Employees
+                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
             var userRoles = await _context.UserRoles
                 .Where(x => x.UserId == user.Id)
                 .Join(_context.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name)
@@ -250,18 +236,12 @@ namespace Humatrix_HRMS.Services
 
             if (isOrgAdmin)
             {
-                query = query.Where(r => r.RequestedByRole == "HR");
+                
             }
             else if (isHR)
             {
-                var currentEmployee = await _context.Employees
-                    .FirstOrDefaultAsync(e => e.UserId == user.Id)
-                    ?? throw new Exception("HR employee profile not found");
-
-                query = query.Where(r =>
-                    r.Employee.DepartmentId == currentEmployee.DepartmentId &&
-                    r.EmployeeId != currentEmployee.EmployeeId &&
-                    (r.RequestedByRole == "Employee" || string.IsNullOrWhiteSpace(r.RequestedByRole)));
+                query = query.Where(r => r.Employee.DepartmentId == currentEmployee.DepartmentId
+                                      && r.EmployeeId != currentEmployee.EmployeeId);
             }
             else
             {
