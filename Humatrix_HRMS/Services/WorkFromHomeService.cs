@@ -38,8 +38,7 @@ namespace Humatrix_HRMS.Services
 
         public async Task ApplyAsync(WorkFromHomeRequest request)
         {
-            var user = await _currentUser.GetUserAsync()
-                ?? throw new Exception("Unauthorized");
+            var user = await _currentUser.GetUserAsync() ?? throw new Exception("Unauthorized");
 
             var employee = await _context.Employees
                 .Include(e => e.Department)
@@ -79,7 +78,6 @@ namespace Humatrix_HRMS.Services
             request.Status = "Pending";
             request.AppliedAt = DateTime.UtcNow;
             request.RequestedByRole = requesterRole;
-            // Removed restrictive ApprovalLevel assignment to allow shared access
             request.ApprovalLevel = "PendingApproval";
 
             using var tx = await _context.Database.BeginTransactionAsync();
@@ -125,7 +123,6 @@ namespace Humatrix_HRMS.Services
             if (req.Employee.OrganizationId != user.OrganizationId)
                 throw new Exception("Unauthorized");
 
-            // Ensure request isn't already processed
             if (req.Status != "Pending")
                 throw new Exception("Request already processed");
 
@@ -165,6 +162,7 @@ namespace Humatrix_HRMS.Services
             {
                 req.Status = "Rejected";
                 req.RejectionReason = reason;
+                req.ApprovedBy = Guid.Parse(user.Id);
                 await _notificationEngine.SendWfhRejectedAsync(
                     employeeUserId: req.Employee.UserId,
                     date: req.Date,
@@ -179,6 +177,25 @@ namespace Humatrix_HRMS.Services
 
             await _notificationService.BroadcastOrgDashboardRefreshAsync(req.Employee.OrganizationId);
             await _notificationService.BroadcastHrDashboardRefreshAsync(req.Employee.OrganizationId, req.Employee.DepartmentId);
+        }
+
+        public async Task<(string Name, string Role)> GetReviewerInfoAsync(Guid? userId)
+        {
+            if (!userId.HasValue) return ("-", "-");
+
+            var user = await _userManager.FindByIdAsync(userId.Value.ToString());
+            if (user == null) return ("System", "Admin");
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            // Name ya Email display karne ka fallback logic
+            string name = !string.IsNullOrWhiteSpace(user.FirstName)
+                          ? $"{user.FirstName} {user.LastName}"
+                          : (user.Email ?? "Org Admin");
+
+            string role = roles.FirstOrDefault() ?? "Admin";
+
+            return (Name: name, Role: role);
         }
 
         public async Task CancelAsync(Guid id)
@@ -216,8 +233,6 @@ namespace Humatrix_HRMS.Services
         public async Task<List<WorkFromHomeRequest>> GetAllAsync(string? status = null)
         {
             var user = await _currentUser.GetUserAsync() ?? throw new Exception("Unauthorized");
-
-            // Current user ka employee profile fetch karein taaki ID mil sake
             var currentEmployee = await _context.Employees
                 .FirstOrDefaultAsync(e => e.UserId == user.Id);
 
@@ -234,35 +249,22 @@ namespace Humatrix_HRMS.Services
                 .ThenInclude(e => e.Department)
                 .Where(r => r.Employee.OrganizationId == user.OrganizationId);
 
-            if (isOrgAdmin)
-            {
-                
-            }
-            else if (isHR)
+            // Access control logic
+            if (isOrgAdmin) { /* OrgAdmin sees all */ }
+            else if (isHR && currentEmployee != null)
             {
                 query = query.Where(r => r.Employee.DepartmentId == currentEmployee.DepartmentId
                                       && r.EmployeeId != currentEmployee.EmployeeId);
             }
-            else
-            {
-                return new List<WorkFromHomeRequest>();
-            }
+            else { return new List<WorkFromHomeRequest>(); }
 
             if (!string.IsNullOrWhiteSpace(status))
-            {
                 query = query.Where(r => r.Status == status);
-            }
 
             return await query
                 .OrderByDescending(r => r.AppliedAt)
                 .AsNoTracking()
                 .ToListAsync();
-        }
-
-        private TimeZoneInfo GetOrgTimezone(string timeZoneId)
-        {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
-            catch { return TimeZoneInfo.Utc; }
         }
     }
 }
