@@ -39,7 +39,7 @@ public class OrgGeneratedDocument
     public string FileName { get; set; } = default!;
 
     [Required, MaxLength(500)]
-    public string OriginalFileName { get; set; } = default!;
+    public string OriginalFileName { get; set; } = default!; 
 
     [Required, MaxLength(1000)]
     public string FilePath { get; set; } = default!;
