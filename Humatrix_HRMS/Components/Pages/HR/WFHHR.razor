@@ -34,14 +34,11 @@
 <div class="container-fluid px-4 mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold tracking-tight text-dark mb-1">
-                WFH Approvals
-            </h2>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">WFH Approvals</h2>
             <p class="text-muted small mb-0">Manage and process employee Work From Home requests.</p>
         </div>
         <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2" @onclick='() => Nav.NavigateTo(dashboardPath)'>
-            <i class="bi bi-speedometer2"></i>
-            DASHBOARD
+            <i class="bi bi-speedometer2"></i> DASHBOARD
         </button>
     </div>
 
@@ -59,12 +56,12 @@
             <table class="table table-hover align-middle mb-0 custom-table">
                 <thead>
                     <tr>
-                        <th class="ps-4">Employee</th>
+                        <th class="ps-4">Employee / Department</th>
                         <th>Date</th>
                         <th>Reason</th>
                         <th>Applied On</th>
                         <th>Status</th>
-                        <th class="pe-4 text-end">Action</th>
+                        <th class="pe-4 text-end">Actions / Reviewer</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -101,6 +98,13 @@
                                             <button class="btn btn-sm btn-outline-danger rounded-pill px-3" @onclick="() => OpenRejectModal(r)">Reject</button>
                                         </div>
                                     }
+                                    else if (r.ApprovedBy.HasValue && reviewerCache.ContainsKey(r.ApprovedBy.Value))
+                                    {
+                                        <div class="text-end small">
+                                            <div class="fw-bold text-dark">@reviewerCache[r.ApprovedBy.Value].Name</div>
+                                            <div class="text-muted">@reviewerCache[r.ApprovedBy.Value].Role</div>
+                                        </div>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -130,10 +134,6 @@
 }
 
 <style>
-    .text-premium {
-        color: #5c4ac7 !important;
-    }
-
     .tracking-tight {
         letter-spacing: -0.025em;
     }
@@ -156,10 +156,8 @@
     }
 
         .btn-interactive-back:hover {
-            background-color: #f8fafc !important;
             border-color: #5c4ac7 !important;
             color: #5c4ac7 !important;
-            transform: translateY(-1px);
         }
 
     .custom-table th {
@@ -192,8 +190,8 @@
 
 @code {
     private List<WorkFromHomeRequest> list = new();
-    private string dashboardPath = "/";
-    private string? message, rejectReason, selectedStatus;
+    private Dictionary<Guid, (string Name, string Role)> reviewerCache = new();
+    private string dashboardPath = "/", message = string.Empty, rejectReason = string.Empty, selectedStatus = string.Empty;
     private bool loading, showRejectModal;
     private WorkFromHomeRequest? selectedRequest;
 
@@ -201,35 +199,28 @@
     {
         using var db = DbFactory.CreateDbContext();
         var sessionUser = await CurrentUser.GetUserAsync();
-
         if (sessionUser != null)
         {
-            var userRoles = await (from ur in db.UserRoles
-                                   join r in db.Roles on ur.RoleId equals r.Id
-                                   where ur.UserId == sessionUser.Id
-                                   select r.Name.ToLower()).ToListAsync();
-
-            // Set dashboard navigation path based on role
-            bool isOrgAdmin = userRoles.Contains("orgadmin");
-            dashboardPath = isOrgAdmin ? "/org/dashboard" : "/hr/dashboard";
+            var userRoles = await db.UserRoles.Where(ur => ur.UserId == sessionUser.Id)
+                .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name.ToLower()).ToListAsync();
+            dashboardPath = userRoles.Contains("orgadmin") ? "/org/dashboard" : "/hr/dashboard";
         }
-
         await LoadData();
     }
 
     private async Task LoadData()
     {
         loading = true;
-        // WfhService.GetAllAsync now handles the visibility logic for both HR and OrgAdmin
         list = await WfhService.GetAllAsync(selectedStatus);
+        // UPDATED: Ab Rejected ho ya Approved, sabka reviewer fetch hoga
+        foreach (var r in list.Where(x => x.ApprovedBy.HasValue && !reviewerCache.ContainsKey(x.ApprovedBy.Value)))
+        {
+            reviewerCache[r.ApprovedBy.Value] = await WfhService.GetReviewerInfoAsync(r.ApprovedBy);
+        }
         loading = false;
     }
 
-    private async Task HandleFilterChange(ChangeEventArgs e)
-    {
-        selectedStatus = e.Value?.ToString();
-        await LoadData();
-    }
+    private async Task HandleFilterChange(ChangeEventArgs e) { selectedStatus = e.Value?.ToString() ?? string.Empty; await LoadData(); }
 
     private async Task Approve(Guid id)
     {
@@ -239,12 +230,7 @@
         await Task.Delay(3000); message = null;
     }
 
-    private void OpenRejectModal(WorkFromHomeRequest r)
-    {
-        selectedRequest = r;
-        rejectReason = string.Empty;
-        showRejectModal = true;
-    }
+    private void OpenRejectModal(WorkFromHomeRequest r) { selectedRequest = r; rejectReason = string.Empty; showRejectModal = true; }
 
     private async Task ConfirmReject()
     {
@@ -258,10 +244,5 @@
         }
     }
 
-    private string GetStatusClass(string s) => s switch
-    {
-        "Approved" => "bg-success-soft",
-        "Rejected" => "bg-danger-soft",
-        _ => "bg-warning-soft"
-    };
+    private string GetStatusClass(string s) => s switch { "Approved" => "bg-success-soft", "Rejected" => "bg-danger-soft", _ => "bg-warning-soft" };
 }

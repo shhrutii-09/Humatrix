@@ -24,21 +24,10 @@
             </div>
         </div>
     }
-    @if (!string.IsNullOrEmpty(error))
-    {
-        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #fef2f2; color: #991b1b; border-left: 4px solid #ef4444 !important; border-radius: 10px;">
-            <div class="d-flex p-3">
-                <div class="toast-body d-flex align-items-center p-0">
-                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5" style="color: #ef4444;"></i>
-                    <span class="small fw-medium">@error</span>
-                </div>
-                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => error = null"></button>
-            </div>
-        </div>
-    }
 </div>
 
 <div class="container-fluid px-4 mt-4">
+
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
             <h2 class="fw-bold tracking-tight text-dark mb-1">Work From Home</h2>
@@ -46,9 +35,11 @@
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="OpenApplyModal">
-                <i class="bi bi-house-add"></i> APPLY WFH
+                <i class="bi bi-house-add"></i>
+                APPLY WFH
             </button>
-            <button class="btn btn-interactive-back shadow-sm" @onclick="GoDashboard">
+            <button class="btn btn-dashboard d-flex align-items-center gap-2 shadow-sm" @onclick="GoDashboard">
+                <i class="bi bi-speedometer2"></i>
                 DASHBOARD
             </button>
         </div>
@@ -61,15 +52,27 @@
                     <tr>
                         <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">DATE</th>
                         <th class="text-secondary small fw-bold tracking-wider py-3">REASON</th>
-                        <th class="text-secondary small fw-bold tracking-wider py-3">APPLIED ON</th>
                         <th class="text-secondary small fw-bold tracking-wider py-3 text-center">STATUS</th>
-                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pe-4">ACTIONS</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 text-end pe-4">ACTIONS / REVIEWER</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (isLoading)
                     {
-                        <tr><td colspan="5" class="text-center py-5"><div class="spinner-border text-primary"></div></td></tr>
+                        <tr>
+                            <td colspan="4" class="text-center py-5">
+                                <div class="spinner-border text-primary" style="width: 2rem; height: 2rem;" role="status"></div>
+                                <p class="mt-2 text-muted small mb-0">Loading system data...</p>
+                            </td>
+                        </tr>
+                    }
+                    else if (!requests.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <span class="fw-medium">No WFH requests found.</span>
+                            </td>
+                        </tr>
                     }
                     else
                     {
@@ -78,12 +81,20 @@
                             <tr>
                                 <td class="ps-4 fw-bold text-dark">@r.Date.ToString("dd MMM yyyy")</td>
                                 <td class="text-muted small">@r.Reason</td>
-                                <td class="small text-muted">@r.AppliedAt.ToLocalTime().ToString("dd MMM yyyy")</td>
-                                <td class="text-center"><span class="badge rounded-pill @GetStatusClass(r.Status)">@r.Status</span></td>
+                                <td class="text-center">
+                                    <span class="status-indicator-pill @GetStatusClass(r.Status)">@r.Status</span>
+                                </td>
                                 <td class="pe-4 text-end">
                                     @if (r.Status == "Pending")
                                     {
                                         <button class="btn btn-sm btn-action-cancel" @onclick="() => Cancel(r.Id)">Cancel</button>
+                                    }
+                                    else if (r.ApprovedBy.HasValue && reviewerCache.ContainsKey(r.ApprovedBy.Value))
+                                    {
+                                        <div class="small">
+                                            <div class="fw-bold">@reviewerCache[r.ApprovedBy.Value].Name</div>
+                                            <div class="text-muted" style="font-size: 10px;">@reviewerCache[r.ApprovedBy.Value].Role</div>
+                                        </div>
                                     }
                                 </td>
                             </tr>
@@ -107,11 +118,11 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-uppercase text-muted">Date</label>
-                        <input type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" @bind="model.Date" />
+                        <input type="date" class="form-control premium-edit-input" min="@DateTime.Today.ToString("yyyy-MM-dd")" @bind="model.Date" />
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-uppercase text-muted">Reason</label>
-                        <textarea class="form-control" rows="3" @bind="model.Reason"></textarea>
+                        <textarea class="form-control premium-edit-input" rows="3" @bind="model.Reason"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -142,14 +153,14 @@
     .btn-add-dept {
         background-color: #5c4ac7 !important;
         color: #ffffff !important;
+        border: none !important;
         padding: 8px 16px;
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
-        border: none;
     }
 
-    .btn-interactive-back {
+    .btn-dashboard {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
         color: #4b5563 !important;
@@ -157,76 +168,66 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
-        transition: all 0.2s ease;
     }
 
-        .btn-interactive-back:hover {
-            background-color: #f8fafc !important;
+        .btn-dashboard:hover {
             border-color: #5c4ac7 !important;
             color: #5c4ac7 !important;
-            transform: translateY(-1px);
         }
 
     .btn-action-cancel {
         background-color: #f1f5f9;
         color: #475569;
         border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 5px 12px;
+        border-radius: 6px;
+        padding: 4px 12px;
         font-size: 12.5px;
+    }
+
+    .premium-edit-input {
+        font-size: 13.5px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+    }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 10px;
+        border-radius: 6px;
     }
 </style>
 
 @code {
     private List<WorkFromHomeRequest> requests = new();
+    private Dictionary<Guid, (string Name, string Role)> reviewerCache = new();
     private WorkFromHomeRequest model = new();
     private bool isLoading, showModal;
-    private string? message, error;
+    private string? message;
 
     protected override async Task OnInitializedAsync() => await LoadRequests();
 
-    private async void TriggerAutoDismiss(bool isSuccess)
+    private async Task LoadRequests()
     {
-        await Task.Delay(4000);
-        if (isSuccess) message = null; else error = null;
-        StateHasChanged();
+        isLoading = true;
+        requests = await WfhService.GetMyAsync();
+        foreach (var r in requests.Where(x => x.ApprovedBy.HasValue && !reviewerCache.ContainsKey(x.ApprovedBy.Value)))
+            reviewerCache[r.ApprovedBy.Value] = await WfhService.GetReviewerInfoAsync(r.ApprovedBy);
+        isLoading = false;
     }
-
-    private async Task LoadRequests() { isLoading = true; requests = await WfhService.GetMyAsync(); isLoading = false; }
 
     private void OpenApplyModal() { model = new WorkFromHomeRequest { Date = DateTime.Today.AddDays(1) }; showModal = true; }
     private void CloseModal() => showModal = false;
 
-    private async Task SubmitWfh()
-    {
-        try
-        {
-            await WfhService.ApplyAsync(model);
-            message = "WFH request submitted successfully.";
-            showModal = false;
-            await LoadRequests();
-            TriggerAutoDismiss(true);
-        }
-        catch (Exception ex) { error = ex.Message; TriggerAutoDismiss(false); }
-    }
+    private async Task SubmitWfh() { await WfhService.ApplyAsync(model); showModal = false; await LoadRequests(); }
+    private async Task Cancel(Guid id) { await WfhService.CancelAsync(id); await LoadRequests(); }
+    private async Task GoDashboard() { var authState = await AuthStateProvider.GetAuthenticationStateAsync(); Nav.NavigateTo(authState.User.IsInRole("HR") ? "/hr/dashboard" : "/employee/dashboard"); }
 
-    private async Task Cancel(Guid id)
+    private static string GetStatusClass(string? status) => status switch
     {
-        try
-        {
-            await WfhService.CancelAsync(id);
-            message = "WFH request cancelled.";
-            await LoadRequests();
-            TriggerAutoDismiss(true);
-        }
-        catch (Exception ex) { error = ex.Message; TriggerAutoDismiss(false); }
-    }
-
-    private async Task GoDashboard()
-    {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        Nav.NavigateTo(authState.User.IsInRole("HR") ? "/hr/dashboard" : "/employee/dashboard");
-    }
-
-    private static string GetStatusClass(string? status) => status switch { "Approved" => "bg-success", "Rejected" => "bg-danger", "Cancelled" => "bg-secondary", _ => "bg-warning" };
+        "Approved" => "pill-active",
+        "Rejected" => "pill-inactive",
+        _ => "bg-light text-dark"
+    };
 }
