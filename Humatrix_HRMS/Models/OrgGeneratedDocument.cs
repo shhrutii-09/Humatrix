@@ -26,7 +26,7 @@ public class OrgGeneratedDocument
 
     // Document metadata
     [Required, MaxLength(200)]
-    public string DocumentNumber { get; set; } = default!;
+    public string DocumentNumber { get; set; } = default!; 
 
     [Required, MaxLength(500)]
     public string DocumentName { get; set; } = default!;
