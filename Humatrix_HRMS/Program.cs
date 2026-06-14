@@ -176,6 +176,16 @@ var indiaTz = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+
+    await RoleSeeder.SeedRoles(roleManager);
+    await SuperAdminSeeder.SeedSuperAdmin(userManager);
+}
 
 // ==========================================
 // AUTO APPLY PENDING MIGRATIONS
