@@ -15,5 +15,6 @@
         public string AssignedToName { get; set; } = "";
         public string AssignedByName { get; set; } = "";
         public DateTime CreatedAt { get; set; }
+        public string DepartmentName { get; set; } = "";
     }
 }

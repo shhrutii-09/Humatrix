@@ -53,7 +53,8 @@
                 ADD DEPARTMENT
             </button>
 
-            <button class="btn btn-interactive-back shadow-sm" @onclick="GoBack">
+            @* Updated Dashboard Button Styling *@
+            <button class="btn btn-dashboard d-flex align-items-center gap-2 shadow-sm" @onclick="GoBack">
                 <i class="bi bi-speedometer2"></i>
                 DASHBOARD
             </button>
@@ -309,7 +310,8 @@
         font-weight: 600;
     }
 
-    .btn-interactive-back {
+    /* Updated Dashboard Button CSS */
+    .btn-dashboard {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
         color: #4b5563 !important;
@@ -318,6 +320,11 @@
         font-size: 12px;
         font-weight: 600;
     }
+
+        .btn-dashboard:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
 
     .btn-paging-arrow {
         border: none;

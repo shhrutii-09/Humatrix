@@ -49,7 +49,7 @@
                 <i class="bi bi-house-add"></i> APPLY WFH
             </button>
             <button class="btn btn-interactive-back shadow-sm" @onclick="GoDashboard">
-                <i class="bi bi-speedometer2"></i> DASHBOARD
+                DASHBOARD
             </button>
         </div>
     </div>
@@ -157,7 +157,15 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
+        transition: all 0.2s ease;
     }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
 
     .btn-action-cancel {
         background-color: #f1f5f9;

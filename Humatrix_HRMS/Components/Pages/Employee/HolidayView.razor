@@ -3,11 +3,15 @@
 
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Data
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 
 @attribute [Authorize]
 @inject HolidayService HolidayService
 @inject NavigationManager Nav
+@inject CurrentUserService CurrentUser
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Holidays | Humatrix HRMS</PageTitle>
 
@@ -17,12 +21,11 @@
             <h2 class="fw-bold tracking-tight text-dark mb-1">Holiday Calendar</h2>
             <p class="text-muted small mb-0">View upcoming company holidays and observances.</p>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
-                <i class="bi bi-speedometer2"></i>
-                DASHBOARD
-            </button>
-        </div>
+
+        @* Original Button Style restored from Department page *@
+        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+            <i class="bi bi-speedometer2"></i> DASHBOARD
+        </button>
     </div>
 
     <div class="card border-0 shadow-sm panel-container-card">
@@ -90,6 +93,7 @@
         color: #5c4ac7;
     }
 
+    /* Department-like Dashboard Button Style */
     .btn-interactive-back {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
@@ -98,11 +102,10 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-
-        .btn-interactive-back:hover {
-            background: #f8fafc !important;
-        }
 </style>
 
 @code {
@@ -110,9 +113,24 @@
     private DateTime currentMonth = DateTime.Today;
     private List<string> weekDays = new() { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
     private List<List<DateTime>> calendar = new();
+    private string dashboardPath = "/employee/dashboard"; // Default path
 
     protected override async Task OnInitializedAsync()
     {
+        // Role based navigation logic
+        var user = await CurrentUser.GetUserAsync();
+        if (user != null)
+        {
+            using var db = DbFactory.CreateDbContext();
+            var roles = await db.UserRoles
+                .Where(ur => ur.UserId == user.Id)
+                .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name.ToLower())
+                .ToListAsync();
+
+            if (roles.Contains("hr")) dashboardPath = "/hr/dashboard";
+            else dashboardPath = "/employee/dashboard";
+        }
+
         holidays = await HolidayService.GetAllAsync();
         BuildCalendar();
     }

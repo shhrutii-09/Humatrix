@@ -25,21 +25,47 @@ namespace Humatrix_HRMS.Services
             _userManager = userManager;
         }
 
-        // =========================
-        // ASSIGN TASK (HR/Admin)
-        // =========================
+        
+        private string GetAssignedByName(Guid assignedBy)
+        {
+            if (assignedBy == Guid.Empty) return "System Admin";
+
+            string idString = assignedBy.ToString();
+
+            var employee = _context.Employees.FirstOrDefault(e => e.UserId == idString);
+            if (employee != null)
+            {
+                return !string.IsNullOrWhiteSpace(employee.FirstName)
+                    ? $"{employee.FirstName} {employee.LastName}"
+                    : "HR User";
+            }
+
+            var user = _userManager.Users.FirstOrDefault(u => u.Id == idString);
+
+            if (user != null)
+            {
+                if (!string.IsNullOrWhiteSpace(user.FirstName))
+                    return $"{user.FirstName} {user.LastName}";
+                else if (!string.IsNullOrWhiteSpace(user.UserName))
+                    return user.UserName;
+                else
+                    return "Org Admin";
+            }
+
+            return "Admin";
+        }
         public async Task AssignTaskAsync(CreateTaskDto dto)
         {
             var user = await _currentUser.GetUserAsync();
-
-            if (user == null)
-                throw new Exception("Unauthorized");
+            if (user == null) throw new Exception("Unauthorized");
 
             var employee = await _context.Employees
-                .FirstOrDefaultAsync(e => e.EmployeeId == dto.AssignedTo);
+                .Include(e => e.Department)
+                .FirstOrDefaultAsync(e => e.EmployeeId == dto.AssignedTo && e.Status == "Active");
 
-            if (employee == null)
-                throw new Exception("Employee not found");
+            if (employee == null) throw new Exception("Active employee not found");
+
+            Guid assignedByGuid = Guid.TryParse(user.Id, out var uid) ? uid : Guid.Empty;
 
             var task = new TaskItem
             {
@@ -49,7 +75,7 @@ namespace Humatrix_HRMS.Services
                 Priority = dto.Priority ?? "Medium",
                 DueDate = dto.DueDate,
                 AssignedTo = (Guid)dto.AssignedTo,
-                AssignedBy = Guid.TryParse(user.Id, out var uid) ? uid : Guid.Empty,
+                AssignedBy = assignedByGuid,
                 OrganizationId = employee.OrganizationId,
                 Status = "Pending",
                 Progress = 0,
@@ -59,9 +85,6 @@ namespace Humatrix_HRMS.Services
             _context.Tasks.Add(task);
             await _context.SaveChangesAsync();
 
-            // =========================
-            // CREATE NOTIFICATION
-            // =========================
             if (!string.IsNullOrEmpty(employee.UserId))
             {
                 await _notificationService.CreateNotificationAsync(
@@ -73,26 +96,153 @@ namespace Humatrix_HRMS.Services
             }
         }
 
-        // =========================
-        // TASK REMINDER NOTIFICATIONS
-        // =========================
+        public async Task<List<TaskDto>> GetMyTasksAsync()
+        {
+            var user = await _currentUser.GetUserAsync();
+            if (user == null) throw new Exception("Unauthorized");
+
+            var employee = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
+            if (employee == null) throw new Exception("Employee not found");
+
+            var tasks = await _context.Tasks
+                .Where(t => t.AssignedTo == employee.EmployeeId)
+                .OrderByDescending(t => t.CreatedAt)
+                .ToListAsync();
+
+            return tasks.Select(t => new TaskDto
+            {
+                TaskId = t.TaskId,
+                Title = t.Title ?? "",
+                Description = t.Description ?? "",
+                Priority = t.Priority ?? "Medium",
+                Status = t.Status ?? "Pending",
+                Progress = t.Progress,
+                DueDate = t.DueDate,
+                CreatedAt = t.CreatedAt,
+                AssignedToName = "",
+                AssignedByName = GetAssignedByName(t.AssignedBy)
+            }).ToList();
+        }
+
+        public async Task<List<TaskDto>> GetAllTasksAsync()
+        {
+            var user = await _currentUser.GetUserAsync();
+            if (user == null) throw new Exception("Unauthorized");
+
+            var tasks = await _context.Tasks
+                .Include(t => t.AssignedToEmployee)
+                .Where(t => t.OrganizationId == user.OrganizationId)
+                .OrderByDescending(t => t.CreatedAt)
+                .ToListAsync();
+
+            return tasks.Select(t => new TaskDto
+            {
+                TaskId = t.TaskId,
+                Title = t.Title ?? "",
+                Description = t.Description ?? "",
+                Priority = t.Priority ?? "Medium",
+                Status = t.Status ?? "Pending",
+                Progress = t.Progress,
+                DueDate = t.DueDate,
+                CreatedAt = t.CreatedAt,
+                AssignedToName = t.AssignedToEmployee != null ? $"{t.AssignedToEmployee.FirstName} {t.AssignedToEmployee.LastName}" : "",
+                AssignedByName = GetAssignedByName(t.AssignedBy)
+            }).ToList();
+        }
+
+        public async Task<List<TaskDto>> GetTasksAssignedByMeAsync()
+        {
+            var user = await _currentUser.GetUserAsync();
+            if (user == null) throw new Exception("Unauthorized");
+
+            Guid userGuid = Guid.TryParse(user.Id, out var guid) ? guid : Guid.Empty;
+            var isHr = await _userManager.IsInRoleAsync(user, "HR");
+            var isOrgAdmin = await _userManager.IsInRoleAsync(user, "OrgAdmin");
+
+            var query = _context.Tasks
+        .Include(t => t.AssignedToEmployee)
+        .ThenInclude(e => e.Department)
+        .AsQueryable();
+
+            if (isOrgAdmin)
+            {
+                query = query.Where(t => t.AssignedToEmployee.Status == "Active");
+            }
+            else if (isHr)
+            {
+                var hrProfile = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
+                if (hrProfile != null)
+                {
+                    query = query.Where(t => t.AssignedToEmployee.DepartmentId == hrProfile.DepartmentId && t.AssignedToEmployee.Status == "Active");
+                }
+            }
+            else
+            {
+                query = query.Where(t => t.AssignedBy == userGuid);
+            }
+
+            var tasks = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
+
+            return tasks.Select(t => new TaskDto
+            {
+                TaskId = t.TaskId,
+                Title = t.Title ?? "",
+                Description = t.Description ?? "",
+                Priority = t.Priority ?? "Medium",
+                Status = t.Status ?? "Pending",
+                Progress = t.Progress,
+                DueDate = t.DueDate,
+                CreatedAt = t.CreatedAt,
+                AssignedToName = t.AssignedToEmployee != null ? $"{t.AssignedToEmployee.FirstName} {t.AssignedToEmployee.LastName}" : "",
+                DepartmentName = t.AssignedToEmployee?.Department?.Name ?? "N/A", // Yahan mapping
+                AssignedByName = GetAssignedByName(t.AssignedBy)
+            }).ToList();
+        }
+
+        public async Task UpdateTaskAsync(UpdateTaskDto dto)
+        {
+            var task = await _context.Tasks.Include(t => t.AssignedToEmployee).FirstOrDefaultAsync(t => t.TaskId == dto.TaskId);
+            if (task == null) throw new Exception("Task not found");
+
+            task.Progress = dto.Progress;
+            task.Status = dto.Progress >= 100 ? "Completed" : dto.Progress > 0 ? "In Progress" : "Pending";
+            await _context.SaveChangesAsync();
+
+            if (task.Progress >= 100)
+            {
+                var managers = await _context.Users.Where(u => u.OrganizationId == task.OrganizationId).ToListAsync();
+                foreach (var m in managers)
+                {
+                    if (await _userManager.IsInRoleAsync(m, "HR") || await _userManager.IsInRoleAsync(m, "OrgAdmin"))
+                    {
+                        await _notificationService.CreateNotificationAsync(m.Id, "Task Completed", $"{task.AssignedToEmployee?.FirstName} completed task '{task.Title}'", "/hr/tasks");
+                    }
+                }
+            }
+        }
+
+        public async Task MarkCompleteAsync(Guid taskId)
+        {
+            var task = await _context.Tasks.FirstOrDefaultAsync(t => t.TaskId == taskId);
+            if (task == null) throw new Exception("Task not found");
+            task.Status = "Completed";
+            task.Progress = 100;
+            await _context.SaveChangesAsync();
+        }
+
         public async Task CreateTaskReminderNotificationsAsync()
         {
             var user = await _currentUser.GetUserAsync();
             if (user == null) return;
 
-            var employee = await _context.Employees
-                .FirstOrDefaultAsync(e => e.UserId == user.Id);
-
+            var employee = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
             if (employee == null) return;
 
             var today = DateTime.Today.Date;
             var tomorrow = today.AddDays(1).Date;
 
             var tasks = await _context.Tasks
-                .Where(t =>
-                    t.AssignedTo == employee.EmployeeId &&
-                    t.Status != "Completed")
+                .Where(t => t.AssignedTo == employee.EmployeeId && t.Status != "Completed")
                 .ToListAsync();
 
             foreach (var task in tasks)
@@ -100,19 +250,16 @@ namespace Humatrix_HRMS.Services
                 string? title = null;
                 string? message = null;
 
-                // DUE TODAY
                 if (task.DueDate.HasValue && task.DueDate.Value.Date == today)
                 {
                     title = "Task Due Today";
                     message = $"Task '{task.Title}' is due today";
                 }
-                // DUE TOMORROW
                 else if (task.DueDate.HasValue && task.DueDate.Value.Date == tomorrow)
                 {
                     title = "Task Due Tomorrow";
                     message = $"Task '{task.Title}' is due tomorrow";
                 }
-                // OVERDUE
                 else if (task.DueDate.HasValue && task.DueDate.Value.Date < today)
                 {
                     title = "Task Overdue";
@@ -121,193 +268,15 @@ namespace Humatrix_HRMS.Services
 
                 if (title != null)
                 {
-                    // AVOID DUPLICATE NOTIFICATIONS
                     bool exists = await _context.Notifications.AnyAsync(n =>
-                        n.UserId == user.Id &&
-                        n.Title == title &&
-                        n.Message == message &&
-                        n.CreatedAt.Date == today);
+                        n.UserId == user.Id && n.Title == title && n.CreatedAt.Date == today);
 
                     if (!exists)
                     {
-                        await _notificationService.CreateNotificationAsync(
-                            user.Id,
-                            title,
-                            message,
-                            "/employee/my-tasks"
-                        );
+                        await _notificationService.CreateNotificationAsync(user.Id, title, message, "/employee/my-tasks");
                     }
                 }
             }
-        }
-
-        // =========================
-        // MY TASKS (Employee)
-        // =========================
-        public async Task<List<TaskDto>> GetMyTasksAsync()
-        {
-            var user = await _currentUser.GetUserAsync();
-
-            if (user == null)
-                throw new Exception("Unauthorized");
-
-            var employee = await _context.Employees
-                .FirstOrDefaultAsync(e => e.UserId == user.Id);
-
-            if (employee == null)
-                throw new Exception("Employee not found");
-
-            return await _context.Tasks
-                .Where(t => t.AssignedTo == employee.EmployeeId)
-                .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new TaskDto
-                {
-                    TaskId = t.TaskId,
-                    Title = t.Title ?? "",
-                    Description = t.Description ?? "",
-                    Priority = t.Priority ?? "Medium",
-                    Status = t.Status ?? "Pending",
-                    Progress = t.Progress,
-                    DueDate = t.DueDate,
-                    CreatedAt = t.CreatedAt,
-                    AssignedToName = "",
-                    AssignedByName = _context.Users
-                .Where(u => u.Id == t.AssignedBy.ToString())
-                .Select(u => u.FirstName + " " + u.LastName)
-                .FirstOrDefault() ?? "Admin"
-                })
-                .ToListAsync();
-        }
-
-        // =========================
-        // ALL TASKS (HR/Admin)
-        // =========================
-        public async Task<List<TaskDto>> GetAllTasksAsync()
-        {
-            var user = await _currentUser.GetUserAsync();
-
-            if (user == null)
-                throw new Exception("Unauthorized");
-
-            return await _context.Tasks
-                .Include(t => t.AssignedToEmployee)
-                .Where(t => t.OrganizationId == user.OrganizationId)
-                .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new TaskDto
-                {
-                    TaskId = t.TaskId,
-                    Title = t.Title ?? "",
-                    Description = t.Description ?? "",
-                    Priority = t.Priority ?? "Medium",
-                    Status = t.Status ?? "Pending",
-                    Progress = t.Progress,
-                    DueDate = t.DueDate,
-                    CreatedAt = t.CreatedAt,
-                    AssignedToName = t.AssignedToEmployee != null
-                        ? t.AssignedToEmployee.FirstName + " " + t.AssignedToEmployee.LastName
-                        : ""
-                })
-                .ToListAsync();
-        }
-
-        // TaskService.cs mein add karein
-        public async Task<List<TaskDto>> GetTasksAssignedByMeAsync()
-        {
-            var user = await _currentUser.GetUserAsync();
-            if (user == null) throw new Exception("Unauthorized");
-
-            Guid userGuid = Guid.TryParse(user.Id, out var guid) ? guid : Guid.Empty;
-
-            return await _context.Tasks
-                .Include(t => t.AssignedToEmployee)
-                .Where(t => t.AssignedBy == userGuid) // Sirf login user dwara assign kiye tasks
-                .OrderByDescending(t => t.CreatedAt)
-                .Select(t => new TaskDto
-                {
-                    TaskId = t.TaskId,
-                    Title = t.Title ?? "",
-                    Description = t.Description ?? "",
-                    Priority = t.Priority ?? "Medium",
-                    Status = t.Status ?? "Pending",
-                    Progress = t.Progress,
-                    DueDate = t.DueDate,
-                    CreatedAt = t.CreatedAt,
-                    AssignedToName = t.AssignedToEmployee != null
-                        ? t.AssignedToEmployee.FirstName + " " + t.AssignedToEmployee.LastName : ""
-                })
-                .ToListAsync();
-        }
-
-        // =========================
-        // UPDATE PROGRESS (Employee)
-        // =========================
-        public async Task UpdateTaskAsync(UpdateTaskDto dto)
-        {
-            var task = await _context.Tasks
-                .Include(t => t.AssignedToEmployee)
-                .FirstOrDefaultAsync(t => t.TaskId == dto.TaskId);
-
-            if (task == null)
-                throw new Exception("Task not found");
-
-            task.Progress = dto.Progress;
-
-            if (dto.Progress >= 100)
-                task.Status = "Completed";
-            else if (dto.Progress > 0)
-                task.Status = "In Progress";
-            else
-                task.Status = "Pending";
-
-            await _context.SaveChangesAsync();
-
-            // =========================
-            // NOTIFY HR/ADMIN WHEN COMPLETED
-            // =========================
-            if (task.Progress >= 100)
-            {
-                var allUsers = await _context.Users
-                    .Where(u => u.OrganizationId == task.OrganizationId)
-                    .ToListAsync();
-
-                var hrUsers = new List<ApplicationUser>();
-
-                foreach (var user in allUsers)
-                {
-                    if (await _userManager.IsInRoleAsync(user, "HR") ||
-                        await _userManager.IsInRoleAsync(user, "OrgAdmin"))
-                    {
-                        hrUsers.Add(user);
-                    }
-                }
-
-                foreach (var hr in hrUsers)
-                {
-                    await _notificationService.CreateNotificationAsync(
-                        hr.Id,
-                        "Task Completed",
-                        $"{task.AssignedToEmployee?.FirstName} completed task '{task.Title}'",
-                        "/hr/tasks"
-                    );
-                }
-            }
-        }
-
-        // =========================
-        // MARK COMPLETE
-        // =========================
-        public async Task MarkCompleteAsync(Guid taskId)
-        {
-            var task = await _context.Tasks
-                .FirstOrDefaultAsync(t => t.TaskId == taskId);
-
-            if (task == null)
-                throw new Exception("Task not found");
-
-            task.Status = "Completed";
-            task.Progress = 100;
-
-            await _context.SaveChangesAsync();
         }
     }
 }

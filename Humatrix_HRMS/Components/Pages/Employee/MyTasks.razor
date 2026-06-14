@@ -34,18 +34,15 @@
 </div>
 
 <div class="container-fluid px-4 mt-4">
-
-    @* HEADER *@
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
             <h2 class="fw-bold tracking-tight text-dark mb-1">My Tasks</h2>
             <p class="text-muted small mb-0">Track and update your assigned operational tasks.</p>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
-                <i class="bi bi-speedometer2"></i> DASHBOARD
-            </button>
-        </div>
+        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+            <i class="bi bi-speedometer2"></i>
+            DASHBOARD
+        </button>
     </div>
 
     @* METRICS *@
@@ -179,12 +176,17 @@
                                disabled="@(t.Status == "Completed")" @onchange="(e) => UpdateProgress(t, e)" />
 
                         <div class="mt-auto pt-2 border-top">
-                            <div class="d-flex justify-content-between">
-                                <small class="text-muted"><i class="bi bi-calendar3 me-1"></i> Due: @(t.DueDate?.ToString("dd MMM yyyy") ?? "N/A")</small>
+                            <div class="d-flex flex-column gap-1">
+                                @* Due Date *@
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    <strong>Due:</strong> @(t.DueDate?.ToString("dd MMM yyyy") ?? "N/A")
+                                </small>
 
-                                @* Naya Code: Assigned By display karne ke liye *@
-                                <small class="text-primary fw-bold">
-                                    <i class="bi bi-person-badge"></i> @t.AssignedByName
+                                @* Assigned By *@
+                                <small class="text-primary">
+                                    <i class="bi bi-person-badge-fill me-1"></i>
+                                    <strong>Assigned By:</strong> @t.AssignedByName
                                 </small>
                             </div>
                         </div>
@@ -196,15 +198,71 @@
 </div>
 
 <style>
-    .metric-panel-card { border-radius: 12px; background-color: #ffffff; transition: transform 0.2s; }
-    .metric-panel-card:hover { transform: translateY(-3px); }
-    .metric-icon-box { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-    .card-progress { height: 6px; background-color: #edf2f7; border-radius: 10px; overflow: hidden; }
-    .bg-light-gradient { background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); border: 1px solid #e9ecef; border-radius: 12px; }
-    .btn-interactive-back { background: #ffffff; border: 1px solid #e5e7eb; color: #4b5563; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 600; }
-    .priority-badge { font-size: 11px; padding: 5px 10px; }
-    .status-badge { font-size: 11px; padding: 5px 10px; }
-    .bg-danger-soft { background-color: rgba(220, 53, 69, 0.1); }
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .metric-panel-card {
+        border-radius: 12px;
+        background-color: #ffffff;
+        transition: transform 0.2s;
+    }
+
+        .metric-panel-card:hover {
+            transform: translateY(-3px);
+        }
+
+    .metric-icon-box {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .card-progress {
+        height: 6px;
+        background-color: #edf2f7;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .bg-light-gradient {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+    }
+
+    /* Updated Dashboard Button CSS */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-interactive-back:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
+
+    .priority-badge {
+        font-size: 11px;
+        padding: 5px 10px;
+    }
+
+    .status-badge {
+        font-size: 11px;
+        padding: 5px 10px;
+    }
+
+    .bg-danger-soft {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
 </style>
 
 @code {
@@ -214,11 +272,10 @@
     private string? selectedStatus;
     private string? selectedPriority;
     private string? message;
-    private string dashboardPath = "/employee/dashboard"; // Default
+    private string dashboardPath = "/employee/dashboard";
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. Determine Dashboard Path based on roles
         var user = await CurrentUser.GetUserAsync();
         if (user != null)
         {
@@ -232,7 +289,6 @@
             else dashboardPath = "/employee/dashboard";
         }
 
-        // 2. Check for URL message
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var msg))
         {

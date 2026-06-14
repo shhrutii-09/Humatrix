@@ -10,7 +10,7 @@
 @inject WorkWeekService WorkWeekService
 @inject NavigationManager NavigationManager
 
-<PageTitle>Work Week | Humatrix</PageTitle>
+<PageTitle>Work Week | Humatrix HRMS</PageTitle>
 
 <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
     @if (!string.IsNullOrEmpty(message))
@@ -45,14 +45,14 @@
     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
             <h2 class="fw-bold tracking-tight text-dark mb-1">
-                <i class="bi bi-calendar3-week text-premium me-2"></i>Work Week Settings
+                Work Week Settings
             </h2>
             <p class="text-muted small mb-0">Set up your company's standard working days to manage shifts and attendance.</p>
         </div>
-        <div>
-            <button class="btn btn-hrms-dashboard d-flex align-items-center gap-2 text-uppercase fw-semibold" @onclick="NavigateToDashboard">
+        <div class="d-flex gap-2">
+            <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2" @onclick="NavigateToDashboard">
                 <i class="bi bi-speedometer2"></i>
-                <span>Dashboard</span>
+                DASHBOARD
             </button>
         </div>
     </div>
@@ -153,31 +153,25 @@
 </div>
 
 <style>
-    /* CSS Nút Dashboard chuẩn theo thiết kế HuMatrix của bạn */
-    .btn-hrms-dashboard {
-        background-color: #ffffff !important;
-        color: #475569 !important;
-        border: 1px solid #cbd5e1 !important;
+    /* Premium Dashboard Button */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
         padding: 8px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        letter-spacing: 0.05em;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
         transition: all 0.2s ease;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     }
 
-        .btn-hrms-dashboard:hover {
+        .btn-interactive-back:hover {
             background-color: #f8fafc !important;
-            color: #1e293b !important;
-            border-color: #94a3b8 !important;
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
         }
 
-        .btn-hrms-dashboard i {
-            font-size: 14px;
-            color: #64748b;
-        }
-
-    /* Premium App Colors & Variables Restored */
     .text-premium {
         color: #5c4ac7 !important;
     }
@@ -201,7 +195,6 @@
         border: 1px solid #e2e8f0 !important;
     }
 
-    /* Interactive Operational Cards */
     .day-config-card {
         cursor: pointer;
         transition: all 0.2s ease;
@@ -227,7 +220,6 @@
         color: #1e293b;
     }
 
-    /* Custom Switch & Input Tokens */
     .custom-premium-checkbox .form-check-input {
         width: 1.35rem;
         height: 1.35rem;
@@ -241,7 +233,6 @@
             border-color: #5c4ac7;
         }
 
-    /* Status Badges */
     .status-indicator-pill {
         font-size: 11px;
         font-weight: 600;
@@ -261,7 +252,6 @@
         color: #64748b;
     }
 
-    /* Analytics Block Customization */
     .bg-premium-soft {
         background-color: rgba(92, 74, 199, 0.03) !important;
         border: 1px solid rgba(92, 74, 199, 0.06);
@@ -291,14 +281,12 @@
         border: 1px dashed #cbd5e1 !important;
     }
 
-    /* Alert Architecture Components */
     .alert-premium-info {
         background-color: #f0f9ff;
         color: #0369a1;
         border: 1px solid #b3e0ff !important;
     }
 
-    /* Submit Engine */
     .btn-action-submit {
         background-color: #5c4ac7 !important;
         color: #ffffff !important;
@@ -316,16 +304,13 @@
         }
 
     @@media (min-width: 992px) {
-        .lg-grid-divider
+        .lg-grid-divider {
+            --bs-gutter-x: 3rem;
+        }
 
-    {
-        --bs-gutter-x: 3rem;
-    }
-
-    .lg-grid-divider > div:first-child {
-        border-right: 1px solid #f1f5f9;
-    }
-
+            .lg-grid-divider > div:first-child {
+                border-right: 1px solid #f1f5f9;
+            }
     }
 </style>
 
@@ -337,21 +322,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            model = await WorkWeekService.GetAsync();
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-        }
+        try { model = await WorkWeekService.GetAsync(); }
+        catch (Exception ex) { error = ex.Message; }
     }
 
-    // Hàm điều hướng quay lại trang Dashboard chính của tổ chức
-    private void NavigateToDashboard()
-    {
-        NavigationManager.NavigateTo("/org/dashboard");
-    }
+    private void NavigateToDashboard() => NavigationManager.NavigateTo("/org/dashboard");
 
     private int WorkingDaysCount =>
         (model?.IsMondayWorking == true ? 1 : 0) +
@@ -365,7 +340,6 @@
     private List<DayConfig> GetDayConfigurations()
     {
         if (model == null) return new();
-
         return new List<DayConfig>
         {
             new("Monday", model!.IsMondayWorking, val => model!.IsMondayWorking = val),
@@ -387,15 +361,8 @@
             message = "Work week configurations synchronized seamlessly.";
             error = null;
         }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            message = null;
-        }
-        finally
-        {
-            saving = false;
-        }
+        catch (Exception ex) { error = ex.Message; message = null; }
+        finally { saving = false; }
     }
 
     private class DayConfig
@@ -403,18 +370,12 @@
         public string DayName { get; }
         public bool IsWorking { get; }
         private readonly Action<bool> _setter;
-
         public DayConfig(string name, bool isWorking, Action<bool> setter)
         {
             DayName = name;
             IsWorking = isWorking;
             _setter = setter;
         }
-
-        public bool PropertyBinding
-        {
-            get => IsWorking;
-            set => _setter(value);
-        }
+        public bool PropertyBinding { get => IsWorking; set => _setter(value); }
     }
 }

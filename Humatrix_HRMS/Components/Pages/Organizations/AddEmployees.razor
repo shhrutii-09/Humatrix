@@ -15,19 +15,18 @@
 <PageTitle>Add Employee | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold text-dark mb-1" style="font-size: 2rem;">Add New Employee</h2>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Add New Employee</h2>
             <p class="text-muted small mb-0">Define a new employee structure and trigger an activation email.</p>
         </div>
-        <button class="btn bg-white border text-secondary fw-bold px-4 py-2 text-uppercase shadow-sm text-back-btn"
-                @onclick='() => Nav.NavigateTo("/employees")'>
-            Back to Employees
+        <button class="btn btn-interactive-back shadow-sm" @onclick="GoBack">
+            BACK TO EMPLOYEES
         </button>
     </div>
 
     <div class="card shadow-sm border-0 rounded-3 bg-white mb-4 custom-form-card">
-        <div class="card-body p-4.5">
+        <div class="card-body p-4">
 
             @if (isPageLoading)
             {
@@ -47,31 +46,29 @@
 
                             <div class="row">
                                 <div class="col-md-6 mb-4">
-                                    <label class="form-label small fw-bold text-uppercase tracking-wider input-label">First Name</label>
-                                    <InputText @bind-Value="model.FirstName" class="form-control custom-dept-input shadow-none" placeholder="e.g. John" disabled="@isSubmitting" />
+                                    <label class="form-label small fw-bold text-secondary tracking-wider mb-2">FIRST NAME</label>
+                                    <InputText @bind-Value="model.FirstName" class="form-control premium-form-input shadow-none" placeholder="e.g. John" disabled="@isSubmitting" />
                                     <ValidationMessage For="@(() => model.FirstName)" class="text-danger small mt-1" />
                                 </div>
 
                                 <div class="col-md-6 mb-4">
-                                    <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Last Name</label>
-                                    <InputText @bind-Value="model.LastName" class="form-control custom-dept-input shadow-none" placeholder="e.g. Doe" disabled="@isSubmitting" />
+                                    <label class="form-label small fw-bold text-secondary tracking-wider mb-2">LAST NAME</label>
+                                    <InputText @bind-Value="model.LastName" class="form-control premium-form-input shadow-none" placeholder="e.g. Doe" disabled="@isSubmitting" />
                                     <ValidationMessage For="@(() => model.LastName)" class="text-danger small mt-1" />
                                 </div>
                             </div>
 
                             <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Corporate Email Address</label>
-                                <InputText @bind-Value="model.Email" type="email" class="form-control custom-dept-input shadow-none" placeholder="employee@yopmail.com" disabled="@isSubmitting" />
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">CORPORATE EMAIL ADDRESS</label>
+                                <InputText @bind-Value="model.Email" type="email" class="form-control premium-form-input shadow-none" placeholder="employee@yopmail.com" disabled="@isSubmitting" />
                                 <ValidationMessage For="@(() => model.Email)" class="text-danger small mt-1" />
                                 <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">*Employee will receive activation mail on Yopmail.</small>
                             </div>
 
-                            <!-- ✅ MOVED: Date of Birth to correct location -->
                             <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Date of Birth</label>
-                                <InputDate @bind-Value="model.DateOfBirth" class="form-control custom-dept-input shadow-none" disabled="@isSubmitting" />
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">DATE OF BIRTH</label>
+                                <InputDate @bind-Value="model.DateOfBirth" class="form-control premium-form-input shadow-none" disabled="@isSubmitting" />
                                 <ValidationMessage For="@(() => model.DateOfBirth)" class="text-danger small mt-1" />
-                                <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">*Used for birthday wishes and age calculation</small>
                             </div>
                         </div>
 
@@ -79,8 +76,8 @@
                             <h5 class="mb-4 text-secondary text-uppercase tracking-wider section-title">Assignment</h5>
 
                             <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Department</label>
-                                <select class="form-select custom-dept-input shadow-none"
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">DEPARTMENT</label>
+                                <select class="form-select premium-form-input shadow-none"
                                         @onchange="OnDepartmentChanged"
                                         disabled="@isSubmitting">
                                     <option value="" disabled selected>Select Department</option>
@@ -93,8 +90,7 @@
                             </div>
 
                             <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Designation</label>
-
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">DESIGNATION</label>
                                 @if (isDesignationLoading)
                                 {
                                     <div class="text-muted small py-2 d-flex align-items-center">
@@ -105,7 +101,7 @@
                                 else
                                 {
                                     <InputSelect @bind-Value="model.DesignationId"
-                                                 class="form-select custom-dept-input shadow-none"
+                                                 class="form-select premium-form-input shadow-none"
                                                  disabled="@(isSubmitting || !model.DepartmentId.HasValue)">
                                         <option value="" disabled selected>Select Designation</option>
                                         @foreach (var d in designations)
@@ -114,14 +110,13 @@
                                         }
                                     </InputSelect>
                                 }
-
                                 <ValidationMessage For="@(() => model.DesignationId)" class="text-danger small mt-1" />
                             </div>
 
                             <div class="mb-4">
-                                <label class="form-label small fw-bold text-uppercase tracking-wider input-label">Work Shift</label>
+                                <label class="form-label small fw-bold text-secondary tracking-wider mb-2">WORK SHIFT</label>
                                 <InputSelect @bind-Value="model.ShiftId"
-                                             class="form-select custom-dept-input shadow-none"
+                                             class="form-select premium-form-input shadow-none"
                                              disabled="@isSubmitting">
                                     <option value="" disabled selected>Select Shift</option>
                                     @foreach (var s in shifts)
@@ -134,27 +129,25 @@
                         </div>
                     </div>
 
-                    <div class="mt-4 pt-4 border-top d-flex gap-2 justify-content-start">
+                    <div class="mt-4 pt-4 border-top d-flex gap-2">
                         <button type="submit"
-                                class="btn text-white fw-bold px-4 py-2 text-uppercase btn-create-dept"
+                                class="btn btn-action-submit px-4 shadow-sm d-flex align-items-center gap-2"
                                 disabled="@isSubmitting">
                             @if (isSubmitting)
                             {
-                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                 <span>Provisioning Employee...</span>
                             }
                             else
                             {
-                                <i class="bi bi-shield-check me-2"></i>
-                        
-                                <span>CREATE EMPLOYEE</span>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Create Employee</span>
                             }
                         </button>
 
                         <button type="button"
-                                class="btn btn-light border bg-white text-secondary fw-medium px-4 py-2"
-                                @onclick='() => Nav.NavigateTo("/employees")'
-                                disabled="@isSubmitting">
+                                class="btn btn-action-cancel px-4"
+                                @onclick="GoBack">
                             Cancel
                         </button>
                     </div>
@@ -163,16 +156,12 @@
 
             @if (isCreatedSuccessfully)
             {
-                <div class="alert alert-premium-success mt-4 border-0 shadow-sm p-4 animate__animated animate__fadeIn"
-                     style="background-color: #e6ffed;">
+                <div class="alert alert-success mt-4 border-0 shadow-sm p-4" style="background-color: #e6ffed;">
                     <div class="d-flex align-items-start">
-                        <div class="success-icon-badge me-3">
-                            <i class="bi bi-check-circle-fill fs-3 text-success"></i>
-                        </div>
+                        <i class="bi bi-check-circle-fill fs-3 text-success me-3"></i>
                         <div>
                             <h5 class="text-success fw-bold mb-2">Employee Account Created Successfully!</h5>
-                            <p class="mb-1 text-dark">Employee activation mail has been sent successfully.</p>
-                            <p class="mb-0 text-muted small">Please check the provided Yopmail inbox and activate the employee account.</p>
+                            <p class="mb-0 text-muted small">Activation mail has been dispatched to the Yopmail inbox.</p>
                         </div>
                     </div>
                 </div>
@@ -180,90 +169,87 @@
 
             @if (!string.IsNullOrEmpty(error))
             {
-                <div class="alert alert-premium-danger mt-4 shadow-sm border-0 d-flex align-items-center" style="background-color: #fbebeb; color: #dc3545;">
-                    <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
-                    <div>
-                        <h6 class="mb-0 fw-bold">System Registration Blocked</h6>
-                        <span class="small opacity-90">@error</span>
-                    </div>
+                <div class="alert alert-premium-danger mt-4 shadow-sm border-0 d-flex align-items-center">
+                    <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                    <div class="small fw-medium">@error</div>
                 </div>
             }
-
         </div>
     </div>
 </div>
 
 <style>
-    .custom-form-card {
-        border-radius: 12px !important;
+    .tracking-tight {
+        letter-spacing: -0.025em;
     }
 
-    .text-back-btn {
-        font-size: 0.785rem !important;
-        letter-spacing: 0.5px;
-        border-radius: 8px !important;
-        color: #5a6a85 !important;
+    .tracking-wider {
+        letter-spacing: 0.05em;
+        font-size: 11px !important;
     }
 
     .section-title {
-        font-size: 0.76rem !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.8px;
         color: #94a3b8 !important;
     }
 
-    .input-label {
-        font-size: 0.72rem !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.6px;
-        color: #64748b !important;
-        margin-bottom: 0.5rem;
-    }
-
-    .custom-dept-input {
+    .premium-form-input {
+        font-size: 14px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
         background-color: #f8fafc !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 8px !important;
-        padding: 0.7rem 1rem;
-        font-size: 0.92rem;
-        color: #334155;
+        transition: all 0.2s ease;
     }
 
-        .custom-dept-input:focus {
+        .premium-form-input:focus {
+            border-color: #5c4ac7;
             background-color: #ffffff !important;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12);
+        }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            background-color: #f8fafc !important;
             border-color: #5c4ac7 !important;
-            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12) !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
         }
 
-    .btn-create-dept {
+    .btn-action-submit {
         background-color: #5c4ac7 !important;
-        font-size: 0.785rem !important;
-        letter-spacing: 0.5px;
-        border-radius: 8px !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 600;
     }
 
-        .btn-create-dept:hover {
-            background-color: #4b3bb3 !important;
-        }
-
-    .alert-premium-success {
-        border: 1px solid rgba(22, 163, 74, 0.15) !important;
-        border-radius: 12px;
+    .btn-action-cancel {
+        background-color: #ffffff;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-size: 13.5px;
     }
 
-    .success-icon-badge {
-        color: #16a34a;
-        background: rgba(22, 163, 74, 0.1);
-        width: 42px;
-        height: 42px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .text-indigo {
-        color: #5c4ac7 !important;
+    .alert-premium-danger {
+        background-color: #fef2f2;
+        color: #991b1b;
+        border-left: 4px solid #ef4444 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
     }
 </style>
 
@@ -313,7 +299,6 @@
             model.DesignationId = null;
             designations.Clear();
         }
-
         isDesignationLoading = false;
     }
 
@@ -326,8 +311,6 @@
             isSubmitting = true;
 
             model.Role = "Employee";
-
-            // This triggers the email sending internally inside EmployeeService, just like HR onboarding
             await EmployeeService.CreateEmployeeAsync(model);
 
             isCreatedSuccessfully = true;
@@ -343,4 +326,6 @@
             isSubmitting = false;
         }
     }
+
+    void GoBack() => Nav.NavigateTo("/employees");
 }
