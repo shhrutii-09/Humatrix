@@ -2,8 +2,10 @@
 @using Humatrix_HRMS.DTOs
 @using Humatrix_HRMS.Data
 @using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
 
 @attribute [Authorize(Roles = "Employee")]
 @inject EmployeeService EmployeeService
@@ -12,145 +14,192 @@
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
-<PageTitle>My Profile | Humatrix</PageTitle>
+<PageTitle>My Profile | Humatrix HRMS</PageTitle>
+
+@* Toast Notification Container *@
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    @if (!string.IsNullOrEmpty(statusMessage) || !string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert"
+             style="background-color: @(!string.IsNullOrEmpty(errorMessage) ? "#fef2f2" : "#f0fdf4");
+                        color: @(!string.IsNullOrEmpty(errorMessage) ? "#991b1b" : "#166534");
+                        border-left: 4px solid @(!string.IsNullOrEmpty(errorMessage) ? "#ef4444" : "#10b981") !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi @(!string.IsNullOrEmpty(errorMessage) ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2 fs-5"></i>
+                    <span class="small fw-medium">@(statusMessage ?? errorMessage)</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => { statusMessage = null; errorMessage = null; }"></button>
+            </div>
+        </div>
+    }
+</div>
 
 <div class="container-fluid px-4 mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fw-normal">My Profile</h2>
-        <button class="btn btn-light shadow-sm" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
-            BACK TO DASHBOARD
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">My Profile</h2>
+            <p class="text-muted small mb-0">Manage your account information and settings.</p>
+        </div>
+        <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
+            <i class="bi bi-speedometer2"></i> DASHBOARD
         </button>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            @if (model == null && string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status"></div>
-                </div>
-            }
-            else if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
-            else
-            {
-                <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
-                    <DataAnnotationsValidator />
-
-                    <div class="row g-4">
-                        <div class="col-md-8">
-                            <h5 class="mb-3 text-muted border-bottom pb-2">Personal Information</h5>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">First Name</label>
-                                    <InputText @bind-Value="editModel.FirstName" class="form-control" />
-                                    <ValidationMessage For="@(() => editModel.FirstName)" class="text-danger small" />
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label small fw-bold">Last Name</label>
-                                    <InputText @bind-Value="editModel.LastName" class="form-control" />
-                                    <ValidationMessage For="@(() => editModel.LastName)" class="text-danger small" />
-                                </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Email Address (Read-Only)</label>
-                                <input type="text" class="form-control bg-light" value="@model.Email" disabled />
-                            </div>
-                            <!-- After email field, add this -->
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Date of Birth</label>
-                                <InputDate @bind-Value="editModel.DateOfBirth" class="form-control" />
-                                <ValidationMessage For="@(() => editModel.DateOfBirth)" class="text-danger small" />
-                            </div>
-                            <h5 class="mt-4 mb-3 text-muted border-bottom pb-2">Professional Details (Read-Only)</h5>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label small fw-bold">Department</label>
-                                    <input type="text" class="form-control bg-light" value="@model.Department" disabled />
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label small fw-bold">Designation</label>
-                                    <input type="text" class="form-control bg-light" value="@model.Designation" disabled />
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label small fw-bold">Work Shift</label>
-                                    <input type="text" class="form-control bg-light" value="@model.ShiftName" disabled />
-                                </div>
-                            </div>
-
-                            <div class="mt-4 d-flex gap-2">
-                                <button type="submit" class="btn btn-success px-4" disabled="@isSaving">
-                                    @(isSaving ? "Saving..." : "UPDATE NAME")
-                                </button>
-                                <button type="button" class="btn btn-outline-primary" @onclick="() => showPasswordModal = true">
-                                    CHANGE PASSWORD
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="col-md-4 border-start ps-4 text-center">
-                            <div class="avatar-lg bg-primary text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 100px; height: 100px; font-size: 2rem;">
-                                @model.FirstName[0]@model.LastName[0]
-                            </div>
-                            <h4 class="mb-0">@model.Name</h4>
-                            <p class="text-muted">@model.Role</p>
-                            <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill">ACTIVE</span>
-                        </div>
-                    </div>
-                </EditForm>
-            }
-
-            @if (!string.IsNullOrEmpty(statusMessage))
-            {
-                <div class="alert alert-success mt-4 border-0 shadow-sm">@statusMessage</div>
-            }
+    @if (model == null && string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-2">Loading profile...</p>
         </div>
-    </div>
+    }
+    else if (model != null)
+    {
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 p-4 h-100">
+                    <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
+                        <DataAnnotationsValidator />
+                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
+                            <i class="bi bi-person-workspace text-muted me-2 fs-5"></i>
+                            <h5 class="mb-0 text-secondary fw-semibold">Personal Information</h5>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold text-muted">First Name</label>
+                                <InputText @bind-Value="editModel.FirstName" class="form-control shadow-sm" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label small fw-bold text-muted">Last Name</label>
+                                <InputText @bind-Value="editModel.LastName" class="form-control shadow-sm" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Yopmail</label>
+                            <input type="text" class="form-control bg-light shadow-sm" value="@model.Email" disabled />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">Date of Birth</label>
+                            <InputDate @bind-Value="editModel.DateOfBirth" class="form-control shadow-sm" />
+                        </div>
+
+                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
+                            <i class="bi bi-briefcase-fill text-muted me-2 fs-5"></i>
+                            <h5 class="mb-0 text-secondary fw-semibold">Employment Details</h5>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small fw-bold text-muted">Department</label>
+                                <input type="text" class="form-control bg-light shadow-sm" value="@model.Department" disabled />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small fw-bold text-muted">Designation</label>
+                                <input type="text" class="form-control bg-light shadow-sm" value="@model.Designation" disabled />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label small fw-bold text-muted">Work Shift</label>
+                                <input type="text" class="form-control bg-light shadow-sm" value="@model.ShiftName" disabled />
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-top d-flex gap-2">
+                            <button type="submit" class="btn btn-action-save px-4 shadow-sm" disabled="@isSaving">SAVE CHANGES</button>
+                            <button type="button" class="btn btn-action-password px-3 shadow-sm" @onclick="() => showPasswordModal = true">CHANGE PASSWORD</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 p-4 text-center h-100 bg-white">
+                    <div class="avatar-container shadow mx-auto mb-3">@model.FirstName[0]@model.LastName[0]</div>
+                    <h4 class="fw-bold text-dark mb-1">@model.Name</h4>
+                    <p class="text-muted small text-uppercase mb-3">@model.Role</p>
+                    <span class="status-badge-compact active-badge">ACTIVE</span>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
-@* Reuse the same Password Modal logic as the HR Profile *@
 @if (showPasswordModal)
 {
     <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title fw-bold">Change Password</h5>
-                    <button type="button" class="btn-close" @onclick="() => showPasswordModal = false"></button>
-                </div>
+                <div class="modal-header"><h5>Change Password</h5><button class="btn-close" @onclick="() => showPasswordModal = false"></button></div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="small fw-bold">Current Password</label>
-                        <input type="password" class="form-control" @bind="currentPwd" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="small fw-bold">New Password</label>
-                        <input type="password" class="form-control" @bind="newPwd" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="small fw-bold">Confirm New Password</label>
-                        <input type="password" class="form-control" @bind="confirmPwd" />
-                    </div>
+                    <input type="password" class="form-control mb-2" placeholder="Current Password" @bind="currentPwd" />
+                    <input type="password" class="form-control mb-2" placeholder="New Password" @bind="newPwd" />
+                    <input type="password" class="form-control mb-2" placeholder="Confirm Password" @bind="confirmPwd" />
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-light" @onclick="() => showPasswordModal = false">Cancel</button>
-                    <button class="btn btn-primary" @onclick="HandlePasswordReset" disabled="@isSaving">UPDATE PASSWORD</button>
-                </div>
+                <div class="modal-footer"><button class="btn btn-primary" @onclick="HandlePasswordReset">Update Password</button></div>
             </div>
         </div>
     </div>
 }
 
+<style>
+    .btn-interactive-back {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        color: #4b5563;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        transition: 0.2s;
+    }
+
+        .btn-interactive-back:hover {
+            background: #f8fafc;
+            border-color: #5c4ac7;
+            color: #5c4ac7;
+        }
+
+    .btn-action-save {
+        background-color: #5c4ac7;
+        color: #fff;
+        border-radius: 8px;
+    }
+
+    .btn-action-password {
+        background-color: #fff;
+        color: #5c4ac7;
+        border: 1px solid #5c4ac7;
+        border-radius: 8px;
+    }
+
+    .avatar-container {
+        width: 110px;
+        height: 110px;
+        font-size: 2.2rem;
+        color: #5c4ac7;
+        background: #f1f0fb;
+        border: 3px solid #5c4ac7;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .status-badge-compact {
+        padding: 6px 16px;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        background: #d1fae5;
+        color: #047857;
+    }
+</style>
+
 @code {
     private EmployeeListDto? model;
     private EditEmployeeDto editModel = new();
-    private bool isSaving = false;
-    private bool showPasswordModal = false;
-    private string? statusMessage;
-    private string? errorMessage;
+    private bool isSaving, showPasswordModal;
+    private string? statusMessage, errorMessage;
     private string currentPwd = "", newPwd = "", confirmPwd = "";
 
     protected override async Task OnInitializedAsync()
@@ -165,9 +214,7 @@
                 {
                     FirstName = model.FirstName,
                     LastName = model.LastName,
-                    DepartmentId = model.DepartmentId,
-                    DesignationId = model.DesignationId,
-                    ShiftId = model.ShiftId
+                    DateOfBirth = model.DateOfBirth
                 };
             }
         }
@@ -175,11 +222,11 @@
 
     private async Task HandleUpdate()
     {
+        isSaving = true;
         try
         {
-            isSaving = true;
             await EmployeeService.UpdateEmployeeAsync(model!.Email, editModel);
-            statusMessage = "Information updated successfully!";
+            statusMessage = "Profile updated successfully!";
         }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { isSaving = false; }
@@ -188,20 +235,9 @@
     private async Task HandlePasswordReset()
     {
         if (newPwd != confirmPwd) { errorMessage = "Passwords do not match."; return; }
-        try
-        {
-            isSaving = true;
-            var user = await UserManager.FindByEmailAsync(model!.Email);
-            var result = await UserManager.ChangePasswordAsync(user!, currentPwd, newPwd);
-            if (result.Succeeded)
-            {
-                statusMessage = "Password updated!";
-                showPasswordModal = false;
-                currentPwd = newPwd = confirmPwd = "";
-            }
-            else { errorMessage = string.Join(", ", result.Errors.Select(e => e.Description)); }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; }
-        finally { isSaving = false; }
+        var user = await UserManager.FindByEmailAsync(model!.Email);
+        var res = await UserManager.ChangePasswordAsync(user!, currentPwd, newPwd);
+        if (res.Succeeded) { statusMessage = "Password updated!"; showPasswordModal = false; }
+        else errorMessage = "Error updating password.";
     }
 }
