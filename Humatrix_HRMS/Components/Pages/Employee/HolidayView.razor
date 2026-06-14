@@ -22,8 +22,7 @@
             <p class="text-muted small mb-0">View upcoming company holidays and observances.</p>
         </div>
 
-        @* Original Button Style restored from Department page *@
-        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+        <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2" @onclick='() => Nav.NavigateTo(dashboardPath)'>
             <i class="bi bi-speedometer2"></i> DASHBOARD
         </button>
     </div>
@@ -93,7 +92,6 @@
         color: #5c4ac7;
     }
 
-    /* Department-like Dashboard Button Style */
     .btn-interactive-back {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
@@ -102,10 +100,13 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        transition: all 0.2s ease;
     }
+
+        .btn-interactive-back:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
 </style>
 
 @code {
@@ -113,11 +114,10 @@
     private DateTime currentMonth = DateTime.Today;
     private List<string> weekDays = new() { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
     private List<List<DateTime>> calendar = new();
-    private string dashboardPath = "/employee/dashboard"; // Default path
+    private string dashboardPath = "/employee/dashboard";
 
     protected override async Task OnInitializedAsync()
     {
-        // Role based navigation logic
         var user = await CurrentUser.GetUserAsync();
         if (user != null)
         {
@@ -127,7 +127,7 @@
                 .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name.ToLower())
                 .ToListAsync();
 
-            if (roles.Contains("hr")) dashboardPath = "/hr/dashboard";
+            if (roles.Contains("hr") || roles.Contains("orgadmin")) dashboardPath = "/hr/dashboard";
             else dashboardPath = "/employee/dashboard";
         }
 

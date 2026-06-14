@@ -11,6 +11,7 @@
 
 <PageTitle>Work From Home | Humatrix HRMS</PageTitle>
 
+@* Toast Notification Container *@
 <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
     @if (!string.IsNullOrEmpty(message))
     {
@@ -220,8 +221,37 @@
     private void OpenApplyModal() { model = new WorkFromHomeRequest { Date = DateTime.Today.AddDays(1) }; showModal = true; }
     private void CloseModal() => showModal = false;
 
-    private async Task SubmitWfh() { await WfhService.ApplyAsync(model); showModal = false; await LoadRequests(); }
-    private async Task Cancel(Guid id) { await WfhService.CancelAsync(id); await LoadRequests(); }
+    private async Task SubmitWfh()
+    {
+        await WfhService.ApplyAsync(model);
+        showModal = false;
+        await LoadRequests();
+        ShowToast("WFH request submitted successfully!");
+    }
+
+    private async Task Cancel(Guid id)
+    {
+        await WfhService.CancelAsync(id);
+        await LoadRequests();
+        ShowToast("WFH request cancelled.");
+    }
+
+    private void ShowToast(string msg)
+    {
+        message = msg;
+        TriggerToastAutoClose();
+    }
+
+    private void TriggerToastAutoClose()
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4000);
+            message = null;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
     private async Task GoDashboard() { var authState = await AuthStateProvider.GetAuthenticationStateAsync(); Nav.NavigateTo(authState.User.IsInRole("HR") ? "/hr/dashboard" : "/employee/dashboard"); }
 
     private static string GetStatusClass(string? status) => status switch

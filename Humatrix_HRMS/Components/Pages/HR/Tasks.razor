@@ -21,10 +21,10 @@
 <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
     @if (!string.IsNullOrEmpty(message))
     {
-        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: @(isError ? "#fef2f2" : "#f0fdf4"); color: @(isError ? "#991b1b" : "#166534"); border-left: 4px solid @(isError ? "#ef4444" : "#10b981") !important; border-radius: 10px;">
             <div class="d-flex p-3">
                 <div class="toast-body d-flex align-items-center p-0">
-                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
+                    <i class="bi @(isError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2 fs-5"></i>
                     <span class="small fw-medium">@message</span>
                 </div>
                 <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
@@ -355,35 +355,37 @@
 
 @code {
     private List<TaskDto> tasks = new();
-    private List<string>? userRoles; // Nullable banaya
-
-    private string? searchText;
-    private string? selectedStatus;
-    private string? selectedPriority;
-    private string? message;
+    private List<string>? userRoles;
+    private string? searchText, selectedStatus, selectedPriority, message;
+    private bool isError;
     private string dashboardPath = "/";
 
     protected override async Task OnInitializedAsync()
     {
-        var uri = Nav.ToAbsoluteUri(Nav.Uri);
-        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var msg))
+        try
         {
-            message = msg;
-            _ = Task.Run(async () => { await Task.Delay(4000); message = null; await InvokeAsync(StateHasChanged); });
+            var uri = Nav.ToAbsoluteUri(Nav.Uri);
+            if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("success", out var msg))
+            {
+                message = msg;
+                isError = false;
+                TriggerToastAutoClose();
+            }
+
+            using var db = DbFactory.CreateDbContext();
+            var sessionUser = await CurrentUser.GetUserAsync();
+            if (sessionUser == null) return;
+
+            userRoles = await (from ur in db.UserRoles
+                               join r in db.Roles on ur.RoleId equals r.Id
+                               where ur.UserId == sessionUser.Id
+                               select r.Name.ToLower()).ToListAsync();
+
+            bool isOrgAdmin = userRoles != null && userRoles.Contains("orgadmin");
+            dashboardPath = isOrgAdmin ? "/org/dashboard" : "/hr/dashboard";
+            tasks = await TaskService.GetTasksAssignedByMeAsync();
         }
-
-        using var db = DbFactory.CreateDbContext();
-        var sessionUser = await CurrentUser.GetUserAsync();
-        if (sessionUser == null) return;
-
-        userRoles = await (from ur in db.UserRoles
-                           join r in db.Roles on ur.RoleId equals r.Id
-                           where ur.UserId == sessionUser.Id
-                           select r.Name.ToLower()).ToListAsync();
-
-        bool isOrgAdmin = userRoles != null && userRoles.Contains("orgadmin");
-        dashboardPath = isOrgAdmin ? "/org/dashboard" : "/hr/dashboard";
-        tasks = await TaskService.GetTasksAssignedByMeAsync();
+        catch (Exception ex) { message = ex.Message; isError = true; TriggerToastAutoClose(); }
     }
 
     private List<TaskDto> filteredTasks => tasks.Where(t =>
@@ -396,4 +398,14 @@
     private string GetStatusClass(string status) => status switch { "Completed" => "bg-success-soft text-success", "Pending" => "bg-warning-soft text-warning", "In Progress" => "bg-info-soft text-info", _ => "bg-secondary text-dark" };
     private string GetPriorityClass(string priority) => priority switch { "High" => "bg-danger text-danger bg-opacity-10", "Medium" => "bg-primary text-primary bg-opacity-10", "Low" => "bg-secondary text-secondary bg-opacity-10", _ => "bg-light text-dark" };
     private string GetProgressColor(string status) => status switch { "Completed" => "bg-success", "In Progress" => "bg-info", _ => "bg-warning" };
+
+    private void TriggerToastAutoClose()
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4000);
+            message = null;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
 }
