@@ -156,6 +156,10 @@ builder.Services.AddScoped<AssetService>();
 builder.Services.AddScoped<OfficeLocationService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<NotificationService>();
+
+builder.Services.AddScoped<AiAssistantService>();
+// Add to Program.cs after other service registrations
+builder.Services.AddScoped<TicketService>();
 //builder.Services.AddHostedService<DocumentEventMonitor>();
 // Add this with your other hosted services
 //builder.Services.AddHostedService<AIEventMonitor>();

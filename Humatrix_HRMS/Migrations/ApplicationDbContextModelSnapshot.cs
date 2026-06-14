@@ -24,6 +24,9 @@ namespace Humatrix_HRMS.Migrations
 
             modelBuilder.HasSequence("EmployeeCodeSequence");
 
+            modelBuilder.HasSequence<int>("TicketNumberSequence")
+                .StartsAt(1001L);
+
             modelBuilder.Entity("Humatrix_HRMS.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -188,6 +191,40 @@ namespace Humatrix_HRMS.Migrations
                     b.HasIndex("OrganizationId", "Module", "OccurredAt");
 
                     b.ToTable("ActivityLogs");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.AiConversation", b =>
+                {
+                    b.Property<Guid>("ConversationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Intent")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Query")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Response")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ConversationId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AiConversations");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.ApprovalHistory", b =>
@@ -2138,6 +2175,36 @@ namespace Humatrix_HRMS.Migrations
                     b.ToTable("OvertimeRequests");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.PendingAiAction", b =>
+                {
+                    b.Property<Guid>("PendingActionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ActionJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("PendingActionId");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PendingAiActions");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.ProcurementRequest", b =>
                 {
                     b.Property<Guid>("ProcurementRequestId")
@@ -2238,6 +2305,69 @@ namespace Humatrix_HRMS.Migrations
                     b.ToTable("Shifts");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.SupportTicket", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AssignedToEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Resolution")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("TicketNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("TicketId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SupportTickets");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.TaskItem", b =>
                 {
                     b.Property<Guid>("TaskId")
@@ -2286,6 +2416,33 @@ namespace Humatrix_HRMS.Migrations
                     b.HasIndex("AssignedTo");
 
                     b.ToTable("Tasks");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.TicketReply", b =>
+                {
+                    b.Property<Guid>("ReplyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("ReplyId");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketReplies");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.UserInvite", b =>
@@ -3108,6 +3265,16 @@ namespace Humatrix_HRMS.Migrations
                     b.Navigation("RequestedByEmployee");
                 });
 
+            modelBuilder.Entity("Humatrix_HRMS.Models.SupportTicket", b =>
+                {
+                    b.HasOne("Humatrix_HRMS.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("Humatrix_HRMS.Models.TaskItem", b =>
                 {
                     b.HasOne("Humatrix_HRMS.Models.Employee", "AssignedToEmployee")
@@ -3117,6 +3284,17 @@ namespace Humatrix_HRMS.Migrations
                         .IsRequired();
 
                     b.Navigation("AssignedToEmployee");
+                });
+
+            modelBuilder.Entity("Humatrix_HRMS.Models.TicketReply", b =>
+                {
+                    b.HasOne("Humatrix_HRMS.Models.SupportTicket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("Humatrix_HRMS.Models.UserInvite", b =>

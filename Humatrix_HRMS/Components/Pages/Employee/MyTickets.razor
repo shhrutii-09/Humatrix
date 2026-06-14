@@ -1,0 +1,226 @@
+﻿@* @page "/employee/tickets"
+@page "/employee/tickets/{TicketId:guid}"
+@attribute [Authorize]
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.AI
+@using Microsoft.AspNetCore.Authorization
+@inject TicketService TicketService
+@inject CurrentUserService CurrentUserService
+@rendermode InteractiveServer
+
+<PageTitle>My Tickets</PageTitle>
+
+<div class="container-fluid py-4" style="max-width: 900px;">    
+
+    <div class="mb-3">
+        <h4 class="mb-0">🎫 My Support Tickets</h4>
+        <small class="text-muted">Issues you've raised — including those created automatically by the AI Assistant</small>
+    </div>
+
+    @if (Loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!Tickets.Any())
+    {
+        <div class="text-center text-muted py-5">
+            <div style="font-size:48px;">📭</div>
+            <p class="mt-2">You haven't raised any tickets yet.</p>
+            <p class="small">If the AI Assistant can't help with something, it will offer to create one for you.</p>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- Ticket List -->
+            <div class="col-md-5 mb-3">
+                <div class="list-group">
+                    @foreach (var t in Tickets)
+                    {
+                        <button class="list-group-item list-group-item-action @(SelectedTicket?.TicketId == t.TicketId ? "active" : "")"
+                                @onclick="@(() => SelectTicket(t.TicketId))">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="fw-semibold">#@t.TicketNumber — @t.Category</div>
+                                    <div class="small text-truncate" style="max-width: 220px;">@t.Description</div>
+                                    <div class="small text-muted mt-1">@t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</div>
+                                </div>
+                                <span class="badge @StatusBadge(t.Status)">@t.Status</span>
+                            </div>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Ticket Detail / Thread -->
+            <div class="col-md-7">
+                @if (SelectedTicket == null)
+                {
+                    <div class="text-center text-muted py-5">
+                        <p>Select a ticket to view the conversation.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="card shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center bg-white">
+                            <div>
+                                <strong>#@SelectedTicket.TicketNumber — @SelectedTicket.Category</strong>
+                                <div class="small text-muted">@SelectedTicket.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</div>
+                            </div>
+                            <span class="badge @StatusBadge(SelectedTicket.Status) fs-6">@SelectedTicket.Status</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="bg-light rounded p-3 mb-3">
+                                <strong>Your Issue</strong>
+                                <p class="mb-0 mt-1" style="white-space:pre-wrap;">@SelectedTicket.Description</p>
+                            </div>
+
+                            @if (SelectedTicket.Status == "Resolved" && !string.IsNullOrWhiteSpace(SelectedTicket.Resolution))
+                            {
+                                <div class="alert alert-success">
+                                    <strong>✅ Resolution from HR</strong>
+                                    <p class="mb-0 mt-1" style="white-space:pre-wrap;">@SelectedTicket.Resolution</p>
+                                </div>
+                            }
+
+                            <h6 class="mt-3">Conversation</h6>
+                            <div class="ticket-thread mb-3">
+                                @if (!Replies.Any())
+                                {
+                                    <p class="text-muted small">No replies yet. HR will respond here soon.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var r in Replies)
+                                    {
+                                        <div class="thread-msg @(r.IsStaff ? "staff" : "employee")">
+                                            <div class="thread-msg-header">
+                                                <strong>@(r.IsStaff ? "HR Team" : "You")</strong>
+                                                <span class="text-muted small">@r.CreatedAt.ToLocalTime().ToString("dd MMM, hh:mm tt")</span>
+                                            </div>
+                                            <div class="thread-msg-body">@r.Message</div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+
+                            <div class="input-group">
+                                <textarea class="form-control" rows="1" placeholder="Type a message to HR..."
+                                          @bind="ReplyText" @bind:event="oninput"></textarea>
+                                <button class="btn btn-primary" @onclick="SendReplyAsync" disabled="@string.IsNullOrWhiteSpace(ReplyText)">
+                                    Send
+                                </button>
+                            </div>
+                            @if (SelectedTicket.Status == "Resolved")
+                            {
+                                <div class="form-text">Replying will automatically reopen this ticket.</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .ticket-thread {
+        max-height: 320px;
+        overflow-y: auto;
+    }
+
+    .thread-msg {
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        max-width: 90%;
+    }
+
+        .thread-msg.employee {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+        }
+
+        .thread-msg.staff {
+            background: #f1f2f6;
+        }
+
+    .thread-msg-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 12px;
+        margin-bottom: 2px;
+    }
+
+    .thread-msg.employee .thread-msg-header {
+        color: rgba(255,255,255,0.85);
+    }
+
+    .thread-msg-body {
+        font-size: 13.5px;
+        white-space: pre-wrap;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public Guid? TicketId { get; set; }
+
+    private List<SupportTicket> Tickets = new();
+    private SupportTicket? SelectedTicket;
+    private List<TicketReplyViewDto> Replies = new();
+    private string ReplyText = "";
+    private bool Loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Tickets = await TicketService.GetMyTicketsAsync();
+
+        var target = TicketId.HasValue && Tickets.Any(t => t.TicketId == TicketId.Value)
+            ? TicketId.Value
+            : Tickets.FirstOrDefault()?.TicketId;
+
+        if (target.HasValue)
+            await SelectTicket(target.Value);
+
+        Loading = false;
+    }
+
+    private async Task SelectTicket(Guid ticketId)
+    {
+        SelectedTicket = await TicketService.GetTicketByIdAsync(ticketId);
+        Replies = await TicketService.GetRepliesAsync(ticketId);
+        ReplyText = "";
+    }
+
+    private async Task SendReplyAsync()
+    {
+        if (SelectedTicket == null || string.IsNullOrWhiteSpace(ReplyText)) return;
+
+        var user = await CurrentUserService.GetUserAsync();
+        if (user == null) return;
+
+        await TicketService.AddReplyAsync(SelectedTicket.TicketId, ReplyText.Trim(), user.Id);
+
+        ReplyText = "";
+        SelectedTicket = await TicketService.GetTicketByIdAsync(SelectedTicket.TicketId);
+        Replies = await TicketService.GetRepliesAsync(SelectedTicket!.TicketId);
+
+        // Refresh list so status badge updates if it was reopened
+        Tickets = await TicketService.GetMyTicketsAsync();
+    }
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "Open" => "bg-primary",
+        "InProgress" => "bg-warning text-dark",
+        "Resolved" => "bg-success",
+        _ => "bg-secondary"
+    };
+} *@

@@ -47,6 +47,8 @@
     </script>
 
     <script src="js/location.js"></script>
+    <script src="js/ai-assistant.js"></script>
+
     @* <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script> *@
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -115,6 +117,13 @@
         };
 
     </script> *@
+    <script>
+        window.scrollToBottom = function(element) {
+            if (element) {
+                element.scrollTop = element.scrollHeight;
+            }
+        };
+    </script>
 </body>
 
 </html>

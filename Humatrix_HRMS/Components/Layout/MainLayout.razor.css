@@ -154,6 +154,20 @@ main {
     font-weight: 500;
 }
 
+
+/* Make sure AI chat button is above everything and clickable */
+.ai-chat-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999 !important;
+}
+
+.ai-chat-button {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
 /* ==========================================================================
    5. COMPILER BACKWARDS COMPATIBILITY & SYSTEM FAULTS
    ========================================================================== */

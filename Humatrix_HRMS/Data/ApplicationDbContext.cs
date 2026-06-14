@@ -69,6 +69,13 @@ namespace Humatrix_HRMS.Data
         public DbSet<DocumentExpiryAlert> DocumentExpiryAlerts { get; set; }
         public DbSet<OrgDocumentTemplate> OrgDocumentTemplates { get; set; }
 
+
+
+        public DbSet<AiConversation> AiConversations { get; set; }
+        public DbSet<SupportTicket> SupportTickets { get; set; }
+        public DbSet<TicketReply> TicketReplies { get; set; }
+        public DbSet<PendingAiAction> PendingAiActions { get; set; }
+
         //public DbSet<OrgGeneratedDocument> OrgGeneratedDocuments => Set<OrgGeneratedDocument>();
         // In OnModelCreating
 
@@ -212,6 +219,59 @@ namespace Humatrix_HRMS.Data
             //        x.Status,
             //        x.ReviewLevel
             //    });
+
+            // Add to OnModelCreating in ApplicationDbContext.cs
+            // AI Conversations
+            modelBuilder.Entity<AiConversation>(entity =>
+            {
+                entity.HasKey(e => e.ConversationId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.CreatedAt);
+            });
+
+            // Support Tickets
+            modelBuilder.Entity<SupportTicket>(entity =>
+            {
+                entity.HasKey(e => e.TicketId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.OrganizationId);
+                entity.HasIndex(e => e.Status);
+                entity.Property(e => e.Category).HasMaxLength(100);
+                entity.Property(e => e.Priority).HasMaxLength(20);
+                entity.Property(e => e.Status).HasMaxLength(20);
+
+                entity.HasOne(e => e.Employee)
+                      .WithMany()
+                      .HasForeignKey(e => e.EmployeeId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // Ticket Replies
+            modelBuilder.Entity<TicketReply>(entity =>
+            {
+                entity.HasKey(e => e.ReplyId);
+                entity.HasIndex(e => e.TicketId);
+                entity.HasOne(e => e.Ticket)
+                      .WithMany()
+                      .HasForeignKey(e => e.TicketId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Add sequence for ticket numbers
+            modelBuilder.HasSequence<int>("TicketNumberSequence")
+                .StartsAt(1001)
+                .IncrementsBy(1);
+
+            // Pending AI Actions - ADD THIS SECTION
+            modelBuilder.Entity<PendingAiAction>(entity =>
+            {
+                entity.HasKey(e => e.PendingActionId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.ExpiresAt);
+                entity.Property(e => e.UserId).IsRequired().HasMaxLength(450);
+                entity.Property(e => e.ActionJson).IsRequired();
+            });
+
             // =========================================================================
             // ATTENDANCE CORRECTION INDEXES
             // =========================================================================

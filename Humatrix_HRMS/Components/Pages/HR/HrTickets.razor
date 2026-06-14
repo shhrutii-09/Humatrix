@@ -1,0 +1,379 @@
+﻿@* @page "/hr/tickets"
+@page "/admin/tickets"
+@page "/hr/tickets/{TicketId:guid}"
+@page "/admin/tickets/{TicketId:guid}"
+@attribute [Authorize(Roles = "HR,OrgAdmin")]
+@using Humatrix_HRMS.Models
+@using Humatrix_HRMS.Services
+@using Humatrix_HRMS.Services.AI
+@using Microsoft.AspNetCore.Authorization
+@inject TicketService TicketService
+@inject CurrentUserService CurrentUserService
+@rendermode InteractiveServer
+
+<PageTitle>Support Tickets</PageTitle>
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">🎫 Support Tickets</h4>
+            <small class="text-muted">Issues escalated by employees and the AI Assistant</small>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshAsync">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+
+    @if (Stats != null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small">Open</div>
+                        <div class="fs-3 fw-bold text-primary">@Stats.OpenTickets</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small">In Progress</div>
+                        <div class="fs-3 fw-bold text-warning">@Stats.InProgressTickets</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small">Resolved</div>
+                        <div class="fs-3 fw-bold text-success">@Stats.ResolvedTickets</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card kpi-card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="text-muted small">Avg. Resolution</div>
+                        <div class="fs-3 fw-bold">@Stats.AverageResolutionHours<small class="fs-6 text-muted"> hrs</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Filter Tabs -->
+    <ul class="nav nav-pills mb-3">
+        @foreach (var tab in FilterTabs)
+        {
+            <li class="nav-item">
+                <button class="nav-link @(ActiveFilter == tab ? "active" : "")"
+                        @onclick="@(() => SetFilter(tab))">
+                    @tab
+                </button>
+            </li>
+        }
+    </ul>
+
+    @if (Loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!Tickets.Any())
+    {
+        <div class="text-center text-muted py-5">
+            <div style="font-size:48px;">✅</div>
+            <p class="mt-2">No tickets in this view. Inbox zero!</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle bg-white shadow-sm rounded">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Employee</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in Tickets)
+                    {
+                        <tr>
+                            <td class="fw-semibold">#@t.TicketNumber</td>
+                            <td>@(t.Employee != null ? $"{t.Employee.FirstName} {t.Employee.LastName}" : "—")</td>
+                            <td>@t.Category</td>
+                            <td class="text-truncate" style="max-width:260px;">@t.Description</td>
+                            <td><span class="badge @PriorityBadge(t.Priority)">@t.Priority</span></td>
+                            <td><span class="badge @StatusBadge(t.Status)">@t.Status</span></td>
+                            <td>@t.CreatedAt.ToLocalTime().ToString("dd MMM, hh:mm tt")</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="@(() => OpenTicket(t.TicketId))">
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- ===================== TICKET DETAIL MODAL ===================== -->
+@if (SelectedTicket != null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseTicket"></div>
+    <div class="modal-dialog-custom">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header">
+                <div>
+                    <h5 class="mb-0">Ticket #@SelectedTicket.TicketNumber — @SelectedTicket.Category</h5>
+                    <small class="text-muted">
+                        @(SelectedTicket.Employee != null ? $"{SelectedTicket.Employee.FirstName} {SelectedTicket.Employee.LastName}" : "")
+                        • @SelectedTicket.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                    </small>
+                </div>
+                <button class="btn-close" @onclick="CloseTicket"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="d-flex gap-2 mb-3">
+                    <span class="badge @PriorityBadge(SelectedTicket.Priority)">@SelectedTicket.Priority Priority</span>
+                    <span class="badge @StatusBadge(SelectedTicket.Status)">@SelectedTicket.Status</span>
+                </div>
+
+                <div class="bg-light rounded p-3 mb-3">
+                    <strong>Original Issue</strong>
+                    <p class="mb-0 mt-1" style="white-space:pre-wrap;">@SelectedTicket.Description</p>
+                </div>
+
+                @if (SelectedTicket.Status == "Resolved" && !string.IsNullOrWhiteSpace(SelectedTicket.Resolution))
+                {
+                    <div class="alert alert-success">
+                        <strong>Resolution:</strong>
+                        <p class="mb-0 mt-1" style="white-space:pre-wrap;">@SelectedTicket.Resolution</p>
+                    </div>
+                }
+
+                <h6 class="mt-4">Conversation</h6>
+                <div class="ticket-thread mb-3">
+                    @if (!Replies.Any())
+                    {
+                        <p class="text-muted small">No replies yet.</p>
+                    }
+                    else
+                    {
+                        @foreach (var r in Replies)
+                        {
+                            <div class="thread-msg @(r.IsStaff ? "staff" : "employee")">
+                                <div class="thread-msg-header">
+                                    <strong>@r.AuthorName</strong>
+                                    <span class="text-muted small">@r.CreatedAt.ToLocalTime().ToString("dd MMM, hh:mm tt")</span>
+                                </div>
+                                <div class="thread-msg-body">@r.Message</div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                @if (SelectedTicket.Status != "Resolved")
+                {
+                    <div class="mb-3">
+                        <textarea class="form-control" rows="2" placeholder="Type a reply to the employee..."
+                                  @bind="ReplyText"></textarea>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer d-flex justify-content-between">
+                <div>
+                    @if (SelectedTicket.Status == "Resolved")
+                    {
+                        <button class="btn btn-outline-warning" @onclick="ReopenAsync">
+                            🔄 Reopen Ticket
+                        </button>
+                    }
+                </div>
+                <div class="d-flex gap-2">
+                    @if (SelectedTicket.Status != "Resolved")
+                    {
+                        <button class="btn btn-outline-primary" @onclick="SendReplyAsync" disabled="@string.IsNullOrWhiteSpace(ReplyText)">
+                            💬 Send Reply
+                        </button>
+                        <button class="btn btn-success" @onclick="@(() => ShowResolveBox = !ShowResolveBox)">
+                            ✅ Resolve
+                        </button>
+                    }
+                    <button class="btn btn-secondary" @onclick="CloseTicket">Close</button>
+                </div>
+            </div>
+
+            @if (ShowResolveBox)
+            {
+                <div class="modal-footer flex-column align-items-stretch border-top-0 pt-0">
+                    <label class="form-label small">Resolution note (shown to the employee)</label>
+                    <textarea class="form-control mb-2" rows="2" @bind="ResolutionText"></textarea>
+                    <button class="btn btn-success" @onclick="ResolveAsync" disabled="@string.IsNullOrWhiteSpace(ResolutionText)">
+                        Confirm Resolve
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .kpi-card { border-radius: 12px; }
+
+    .modal-backdrop-custom {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1040;
+    }
+
+    .modal-dialog-custom {
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 100%; max-width: 640px; max-height: 88vh; overflow-y: auto;
+        z-index: 1050; border-radius: 12px; background: white;
+    }
+
+    .ticket-thread { max-height: 260px; overflow-y: auto; }
+
+    .thread-msg {
+        border-radius: 10px; padding: 8px 12px; margin-bottom: 8px;
+        max-width: 90%;
+    }
+
+    .thread-msg.employee { background: #f1f2f6; }
+    .thread-msg.staff { background: #e7e9ff; margin-left: auto; }
+
+    .thread-msg-header { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 2px; }
+    .thread-msg-body { font-size: 13.5px; white-space: pre-wrap; }
+</style>
+
+@code {
+    [Parameter]
+    public Guid? TicketId { get; set; }
+
+    private static readonly string[] FilterTabs = { "Open", "InProgress", "Resolved", "All" };
+
+    private string ActiveFilter = "Open";
+    private List<SupportTicket> Tickets = new();
+    private DashboardStatsDto? Stats;
+    private bool Loading = true;
+
+    private SupportTicket? SelectedTicket;
+    private List<TicketReplyViewDto> Replies = new();
+    private string ReplyText = "";
+    private string ResolutionText = "";
+    private bool ShowResolveBox = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TicketId.HasValue)
+            ActiveFilter = "All"; // make sure deep-linked ticket isn't hidden by the default filter
+
+        await RefreshAsync();
+
+        if (TicketId.HasValue)
+            await OpenTicket(TicketId.Value);
+    }
+
+    private async Task RefreshAsync()
+    {
+        Loading = true;
+        StateHasChanged();
+
+        var user = await CurrentUserService.GetUserAsync();
+        if (user?.OrganizationId != null)
+            Stats = await TicketService.GetTicketDashboardStatsAsync(user.OrganizationId.Value);
+
+        await LoadTicketsAsync();
+
+        Loading = false;
+    }
+
+    private async Task LoadTicketsAsync()
+    {
+        var status = ActiveFilter == "All" ? null : ActiveFilter;
+        Tickets = await TicketService.GetTicketsForHRAsync(status);
+    }
+
+    private async Task SetFilter(string filter)
+    {
+        ActiveFilter = filter;
+        Loading = true;
+        await LoadTicketsAsync();
+        Loading = false;
+    }
+
+    private async Task OpenTicket(Guid ticketId)
+    {
+        SelectedTicket = await TicketService.GetTicketByIdAsync(ticketId);
+        Replies = await TicketService.GetRepliesAsync(ticketId);
+        ReplyText = "";
+        ResolutionText = "";
+        ShowResolveBox = false;
+    }
+
+    private void CloseTicket()
+    {
+        SelectedTicket = null;
+        Replies.Clear();
+    }
+
+    private async Task SendReplyAsync()
+    {
+        if (SelectedTicket == null || string.IsNullOrWhiteSpace(ReplyText)) return;
+
+        var user = await CurrentUserService.GetUserAsync();
+        if (user == null) return;
+
+        await TicketService.AddReplyAsync(SelectedTicket.TicketId, ReplyText.Trim(), user.Id);
+
+        ReplyText = "";
+        Replies = await TicketService.GetRepliesAsync(SelectedTicket.TicketId);
+    }
+
+    private async Task ResolveAsync()
+    {
+        if (SelectedTicket == null || string.IsNullOrWhiteSpace(ResolutionText)) return;
+
+        SelectedTicket = await TicketService.ResolveTicketAsync(SelectedTicket.TicketId, ResolutionText.Trim());
+        ShowResolveBox = false;
+        ResolutionText = "";
+        await LoadTicketsAsync();
+    }
+
+    private async Task ReopenAsync()
+    {
+        if (SelectedTicket == null) return;
+
+        SelectedTicket = await TicketService.ReopenTicketAsync(SelectedTicket.TicketId, "Reopened by HR");
+        await LoadTicketsAsync();
+    }
+
+    private static string PriorityBadge(string priority) => priority switch
+    {
+        "Urgent" => "bg-danger",
+        "High" => "bg-warning text-dark",
+        "Medium" => "bg-info text-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string StatusBadge(string status) => status switch
+    {
+        "Open" => "bg-primary",
+        "InProgress" => "bg-warning text-dark",
+        "Resolved" => "bg-success",
+        _ => "bg-secondary"
+    };
+} *@
