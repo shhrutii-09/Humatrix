@@ -27,7 +27,7 @@ builder.Services.AddScoped<IdentityUserAccessor>();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-// Web  API
+// Web API
 builder.Services.AddControllers();
 
 // Add Swagger for API documentation
