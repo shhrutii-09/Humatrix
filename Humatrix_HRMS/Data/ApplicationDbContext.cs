@@ -272,6 +272,9 @@ namespace Humatrix_HRMS.Data
                 entity.Property(e => e.ActionJson).IsRequired();
             });
 
+            modelBuilder.ApplyConfiguration(new SupportTicketConfiguration());
+            modelBuilder.ApplyConfiguration(new TicketReplyConfiguration());
+
             // =========================================================================
             // ATTENDANCE CORRECTION INDEXES
             // =========================================================================

@@ -6,96 +6,284 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Humatrix_HRMS.Services.AI;
 
+/// <summary>
+/// Centralised helpdesk service.
+///
+/// Scope rules (enforced at the service layer — never trust the UI):
+///   OrgAdmin  → sees / manages ALL tickets within their organisation.
+///   HR        → sees / manages ONLY tickets raised by employees in the
+///               same department as the HR's own employee record.
+///               An HR user cannot see tickets they raised themselves
+///               (those appear in their employee "My Tickets" view).
+///   Employee  → sees / replies to ONLY tickets they personally raised.
+/// </summary>
 public class TicketService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly CurrentUserService _currentUser;
     private readonly NotificationService _notificationService;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ILogger<TicketService> _logger;
 
     public TicketService(
-        ApplicationDbContext db,
+        IDbContextFactory<ApplicationDbContext> dbFactory,
         CurrentUserService currentUser,
         NotificationService notificationService,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        ILogger<TicketService> logger)
     {
-        _db = db;
+        _dbFactory = dbFactory;
         _currentUser = currentUser;
         _notificationService = notificationService;
         _userManager = userManager;
+        _logger = logger;
     }
 
-    public async Task<List<SupportTicket>> GetTicketsForHRAsync(string? status = null)
+    // ═══════════════════════════════════════════════════════════════════════
+    // INTERNAL HELPERS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Returns the caller's role context.  Never throws — returns null on failure.
+    /// </summary>
+    private async Task<CallerContext?> GetCallerContextAsync()
     {
         var user = await _currentUser.GetUserAsync();
-        if (user == null) return new List<SupportTicket>();
+        if (user == null) return null;
 
         var roles = await _userManager.GetRolesAsync(user);
-        var isOrgAdmin = roles.Contains("OrgAdmin");
-        var isHR = roles.Contains("HR");
 
-        var query = _db.SupportTickets
-            .Include(t => t.Employee)
-            .Where(t => t.OrganizationId == user.OrganizationId);
+        await using var db = await _dbFactory.CreateDbContextAsync();
 
-        if (isHR && !isOrgAdmin)
+        var employee = await db.Employees
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.UserId == user.Id);
+
+        return new CallerContext
         {
-            // HR sees only tickets from their department
-            var employee = await _db.Employees
-                .FirstOrDefaultAsync(e => e.UserId == user.Id);
+            UserId = user.Id,
+            OrganizationId = user.OrganizationId ?? Guid.Empty,
+            IsOrgAdmin = roles.Contains("OrgAdmin"),
+            IsHR = roles.Contains("HR"),
+            Employee = employee
+        };
+    }
 
-            if (employee != null)
-            {
-                query = query.Where(t => t.Employee != null && t.Employee.DepartmentId == employee.DepartmentId);
-            }
+    /// <summary>
+    /// Builds an IQueryable scoped to exactly what the current caller is
+    /// authorised to see. This is the single source of truth for all list
+    /// and existence checks — every public method uses it.
+    /// </summary>
+    private IQueryable<SupportTicket> ScopedTicketQuery(
+        ApplicationDbContext db,
+        CallerContext ctx)
+    {
+        var query = db.SupportTickets
+            .Where(t => t.OrganizationId == ctx.OrganizationId);
+
+        if (ctx.IsOrgAdmin)
+        {
+            // OrgAdmin sees ALL tickets in their org.
+            return query;
         }
 
-        if (!string.IsNullOrEmpty(status))
+        if (ctx.IsHR)
+        {
+            if (ctx.Employee == null)
+            {
+                // HR with no employee record — return nothing (safety net).
+                return query.Where(_ => false);
+            }
+
+            var deptId = ctx.Employee.DepartmentId;
+
+            // HR sees tickets from their department employees only.
+            // They do NOT see tickets they raised themselves (those are in "My Tickets").
+            return query.Where(t =>
+                t.Employee != null &&
+                t.Employee.DepartmentId == deptId &&
+                t.UserId != ctx.UserId);
+        }
+
+        // Employee — should not call management methods, but guard anyway.
+        return query.Where(t => t.UserId == ctx.UserId);
+    }
+
+    /// <summary>
+    /// Verifies that the given ticket is within the caller's scope.
+    /// Throws UnauthorizedAccessException on scope violation.
+    /// </summary>
+    private async Task AssertTicketInScopeAsync(
+        ApplicationDbContext db,
+        CallerContext ctx,
+        Guid ticketId)
+    {
+        var exists = await ScopedTicketQuery(db, ctx)
+            .AnyAsync(t => t.TicketId == ticketId);
+
+        if (!exists)
+        {
+            _logger.LogWarning(
+                "Scope violation: user {UserId} attempted to access ticket {TicketId}",
+                ctx.UserId, ticketId);
+
+            throw new UnauthorizedAccessException(
+                "You do not have access to this ticket.");
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // READ — FOR HR / ORGADMIN MANAGEMENT VIEW
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public async Task<List<SupportTicket>> GetTicketsForHRAsync(
+        string? status = null,
+        string? priority = null,
+        string? category = null,
+        string? assignedToUserId = null,
+        string? search = null)
+    {
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null || ctx.OrganizationId == Guid.Empty)
+            return new List<SupportTicket>();
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var query = ScopedTicketQuery(db, ctx)
+            .Include(t => t.Employee)
+            .Include(t => t.AssignedTo)
+            .AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(t => t.Status == status);
 
-        return await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
+        if (!string.IsNullOrWhiteSpace(priority))
+            query = query.Where(t => t.Priority == priority);
+
+        if (!string.IsNullOrWhiteSpace(category))
+            query = query.Where(t => t.Category == category);
+
+        if (!string.IsNullOrWhiteSpace(assignedToUserId))
+            query = query.Where(t => t.AssignedToUserId == assignedToUserId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(t =>
+                t.Description.ToLower().Contains(s) ||
+                t.Category.ToLower().Contains(s) ||
+                (t.Employee != null && (t.Employee.FirstName + " " + t.Employee.LastName).ToLower().Contains(s)));
+        }
+
+        return await query
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync();
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // READ — FOR EMPLOYEE "MY TICKETS"
+    // ═══════════════════════════════════════════════════════════════════════
 
     public async Task<List<SupportTicket>> GetMyTicketsAsync()
     {
         var user = await _currentUser.GetUserAsync();
         if (user == null) return new List<SupportTicket>();
 
-        var employee = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
+        await using var db = await _dbFactory.CreateDbContextAsync();
 
-        return await _db.SupportTickets
-            .Where(t => t.UserId == user.Id || (employee != null && t.EmployeeId == employee.EmployeeId))
+        // Only the user's own tickets — no OR-conditions that could leak
+        // another employee's records.
+        return await db.SupportTickets
+            .Where(t => t.UserId == user.Id)
             .OrderByDescending(t => t.CreatedAt)
+            .AsNoTracking()
             .ToListAsync();
     }
 
-    public async Task<SupportTicket?> GetTicketByIdAsync(Guid ticketId)
+    // ═══════════════════════════════════════════════════════════════════════
+    // READ — SINGLE TICKET (scope-guarded)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Fetches a single ticket.
+    /// For HR/OrgAdmin callers, enforces department/org scope.
+    /// For Employee callers, enforces ownership.
+    /// Returns null if not found; throws UnauthorizedAccessException on scope violation.
+    /// </summary>
+    public async Task<SupportTicket?> GetTicketByIdAsync(Guid ticketId, bool isManagementView = false)
     {
-        return await _db.SupportTickets
-            .Include(t => t.Employee)
-            .FirstOrDefaultAsync(t => t.TicketId == ticketId);
+        var user = await _currentUser.GetUserAsync();
+        if (user == null) return null;
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        if (isManagementView)
+        {
+            var ctx = await GetCallerContextAsync();
+            if (ctx == null) return null;
+
+            await AssertTicketInScopeAsync(db, ctx, ticketId);
+
+            return await db.SupportTickets
+                .Include(t => t.Employee)
+                .Include(t => t.AssignedTo)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TicketId == ticketId);
+        }
+        else
+        {
+            // Employee — strictly their own tickets
+            return await db.SupportTickets
+                .Include(t => t.Employee)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TicketId == ticketId && t.UserId == user.Id);
+        }
     }
 
-    public async Task<List<TicketReplyViewDto>> GetRepliesAsync(Guid ticketId)
+    // ═══════════════════════════════════════════════════════════════════════
+    // READ — REPLIES
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Returns replies for a ticket.
+    /// Pass <paramref name="includeInternalNotes"/> = true for HR/OrgAdmin views only.
+    /// Employee views must never see internal notes.
+    /// </summary>
+    public async Task<List<TicketReplyViewDto>> GetRepliesAsync(
+        Guid ticketId,
+        bool includeInternalNotes = false)
     {
-        var replies = await _db.TicketReplies
-            .Where(r => r.TicketId == ticketId)
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var query = db.TicketReplies
+            .Where(r => r.TicketId == ticketId);
+
+        if (!includeInternalNotes)
+            query = query.Where(r => !r.IsInternalNote);
+
+        var replies = await query
             .OrderBy(r => r.CreatedAt)
+            .AsNoTracking()
             .ToListAsync();
 
         var result = new List<TicketReplyViewDto>();
 
         foreach (var r in replies)
         {
-            var user = await _userManager.FindByIdAsync(r.UserId);
-            var roles = user != null ? await _userManager.GetRolesAsync(user) : new List<string>();
+            var replyUser = await _userManager.FindByIdAsync(r.UserId);
+            var roles = replyUser != null
+                ? await _userManager.GetRolesAsync(replyUser)
+                : new List<string>();
 
             result.Add(new TicketReplyViewDto
             {
                 ReplyId = r.ReplyId,
                 UserId = r.UserId,
-                AuthorName = user != null ? $"{user.FirstName} {user.LastName}".Trim() : "Unknown",
+                AuthorName = replyUser != null
+                    ? $"{replyUser.FirstName} {replyUser.LastName}".Trim()
+                    : "Unknown",
                 IsStaff = roles.Contains("HR") || roles.Contains("OrgAdmin"),
+                IsInternalNote = r.IsInternalNote,
                 Message = r.Message,
                 CreatedAt = r.CreatedAt
             });
@@ -104,132 +292,457 @@ public class TicketService
         return result;
     }
 
-    public async Task<SupportTicket> AddReplyAsync(Guid ticketId, string message, string userId)
+    // ═══════════════════════════════════════════════════════════════════════
+    // CREATE — EMPLOYEE RAISES A TICKET
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public async Task<SupportTicket> CreateTicketAsync(
+        string category,
+        string description,
+        string priority = "Medium",
+        string source = "Manual")
     {
-        var ticket = await _db.SupportTickets.FindAsync(ticketId);
+        var user = await _currentUser.GetUserAsync();
+        if (user == null)
+            throw new InvalidOperationException("User not authenticated.");
+
+        if (user.OrganizationId == null)
+            throw new InvalidOperationException("User is not associated with an organisation.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var employee = await db.Employees
+            .FirstOrDefaultAsync(e => e.UserId == user.Id);
+        var nextTicketNumber =
+    (await db.SupportTickets
+        .MaxAsync(t => (int?)t.TicketNumber) ?? 1000) + 1;
+        var ticket = new SupportTicket
+        {
+            TicketId = Guid.NewGuid(),
+
+            TicketNumber = nextTicketNumber,
+
+            OrganizationId = user.OrganizationId.Value,
+            UserId = user.Id,
+            EmployeeId = employee?.EmployeeId,
+
+            Category = category.Trim(),
+            Description = description.Trim(),
+
+            Priority = priority,
+            Status = "Open",
+            Source = source,
+
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        //db.SupportTickets.Add(ticket);
+        //await db.SaveChangesAsync();
+        db.SupportTickets.Add(ticket);
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Ticket creation failed");
+            _logger.LogError("INNER ERROR: {Error}",
+                ex.InnerException?.Message);
+
+            throw new Exception(
+                ex.InnerException?.Message ??
+                ex.Message);
+        }
+
+        // Notify the department HR (and always the OrgAdmin)
+        await _notificationService.CreateOrgAdminNotificationsAsync(
+            user.OrganizationId.Value,
+            $"New Ticket #{ticket.TicketNumber}: {category}",
+            description.Length > 100 ? description[..100] + "…" : description,
+            $"/admin/tickets/{ticket.TicketId}");
+
+        return ticket;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // REPLY — SCOPED
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Adds a reply.  HR/OrgAdmin replies go through scope validation.
+    /// Employee replies validate ticket ownership.
+    /// </summary>
+    public async Task<SupportTicket> AddReplyAsync(
+        Guid ticketId,
+        string message,
+        bool isInternalNote = false,
+        bool isManagementView = false)
+    {
+        var user = await _currentUser.GetUserAsync();
+        if (user == null)
+            throw new UnauthorizedAccessException("Not authenticated.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        SupportTicket? ticket;
+
+        if (isManagementView)
+        {
+            var ctx = await GetCallerContextAsync();
+            if (ctx == null) throw new UnauthorizedAccessException("Not authenticated.");
+
+            // Internal notes only for staff
+            if (isInternalNote && !ctx.IsHR && !ctx.IsOrgAdmin)
+                throw new UnauthorizedAccessException("Only HR/OrgAdmin can add internal notes.");
+
+            await AssertTicketInScopeAsync(db, ctx, ticketId);
+            ticket = await db.SupportTickets.FindAsync(ticketId);
+        }
+        else
+        {
+            // Employee — must own the ticket
+            ticket = await db.SupportTickets
+                .FirstOrDefaultAsync(t => t.TicketId == ticketId && t.UserId == user.Id);
+
+            if (ticket == null)
+                throw new UnauthorizedAccessException("You do not have access to this ticket.");
+
+            // Employees cannot add internal notes
+            isInternalNote = false;
+        }
+
         if (ticket == null)
-            throw new Exception("Ticket not found");
+            throw new KeyNotFoundException("Ticket not found.");
 
         var reply = new TicketReply
         {
             ReplyId = Guid.NewGuid(),
             TicketId = ticketId,
-            UserId = userId,
-            Message = message,
+            UserId = user.Id,
+            Message = message.Trim(),
+            IsInternalNote = isInternalNote,
             CreatedAt = DateTime.UtcNow
         };
 
-        _db.TicketReplies.Add(reply);
+        db.TicketReplies.Add(reply);
 
-        // Update ticket status if it was resolved and now being reopened
-        if (ticket.Status == "Resolved")
+        // Auto-reopen if resolved and employee replied
+        if (ticket.Status == "Resolved" && !isManagementView)
             ticket.Status = "Open";
 
-        await _db.SaveChangesAsync();
+        // Auto-move to InProgress when HR first replies
+        if (isManagementView && !isInternalNote && ticket.Status == "Open")
+            ticket.Status = "InProgress";
 
-        // Notify the other party
-        var isHRorAdmin = await IsUserHRorAdmin(userId, ticket.OrganizationId);
+        ticket.UpdatedAt = DateTime.UtcNow;
 
-        if (isHRorAdmin && ticket.UserId != null)
+        await db.SaveChangesAsync();
+
+        // ── Notifications ─────────────────────────────────────────────────
+        if (!isInternalNote)
         {
-            await _notificationService.CreateNotificationAsync(
-                ticket.UserId,
-                $"New reply on Ticket #{ticket.TicketNumber}",
-                message.Length > 100 ? message.Substring(0, 100) + "..." : message,
-                $"/employee/tickets/{ticketId}");
-        }
-        else if (ticket.UserId != userId)
-        {
-            // Notify HR/Admin
-            await _notificationService.CreateOrgAdminNotificationsAsync(
-                ticket.OrganizationId,
-                $"New reply on Ticket #{ticket.TicketNumber}",
-                message.Length > 100 ? message.Substring(0, 100) + "..." : message,
-                $"/admin/tickets/{ticketId}");
+            if (isManagementView)
+            {
+                // HR replied → notify employee
+                if (!string.IsNullOrEmpty(ticket.UserId))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        ticket.UserId,
+                        $"New reply on your Ticket #{ticket.TicketNumber}",
+                        message.Length > 100 ? message[..100] + "…" : message,
+                        $"/employee/tickets/{ticketId}");
+                }
+            }
+            else
+            {
+                // Employee replied → notify the assigned HR (or broadcast to OrgAdmin)
+                if (!string.IsNullOrEmpty(ticket.AssignedToUserId))
+                {
+                    await _notificationService.CreateNotificationAsync(
+                        ticket.AssignedToUserId,
+                        $"Employee reply on Ticket #{ticket.TicketNumber}",
+                        message.Length > 100 ? message[..100] + "…" : message,
+                        $"/admin/tickets/{ticketId}");
+                }
+                else
+                {
+                    await _notificationService.CreateOrgAdminNotificationsAsync(
+                        ticket.OrganizationId,
+                        $"Employee reply on Ticket #{ticket.TicketNumber}",
+                        message.Length > 100 ? message[..100] + "…" : message,
+                        $"/admin/tickets/{ticketId}");
+                }
+            }
         }
 
         return ticket;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // ASSIGN TICKET (OrgAdmin only)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public async Task AssignTicketAsync(Guid ticketId, string assignToUserId)
+    {
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null) throw new UnauthorizedAccessException();
+
+        // Only OrgAdmin can assign tickets
+        if (!ctx.IsOrgAdmin)
+            throw new UnauthorizedAccessException("Only OrgAdmin can assign tickets.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        await AssertTicketInScopeAsync(db, ctx, ticketId);
+
+        var ticket = await db.SupportTickets.FindAsync(ticketId)
+            ?? throw new KeyNotFoundException("Ticket not found.");
+
+        // Validate the assignee belongs to the same org and is HR
+        var assignee = await _userManager.FindByIdAsync(assignToUserId);
+        if (assignee == null || assignee.OrganizationId != ctx.OrganizationId)
+            throw new InvalidOperationException("Invalid assignee.");
+
+        var assigneeRoles = await _userManager.GetRolesAsync(assignee);
+        if (!assigneeRoles.Contains("HR") && !assigneeRoles.Contains("OrgAdmin"))
+            throw new InvalidOperationException("Tickets can only be assigned to HR or OrgAdmin users.");
+
+        var assigneeEmployee = await db.Employees
+            .FirstOrDefaultAsync(e => e.UserId == assignToUserId);
+
+        ticket.AssignedToUserId = assignToUserId;
+        ticket.AssignedToEmployeeId = assigneeEmployee?.EmployeeId;
+        ticket.UpdatedAt = DateTime.UtcNow;
+
+        if (ticket.Status == "Open")
+            ticket.Status = "InProgress";
+
+        await db.SaveChangesAsync();
+
+        // Notify the newly assigned HR
+        await _notificationService.CreateNotificationAsync(
+            assignToUserId,
+            $"Ticket #{ticket.TicketNumber} assigned to you",
+            ticket.Description.Length > 100 ? ticket.Description[..100] + "…" : ticket.Description,
+            $"/admin/tickets/{ticketId}");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // RESOLVE (scope-guarded)
+    // ═══════════════════════════════════════════════════════════════════════
+
     public async Task<SupportTicket> ResolveTicketAsync(Guid ticketId, string resolution)
     {
-        var ticket = await _db.SupportTickets.FindAsync(ticketId);
-        if (ticket == null)
-            throw new Exception("Ticket not found");
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null || (!ctx.IsHR && !ctx.IsOrgAdmin))
+            throw new UnauthorizedAccessException("Only HR or OrgAdmin can resolve tickets.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        await AssertTicketInScopeAsync(db, ctx, ticketId);
+
+        var ticket = await db.SupportTickets.FindAsync(ticketId)
+            ?? throw new KeyNotFoundException("Ticket not found.");
+
+        if (ticket.Status == "Resolved")
+            throw new InvalidOperationException("Ticket is already resolved.");
 
         ticket.Status = "Resolved";
         ticket.ResolvedAt = DateTime.UtcNow;
-        ticket.Resolution = resolution;
+        ticket.Resolution = resolution.Trim();
+        ticket.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         if (!string.IsNullOrEmpty(ticket.UserId))
         {
             await _notificationService.CreateNotificationAsync(
                 ticket.UserId,
-                $"Ticket #{ticket.TicketNumber} Resolved",
-                $"Your ticket has been resolved.\n\nResolution: {resolution}",
+                $"Your Ticket #{ticket.TicketNumber} has been resolved",
+                $"Resolution: {(resolution.Length > 150 ? resolution[..150] + "…" : resolution)}",
                 $"/employee/tickets/{ticketId}");
         }
 
         return ticket;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // REOPEN (scope-guarded)
+    // ═══════════════════════════════════════════════════════════════════════
+
     public async Task<SupportTicket> ReopenTicketAsync(Guid ticketId, string reason)
     {
-        var ticket = await _db.SupportTickets.FindAsync(ticketId);
-        if (ticket == null)
-            throw new Exception("Ticket not found");
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null || (!ctx.IsHR && !ctx.IsOrgAdmin))
+            throw new UnauthorizedAccessException("Only HR or OrgAdmin can reopen tickets.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        await AssertTicketInScopeAsync(db, ctx, ticketId);
+
+        var ticket = await db.SupportTickets.FindAsync(ticketId)
+            ?? throw new KeyNotFoundException("Ticket not found.");
 
         ticket.Status = "Open";
         ticket.ResolvedAt = null;
         ticket.Resolution = null;
+        ticket.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
-        await _notificationService.CreateOrgAdminNotificationsAsync(
-            ticket.OrganizationId,
-            $"Ticket #{ticket.TicketNumber} Reopened",
-            reason,
-            $"/admin/tickets/{ticketId}");
+        if (!string.IsNullOrEmpty(ticket.UserId))
+        {
+            await _notificationService.CreateNotificationAsync(
+                ticket.UserId,
+                $"Your Ticket #{ticket.TicketNumber} has been reopened",
+                reason,
+                $"/employee/tickets/{ticketId}");
+        }
 
         return ticket;
     }
 
-    public async Task<DashboardStatsDto> GetTicketDashboardStatsAsync(Guid organizationId)
+    // ═══════════════════════════════════════════════════════════════════════
+    // CLOSE (scope-guarded; different from Resolved — ticket is archived)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public async Task<SupportTicket> CloseTicketAsync(Guid ticketId)
     {
-        var query = _db.SupportTickets.Where(t => t.OrganizationId == organizationId);
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null || !ctx.IsOrgAdmin)
+            throw new UnauthorizedAccessException("Only OrgAdmin can permanently close tickets.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        await AssertTicketInScopeAsync(db, ctx, ticketId);
+
+        var ticket = await db.SupportTickets.FindAsync(ticketId)
+            ?? throw new KeyNotFoundException("Ticket not found.");
+
+        ticket.Status = "Closed";
+        ticket.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        return ticket;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DASHBOARD STATS — CORRECTLY SCOPED
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public async Task<DashboardStatsDto> GetTicketDashboardStatsAsync()
+    {
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null || ctx.OrganizationId == Guid.Empty)
+            return new DashboardStatsDto();
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        // Use the same scope query so HR only sees their dept's stats
+        var baseQuery = ScopedTicketQuery(db, ctx);
+
+        var now = DateTime.UtcNow;
 
         return new DashboardStatsDto
         {
-            OpenTickets = await query.CountAsync(t => t.Status == "Open"),
-            InProgressTickets = await query.CountAsync(t => t.Status == "InProgress"),
-            ResolvedTickets = await query.CountAsync(t => t.Status == "Resolved"),
-            TotalTicketsThisMonth = await query.CountAsync(t => t.CreatedAt.Month == DateTime.UtcNow.Month),
-            AverageResolutionHours = await CalculateAverageResolutionHoursAsync(organizationId)
+            OpenTickets =
+                await baseQuery.CountAsync(t => t.Status == "Open"),
+
+            InProgressTickets =
+                await baseQuery.CountAsync(t => t.Status == "InProgress"),
+
+            ResolvedTickets =
+                await baseQuery.CountAsync(t => t.Status == "Resolved"),
+
+            TotalTicketsThisMonth =
+                await baseQuery.CountAsync(t =>
+                    t.CreatedAt.Month == now.Month &&
+                    t.CreatedAt.Year == now.Year),
+
+            UnassignedTickets =
+                await baseQuery.CountAsync(t =>
+                    t.AssignedToUserId == null &&
+                    t.Status != "Resolved" &&
+                    t.Status != "Closed"),
+
+            AverageResolutionHours =
+                await CalculateAverageResolutionHoursAsync(baseQuery)
         };
     }
 
-    private async Task<double> CalculateAverageResolutionHoursAsync(Guid organizationId)
+    private static async Task<double> CalculateAverageResolutionHoursAsync(
+        IQueryable<SupportTicket> scopedQuery)
     {
-        var resolvedTickets = await _db.SupportTickets
-            .Where(t => t.OrganizationId == organizationId && t.Status == "Resolved" && t.ResolvedAt.HasValue)
+        var resolved = await scopedQuery
+            .Where(t => t.Status == "Resolved" && t.ResolvedAt.HasValue)
+            .Select(t => new { t.CreatedAt, ResolvedAt = t.ResolvedAt!.Value })
             .ToListAsync();
 
-        if (!resolvedTickets.Any()) return 0;
+        if (!resolved.Any()) return 0;
 
-        var totalHours = resolvedTickets.Sum(t => (t.ResolvedAt!.Value - t.CreatedAt).TotalHours);
-        return Math.Round(totalHours / resolvedTickets.Count, 1);
+        var totalHours = resolved.Sum(t => (t.ResolvedAt - t.CreatedAt).TotalHours);
+        return Math.Round(totalHours / resolved.Count, 1);
     }
 
-    private async Task<bool> IsUserHRorAdmin(string userId, Guid organizationId)
+    // ═══════════════════════════════════════════════════════════════════════
+    // HELPER: list of HR users in scope (for assignment dropdown)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public async Task<List<HrStaffDto>> GetAssignableHRUsersAsync()
     {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null) return false;
+        var ctx = await GetCallerContextAsync();
+        if (ctx == null || !ctx.IsOrgAdmin)
+            return new List<HrStaffDto>();
 
-        var roles = await _userManager.GetRolesAsync(user);
-        return roles.Contains("HR") || roles.Contains("OrgAdmin");
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var hrRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == "HR");
+        if (hrRole == null) return new List<HrStaffDto>();
+
+        var hrUserIds = await db.UserRoles
+            .Where(ur => ur.RoleId == hrRole.Id)
+            .Select(ur => ur.UserId)
+            .ToListAsync();
+
+        var hrUsers = await db.Users
+            .Where(u => hrUserIds.Contains(u.Id) && u.OrganizationId == ctx.OrganizationId)
+            .ToListAsync();
+
+        var result = new List<HrStaffDto>();
+
+        foreach (var u in hrUsers)
+        {
+            var emp = await db.Employees
+                .Include(e => e.Department)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.UserId == u.Id);
+
+            result.Add(new HrStaffDto
+            {
+                UserId = u.Id,
+                FullName = $"{u.FirstName} {u.LastName}".Trim(),
+                DepartmentName = emp?.Department?.Name ?? "—"
+            });
+        }
+
+        return result;
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Supporting types
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// <summary>Internal context object — never leaves the service.</summary>
+internal sealed class CallerContext
+{
+    public string UserId { get; init; } = string.Empty;
+    public Guid OrganizationId { get; init; }
+    public bool IsOrgAdmin { get; init; }
+    public bool IsHR { get; init; }
+    public Employee? Employee { get; init; }
 }
 
 public class DashboardStatsDto
@@ -238,6 +751,7 @@ public class DashboardStatsDto
     public int InProgressTickets { get; set; }
     public int ResolvedTickets { get; set; }
     public int TotalTicketsThisMonth { get; set; }
+    public int UnassignedTickets { get; set; }
     public double AverageResolutionHours { get; set; }
 }
 
@@ -247,6 +761,14 @@ public class TicketReplyViewDto
     public string UserId { get; set; } = string.Empty;
     public string AuthorName { get; set; } = string.Empty;
     public bool IsStaff { get; set; }
+    public bool IsInternalNote { get; set; }
     public string Message { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+}
+
+public class HrStaffDto
+{
+    public string UserId { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
 }

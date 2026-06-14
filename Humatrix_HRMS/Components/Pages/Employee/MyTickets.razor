@@ -1,4 +1,5 @@
-﻿@* @page "/employee/tickets"
+﻿@* Pages/Employee/MyTickets.razor *@
+@page "/employee/tickets"
 @page "/employee/tickets/{TicketId:guid}"
 @attribute [Authorize]
 @using Humatrix_HRMS.Models
@@ -9,55 +10,68 @@
 @inject CurrentUserService CurrentUserService
 @rendermode InteractiveServer
 
-<PageTitle>My Tickets</PageTitle>
+<PageTitle>My Support Tickets</PageTitle>
 
-<div class="container-fluid py-4" style="max-width: 900px;">    
+<div class="container-fluid py-4" style="max-width: 960px;">
 
-    <div class="mb-3">
-        <h4 class="mb-0">🎫 My Support Tickets</h4>
-        <small class="text-muted">Issues you've raised — including those created automatically by the AI Assistant</small>
+    <!-- ── Header + New Ticket button ──────────────────────────────────── -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-0">🎫 My Support Tickets</h4>
+            <small class="text-muted">Issues you've raised — HR will respond here</small>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="OpenNewTicketModal">
+            + New Ticket
+        </button>
     </div>
 
-    @if (Loading)
+    <!-- ── Body ────────────────────────────────────────────────────────── -->
+    @if (_loading)
     {
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
         </div>
     }
-    else if (!Tickets.Any())
+    else if (!_tickets.Any())
     {
         <div class="text-center text-muted py-5">
             <div style="font-size:48px;">📭</div>
             <p class="mt-2">You haven't raised any tickets yet.</p>
-            <p class="small">If the AI Assistant can't help with something, it will offer to create one for you.</p>
+            <p class="small">
+                Use the <strong>New Ticket</strong> button above, or the AI Assistant will
+                offer to create one automatically when it cannot solve your issue.
+            </p>
         </div>
     }
     else
     {
-        <div class="row">
-            <!-- Ticket List -->
-            <div class="col-md-5 mb-3">
+        <div class="row g-3">
+
+            <!-- Ticket list -->
+            <div class="col-md-5">
                 <div class="list-group">
-                    @foreach (var t in Tickets)
+                    @foreach (var t in _tickets)
                     {
-                        <button class="list-group-item list-group-item-action @(SelectedTicket?.TicketId == t.TicketId ? "active" : "")"
+                        <button class="list-group-item list-group-item-action @(_selectedTicket?.TicketId == t.TicketId ? "active" : "")"
                                 @onclick="@(() => SelectTicket(t.TicketId))">
                             <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <div class="fw-semibold">#@t.TicketNumber — @t.Category</div>
-                                    <div class="small text-truncate" style="max-width: 220px;">@t.Description</div>
-                                    <div class="small text-muted mt-1">@t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</div>
+                                <div class="me-2 overflow-hidden">
+                                    <div class="fw-semibold text-truncate">#@t.TicketNumber — @t.Category</div>
+                                    <div class="small text-truncate" style="max-width:200px;">@t.Description</div>
+                                    <div class="small text-muted mt-1">
+                                        @t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                                    </div>
                                 </div>
-                                <span class="badge @StatusBadge(t.Status)">@t.Status</span>
+                                <span class="badge @StatusBadge(t.Status) flex-shrink-0">@t.Status</span>
                             </div>
                         </button>
                     }
                 </div>
             </div>
 
-            <!-- Ticket Detail / Thread -->
+            <!-- Ticket detail / thread -->
             <div class="col-md-7">
-                @if (SelectedTicket == null)
+                @if (_selectedTicket == null)
                 {
                     <div class="text-center text-muted py-5">
                         <p>Select a ticket to view the conversation.</p>
@@ -65,59 +79,95 @@
                 }
                 else
                 {
-                    <div class="card shadow-sm">
-                        <div class="card-header d-flex justify-content-between align-items-center bg-white">
+                    <div class="card shadow-sm h-100 d-flex flex-column">
+
+                        <!-- Card header -->
+                        <div class="card-header bg-white d-flex justify-content-between align-items-start">
                             <div>
-                                <strong>#@SelectedTicket.TicketNumber — @SelectedTicket.Category</strong>
-                                <div class="small text-muted">@SelectedTicket.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</div>
+                                <strong>#@_selectedTicket.TicketNumber — @_selectedTicket.Category</strong>
+                                <div class="small text-muted">
+                                    @_selectedTicket.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                                </div>
                             </div>
-                            <span class="badge @StatusBadge(SelectedTicket.Status) fs-6">@SelectedTicket.Status</span>
+                            <span class="badge @StatusBadge(_selectedTicket.Status) fs-6">
+                                @_selectedTicket.Status
+                            </span>
                         </div>
-                        <div class="card-body">
+
+                        <div class="card-body d-flex flex-column">
+
+                            <!-- Original issue -->
                             <div class="bg-light rounded p-3 mb-3">
-                                <strong>Your Issue</strong>
-                                <p class="mb-0 mt-1" style="white-space:pre-wrap;">@SelectedTicket.Description</p>
+                                <div class="small text-muted fw-semibold mb-1">YOUR ISSUE</div>
+                                <p class="mb-0" style="white-space:pre-wrap;">@_selectedTicket.Description</p>
                             </div>
 
-                            @if (SelectedTicket.Status == "Resolved" && !string.IsNullOrWhiteSpace(SelectedTicket.Resolution))
+                            <!-- Resolution -->
+                            @if (_selectedTicket.Status == "Resolved" && !string.IsNullOrWhiteSpace(_selectedTicket.Resolution))
                             {
-                                <div class="alert alert-success">
-                                    <strong>✅ Resolution from HR</strong>
-                                    <p class="mb-0 mt-1" style="white-space:pre-wrap;">@SelectedTicket.Resolution</p>
+                                <div class="alert alert-success py-2">
+                                    <div class="fw-semibold small">✅ RESOLUTION FROM HR</div>
+                                    <p class="mb-0" style="white-space:pre-wrap;">@_selectedTicket.Resolution</p>
                                 </div>
                             }
 
-                            <h6 class="mt-3">Conversation</h6>
-                            <div class="ticket-thread mb-3">
-                                @if (!Replies.Any())
+                            <!-- Conversation thread -->
+                            <div class="small text-muted fw-semibold mb-2">CONVERSATION</div>
+                            <div class="ticket-thread mb-3" id="employeeThread">
+                                @if (!_replies.Any())
                                 {
-                                    <p class="text-muted small">No replies yet. HR will respond here soon.</p>
+                                    <p class="text-muted small text-center py-3">
+                                        No replies yet. HR will respond here soon.
+                                    </p>
                                 }
                                 else
                                 {
-                                    @foreach (var r in Replies)
+                                    @foreach (var r in _replies)
                                     {
                                         <div class="thread-msg @(r.IsStaff ? "staff" : "employee")">
-                                            <div class="thread-msg-header">
+                                            <div class="thread-meta">
                                                 <strong>@(r.IsStaff ? "HR Team" : "You")</strong>
-                                                <span class="text-muted small">@r.CreatedAt.ToLocalTime().ToString("dd MMM, hh:mm tt")</span>
+                                                <span>@r.CreatedAt.ToLocalTime().ToString("dd MMM, hh:mm tt")</span>
                                             </div>
-                                            <div class="thread-msg-body">@r.Message</div>
+                                            <div class="thread-body">@r.Message</div>
                                         </div>
                                     }
                                 }
                             </div>
 
-                            <div class="input-group">
-                                <textarea class="form-control" rows="1" placeholder="Type a message to HR..."
-                                          @bind="ReplyText" @bind:event="oninput"></textarea>
-                                <button class="btn btn-primary" @onclick="SendReplyAsync" disabled="@string.IsNullOrWhiteSpace(ReplyText)">
-                                    Send
-                                </button>
-                            </div>
-                            @if (SelectedTicket.Status == "Resolved")
+                            <!-- Reply input (always available while not Closed) -->
+                            @if (_selectedTicket.Status != "Closed")
                             {
-                                <div class="form-text">Replying will automatically reopen this ticket.</div>
+                                @if (_errorMessage != null)
+                                {
+                                    <div class="alert alert-danger py-1 small mb-2">@_errorMessage</div>
+                                }
+
+                                <div class="input-group mt-auto">
+                                    <textarea class="form-control"
+                                              rows="2"
+                                              placeholder="Type a message to HR…"
+                                              @bind="_replyText"
+                                              @bind:event="oninput"></textarea>
+                                    <button class="btn btn-primary"
+                                            @onclick="SendReplyAsync"
+                                            disabled="@string.IsNullOrWhiteSpace(_replyText)">
+                                        Send
+                                    </button>
+                                </div>
+
+                                @if (_selectedTicket.Status == "Resolved")
+                                {
+                                    <div class="form-text">
+                                        Replying will automatically reopen this ticket.
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="alert alert-secondary py-1 small mb-0">
+                                    This ticket has been closed and is read-only.
+                                </div>
                             }
                         </div>
                     </div>
@@ -127,6 +177,62 @@
     }
 </div>
 
+<!-- ═══ New Ticket Modal ═════════════════════════════════════════════════ -->
+@if (_showNewTicketModal)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseNewTicketModal"></div>
+    <div class="new-ticket-modal shadow-lg">
+        <div class="modal-header">
+            <h5 class="modal-title">Raise a Support Ticket</h5>
+            <button class="btn-close" @onclick="CloseNewTicketModal"></button>
+        </div>
+        <div class="modal-body">
+
+            @if (_createError != null)
+            {
+                <div class="alert alert-danger py-1 small">@_createError</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">Category <span class="text-danger">*</span></label>
+                <select class="form-select" @bind="_newCategory">
+                    <option value="">— Select a category —</option>
+                    @foreach (var cat in TicketCategories.All)
+                    {
+                        <option>@cat</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Priority</label>
+                <select class="form-select" @bind="_newPriority">
+                    <option>Low</option>
+                    <option selected>Medium</option>
+                    <option>High</option>
+                    <option>Urgent</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Describe your issue <span class="text-danger">*</span></label>
+                <textarea class="form-control" rows="4"
+                          placeholder="Please describe your issue in detail…"
+                          @bind="_newDescription"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" @onclick="CloseNewTicketModal">Cancel</button>
+            <button class="btn btn-primary"
+                    @onclick="SubmitNewTicketAsync"
+                    disabled="@(string.IsNullOrWhiteSpace(_newCategory) || string.IsNullOrWhiteSpace(_newDescription))">
+                Submit Ticket
+            </button>
+        </div>
+    </div>
+}
+
+<!-- ═══ Styles ═══════════════════════════════════════════════════════════ -->
 <style>
     .ticket-thread {
         max-height: 320px;
@@ -150,77 +256,153 @@
             background: #f1f2f6;
         }
 
-    .thread-msg-header {
+    .thread-meta {
         display: flex;
         justify-content: space-between;
-        gap: 10px;
-        font-size: 12px;
-        margin-bottom: 2px;
+        font-size: 11px;
+        margin-bottom: 3px;
+        opacity: .8;
     }
 
-    .thread-msg.employee .thread-msg-header {
-        color: rgba(255,255,255,0.85);
-    }
-
-    .thread-msg-body {
+    .thread-body {
         font-size: 13.5px;
         white-space: pre-wrap;
+    }
+
+    /* New ticket modal */
+    .modal-backdrop-custom {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.45);
+        z-index: 1040;
+    }
+
+    .new-ticket-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(540px, 96vw);
+        background: white;
+        border-radius: 12px;
+        z-index: 1050;
+        overflow: hidden;
     }
 </style>
 
 @code {
-    [Parameter]
-    public Guid? TicketId { get; set; }
+    [Parameter] public Guid? TicketId { get; set; }
 
-    private List<SupportTicket> Tickets = new();
-    private SupportTicket? SelectedTicket;
-    private List<TicketReplyViewDto> Replies = new();
-    private string ReplyText = "";
-    private bool Loading = true;
+    private List<SupportTicket> _tickets = new();
+    private SupportTicket? _selectedTicket;
+    private List<TicketReplyViewDto> _replies = new();
+
+    private string _replyText = "";
+    private string? _errorMessage;
+    private bool _loading = true;
+
+    // New ticket modal
+    private bool _showNewTicketModal = false;
+    private string _newCategory = "";
+    private string _newPriority = "Medium";
+    private string _newDescription = "";
+    private string? _createError;
 
     protected override async Task OnInitializedAsync()
     {
-        Tickets = await TicketService.GetMyTicketsAsync();
+        _tickets = await TicketService.GetMyTicketsAsync();
 
-        var target = TicketId.HasValue && Tickets.Any(t => t.TicketId == TicketId.Value)
+        var target = TicketId.HasValue && _tickets.Any(t => t.TicketId == TicketId.Value)
             ? TicketId.Value
-            : Tickets.FirstOrDefault()?.TicketId;
+            : _tickets.FirstOrDefault()?.TicketId;
 
         if (target.HasValue)
             await SelectTicket(target.Value);
 
-        Loading = false;
+        _loading = false;
     }
 
     private async Task SelectTicket(Guid ticketId)
     {
-        SelectedTicket = await TicketService.GetTicketByIdAsync(ticketId);
-        Replies = await TicketService.GetRepliesAsync(ticketId);
-        ReplyText = "";
+        _errorMessage = null;
+        _replyText = "";
+        _selectedTicket = await TicketService.GetTicketByIdAsync(ticketId, isManagementView: false);
+
+        // Employee view — internal notes excluded automatically
+        _replies = _selectedTicket != null
+            ? await TicketService.GetRepliesAsync(ticketId, includeInternalNotes: false)
+            : new List<TicketReplyViewDto>();
     }
 
     private async Task SendReplyAsync()
     {
-        if (SelectedTicket == null || string.IsNullOrWhiteSpace(ReplyText)) return;
+        if (_selectedTicket == null || string.IsNullOrWhiteSpace(_replyText)) return;
+        _errorMessage = null;
 
-        var user = await CurrentUserService.GetUserAsync();
-        if (user == null) return;
+        try
+        {
+            await TicketService.AddReplyAsync(
+                _selectedTicket.TicketId,
+                _replyText.Trim(),
+                isInternalNote: false,
+                isManagementView: false);
 
-        await TicketService.AddReplyAsync(SelectedTicket.TicketId, ReplyText.Trim(), user.Id);
+            _replyText = "";
+            await SelectTicket(_selectedTicket.TicketId);
+            _tickets = await TicketService.GetMyTicketsAsync();
 
-        ReplyText = "";
-        SelectedTicket = await TicketService.GetTicketByIdAsync(SelectedTicket.TicketId);
-        Replies = await TicketService.GetRepliesAsync(SelectedTicket!.TicketId);
-
-        // Refresh list so status badge updates if it was reopened
-        Tickets = await TicketService.GetMyTicketsAsync();
+            // Update the selected ticket reference (status may have changed)
+            _selectedTicket = _tickets.FirstOrDefault(t => t.TicketId == _selectedTicket.TicketId);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
     }
 
-    private static string StatusBadge(string status) => status switch
+    // ── New Ticket ──────────────────────────────────────────────────────
+
+    private void OpenNewTicketModal()
+    {
+        _newCategory = "";
+        _newPriority = "Medium";
+        _newDescription = "";
+        _createError = null;
+        _showNewTicketModal = true;
+    }
+
+    private void CloseNewTicketModal() => _showNewTicketModal = false;
+
+    private async Task SubmitNewTicketAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newCategory) || string.IsNullOrWhiteSpace(_newDescription))
+            return;
+
+        _createError = null;
+
+        try
+        {
+            var ticket = await TicketService.CreateTicketAsync(
+                _newCategory.Trim(),
+                _newDescription.Trim(),
+                _newPriority);
+
+            _showNewTicketModal = false;
+            _tickets = await TicketService.GetMyTicketsAsync();
+            await SelectTicket(ticket.TicketId);
+        }
+        catch (Exception ex)
+        {
+            _createError = ex.Message;
+        }
+    }
+
+    private static string StatusBadge(string s) => s switch
     {
         "Open" => "bg-primary",
         "InProgress" => "bg-warning text-dark",
         "Resolved" => "bg-success",
-        _ => "bg-secondary"
+        "Closed" => "bg-secondary",
+        _ => "bg-light text-dark"
     };
-} *@
+}

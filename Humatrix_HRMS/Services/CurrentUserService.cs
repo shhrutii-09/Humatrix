@@ -165,5 +165,7 @@ namespace Humatrix_HRMS.Services
 
             return Task.FromResult(user.IsInRole(role));
         }
+
+
     }
 }
