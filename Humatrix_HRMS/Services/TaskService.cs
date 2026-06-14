@@ -155,36 +155,42 @@ namespace Humatrix_HRMS.Services
             var user = await _currentUser.GetUserAsync();
             if (user == null) throw new Exception("Unauthorized");
 
-            Guid userGuid = Guid.TryParse(user.Id, out var guid) ? guid : Guid.Empty;
             var isHr = await _userManager.IsInRoleAsync(user, "HR");
             var isOrgAdmin = await _userManager.IsInRoleAsync(user, "OrgAdmin");
 
             var query = _context.Tasks
-        .Include(t => t.AssignedToEmployee)
-        .ThenInclude(e => e.Department)
-        .AsQueryable();
+                .Include(t => t.AssignedToEmployee)
+                .ThenInclude(e => e.Department)
+                .AsQueryable();
 
             if (isOrgAdmin)
             {
-                query = query.Where(t => t.AssignedToEmployee.Status == "Active");
+                // OrgAdmin: Sirf HR role wale users ko assign kiye gaye tasks dikhein
+                query = query.Where(t => _context.UserRoles
+                    .Join(_context.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur, r })
+                    .Where(x => x.r.Name == "HR" && x.ur.UserId == t.AssignedToEmployee.UserId)
+                    .Any());
             }
             else if (isHr)
             {
+                // HR: Sirf Employees (Jo HR nahi hain) aur apne department ke
                 var hrProfile = await _context.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
                 if (hrProfile != null)
                 {
-                    query = query.Where(t => t.AssignedToEmployee.DepartmentId == hrProfile.DepartmentId && t.AssignedToEmployee.Status == "Active");
+                    query = query.Where(t => t.AssignedToEmployee.DepartmentId == hrProfile.DepartmentId
+                                          && t.AssignedToEmployee.Status == "Active"
+                                          && !_context.UserRoles
+                                              .Join(_context.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur, r })
+                                              .Where(x => x.r.Name == "HR" && x.ur.UserId == t.AssignedToEmployee.UserId)
+                                              .Any());
                 }
-            }
-            else
-            {
-                query = query.Where(t => t.AssignedBy == userGuid);
             }
 
             var tasks = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
 
             return tasks.Select(t => new TaskDto
             {
+                // ... (Baaki ki mapping waisi hi rahegi)
                 TaskId = t.TaskId,
                 Title = t.Title ?? "",
                 Description = t.Description ?? "",
@@ -194,7 +200,7 @@ namespace Humatrix_HRMS.Services
                 DueDate = t.DueDate,
                 CreatedAt = t.CreatedAt,
                 AssignedToName = t.AssignedToEmployee != null ? $"{t.AssignedToEmployee.FirstName} {t.AssignedToEmployee.LastName}" : "",
-                DepartmentName = t.AssignedToEmployee?.Department?.Name ?? "N/A", // Yahan mapping
+                DepartmentName = t.AssignedToEmployee?.Department?.Name ?? "N/A",
                 AssignedByName = GetAssignedByName(t.AssignedBy)
             }).ToList();
         }
