@@ -32,15 +32,15 @@
         <div class="d-flex align-items-center gap-3 backend-action-bar">
 
             <!-- Modern Hover-Reactive Notification Hub -->
-            @if (dashboardContext != null)
+            @* @if (dashboardContext != null)
             {
                 <div class="notification-interactive-wrapper d-flex align-items-center">
                     <NotificationBell />
                 </div>
-            }
+            } *@
 
             <!-- Profile Interactive Capsule (Perfect Baseline Setup) -->
-            <div class="profile-interactive-wrapper d-flex align-items-center">
+            @* <div class="profile-interactive-wrapper d-flex align-items-center">
                 <button class="btn btn-interactive-profile d-flex align-items-center gap-2"
                         @onclick='() => Nav.NavigateTo("/org/profile")'>
                     <div class="profile-avatar-box">
@@ -52,7 +52,7 @@
                     </div>
                     <i class="bi bi-chevron-down ms-1 text-muted small arrow-toggle"></i>
                 </button>
-            </div>
+            </div> *@
 
         </div>
     </div>

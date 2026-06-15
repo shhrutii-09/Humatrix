@@ -3,6 +3,7 @@
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Components.Account.Shared
 @using Humatrix_HRMS.DTOs.Dashboard
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @rendermode InteractiveServer
@@ -11,52 +12,71 @@
 @inject CurrentUserService CurrentUserService
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<div class="d-flex align-items-center gap-3 backend-action-bar">
+@if (!isSuperAdmin)
+{
+    <div class="d-flex align-items-center gap-3 backend-action-bar">
 
-    <!-- 🔔 LIVE NOTIFICATION HUB (Updates instantly via SignalR) -->
-    @if (dashboardContext != null)
-    {
-        <div class="notification-interactive-wrapper d-flex align-items-center">
-            <NotificationBell />
+        <!-- 🔔 LIVE NOTIFICATION HUB -->
+        @if (dashboardContext != null)
+        {
+            <div class="notification-interactive-wrapper d-flex align-items-center">
+                <NotificationBell />
+            </div>
+        }
+
+        <!-- Vertical Divider -->
+        <div class="vr text-muted my-2" style="height: 20px;"></div>
+
+        <!-- 👤 PROFILE -->
+        <div class="profile-interactive-wrapper d-flex align-items-center">
+            <button class="btn btn-interactive-profile d-flex align-items-center gap-2"
+                    @onclick="NavigateToProfile">
+
+                <div class="profile-avatar-box">
+                    <i class="bi bi-person-fill"></i>
+                </div>
+
+                <div class="profile-text-labels text-start d-none d-md-block">
+                    <span class="profile-title d-block">My Profile</span>
+                    <span class="profile-subtitle d-block text-muted">
+                        Account Settings
+                    </span>
+                </div>
+
+                <i class="bi bi-chevron-down ms-1 text-muted small arrow-toggle"></i>
+            </button>
         </div>
-    }
 
-    <!-- Small Vertical Divider Line -->
-    <div class="vr text-muted my-2" style="height: 20px;"></div>
-
-    <!-- 👤 PROFILE INTERACTIVE CAPSULE -->
-    <div class="profile-interactive-wrapper d-flex align-items-center">
-        <button class="btn btn-interactive-profile d-flex align-items-center gap-2"
-                @onclick="NavigateToProfile">
-            <div class="profile-avatar-box">
-                <i class="bi bi-person-fill"></i>
-            </div>
-            <div class="profile-text-labels text-start d-none d-md-block">
-                <span class="profile-title d-block">My Profile</span>
-                <span class="profile-subtitle d-block text-muted">Account Settings</span>
-            </div>
-            <i class="bi bi-chevron-down ms-1 text-muted small arrow-toggle"></i>
-        </button>
     </div>
-
-</div>
+}
 
 @code {
     private OrgDashboardContextDto? dashboardContext;
     private HubConnection? _globalHub;
+    private bool isSuperAdmin = true; // Default to true until we verify otherwise to prevent UI flickering
 
     protected override async Task OnInitializedAsync()
     {
+        // 1. Fetch authentication state and check user roles
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Change "SuperAdmin" to match the exact string name of your role in your database/Identity setup
+        isSuperAdmin = user.IsInRole("SuperAdmin");
+
+        // 2. Don't load anything if the user is a SuperAdmin
+        if (isSuperAdmin)
+            return;
+
         dashboardContext = await CurrentUserService.GetOrgDashboardContextAsync();
     }
 
     private void NavigateToProfile()
     {
-        // Get the current relative URL path lowered (e.g., "hr/dashboard")
         string currentPath = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
 
-        // Dynamically route based on what dashboard area the user is currently visiting
         if (currentPath.StartsWith("hr"))
         {
             Nav.NavigateTo("/hr/profile");
@@ -73,7 +93,9 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        // 3. Prevent SignalR setup for SuperAdmins
+        if (!firstRender || isSuperAdmin)
+            return;
 
         _globalHub = new HubConnectionBuilder()
             .WithUrl(Nav.ToAbsoluteUri("/notificationHub"))
@@ -87,14 +109,15 @@
                 try
                 {
                     Console.WriteLine($"Global Topbar Received Notification: {payload.Title}");
+
                     await JS.InvokeVoidAsync("playNotificationSound");
+
                     await JS.InvokeVoidAsync(
                         "showToastNotification",
                         payload.Title,
                         payload.Message,
                         payload.RedirectUrl,
-                        payload.Priority
-                    );
+                        payload.Priority);
 
                     await InvokeAsync(StateHasChanged);
                 }
@@ -120,8 +143,14 @@
 
         if (dashboardContext != null)
         {
-            await _globalHub.SendAsync("JoinOrgDashboardGroup", dashboardContext.OrganizationId.ToString());
-            await _globalHub.SendAsync("JoinUserGroup", dashboardContext.UserId);
+            await _globalHub.SendAsync(
+                "JoinOrgDashboardGroup",
+                dashboardContext.OrganizationId.ToString());
+
+            await _globalHub.SendAsync(
+                "JoinUserGroup",
+                dashboardContext.UserId);
+
             await InvokeAsync(StateHasChanged);
         }
     }
