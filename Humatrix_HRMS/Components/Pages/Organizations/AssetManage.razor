@@ -33,23 +33,20 @@
         </div>
         <div class="am-header-actions">
             <!-- DASHBOARD BUTTON -->
-            <button class="am-btn am-btn-ghost" @onclick="GoToDashboard">
-                <i class="bi bi-speedometer2"></i>
-                <span>Dashboard</span>
-            </button>
-            @* <button class="am-btn am-btn-ghost" @onclick="RefreshAsync" disabled="@loading">
-                <i class="bi bi-arrow-clockwise @(loading ? "spin" : "")"></i>
-                <span>Refresh</span>
-            </button> *@
-            <button class="am-btn am-btn-primary" @onclick="OpenCreateModal">
-                <i class="bi bi-plus-lg"></i>
-                <span>Add Asset</span>
-            </button>
+            
             <button class="am-btn am-btn-ghost me-3" @onclick="AssetProcurement" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
                 <i class="bi bi-arrow-right"></i> New Assets Request
             </button>
             <button class="am-btn am-btn-ghost me-3" @onclick="AssetRequest" style="border: 1px solid #dee2e6; background: #fff; padding: 0.4rem 0.8rem; borderRadius: 6px;">
                 <i class="bi bi-arrow-right"></i> Asset Request Dashboard
+            </button>
+            <button class="am-btn am-btn-primary" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg"></i>
+                <span>Add Asset</span>
+            </button>
+            <button class="am-btn am-btn-ghost" @onclick="GoToDashboard">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
             </button>
         </div>
     </div>
