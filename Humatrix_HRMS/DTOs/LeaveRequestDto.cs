@@ -4,11 +4,11 @@
     {
         public Guid LeaveRequestId { get; set; }
 
-        // 👤 Employee Info (Flattened for UI)
         public string EmployeeName { get; set; } = string.Empty;
         public string? Department { get; set; }
 
-        // 🏷 Leave Info
+        public string RequestedByRole { get; set; } = "Employee";
+
         public string LeaveTypeName { get; set; } = string.Empty;
 
         public DateTime FromDate { get; set; }
@@ -17,20 +17,15 @@
         public bool IsHalfDay { get; set; }
         public decimal TotalDays { get; set; }
 
-        // 📝 Details
         public string Reason { get; set; } = string.Empty;
 
-        // 🔄 Status
         public string Status { get; set; } = string.Empty;
 
-        // ⏱ Timeline
         public DateTime AppliedAt { get; set; }
         public DateTime? ReviewedAt { get; set; }
-
-        // ❌ Rejection
+        public Guid? ApprovedBy { get; set; }
         public string? RejectionReason { get; set; }
 
         public string? ReviewerName { get; set; }
-        //public DateTime? ReviewedAt { get; set; }
     }
 }

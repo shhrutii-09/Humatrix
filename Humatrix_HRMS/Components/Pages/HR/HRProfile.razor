@@ -6,380 +6,255 @@
 @using Humatrix_HRMS.Models
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
 
 @attribute [Authorize(Roles = "HR")]
 @inject EmployeeService EmployeeService
 @inject CurrentUserService CurrentUserService
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>Profile | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 mt-4">
-    <!-- Header Section -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-normal">@(IsSelf ? "My Profile" : "Employee Profile")</h2>
+@* Toast Notification Container *@
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    @if (!string.IsNullOrEmpty(statusMessage) || !string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert"
+             style="background-color: @(!string.IsNullOrEmpty(errorMessage) ? "#fef2f2" : "#f0fdf4");
+                        color: @(!string.IsNullOrEmpty(errorMessage) ? "#991b1b" : "#166534");
+                        border-left: 4px solid @(!string.IsNullOrEmpty(errorMessage) ? "#ef4444" : "#10b981") !important; border-radius: 10px;">
+            <div class="d-flex p-3">
+                <div class="toast-body d-flex align-items-center p-0">
+                    <i class="bi @(!string.IsNullOrEmpty(errorMessage) ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2 fs-5"></i>
+                    <span class="small fw-medium">@(statusMessage ?? errorMessage)</span>
+                </div>
+                <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => { statusMessage = null; errorMessage = null; }"></button>
+            </div>
         </div>
-        <!-- Unified interactive back button -->
-        <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo("/hr/dashboard")'>
-            <i class="bi bi-arrow-left me-1"></i> BACK TO DASHBOARD
+    }
+</div>
+
+<div class="container-fluid px-4 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">@(IsSelf ? "My Profile" : "Employee Profile")</h2>
+            <p class="text-muted small mb-0">Manage account information and system settings.</p>
+        </div>
+        <button class="btn btn-interactive-back shadow-sm d-flex align-items-center gap-2" @onclick="GoDashboard">
+            <i class="bi bi-speedometer2"></i> DASHBOARD
         </button>
     </div>
 
-    <!-- Main Content Grid -->
     <div class="row g-4">
         @if (model == null && string.IsNullOrEmpty(errorMessage))
         {
-            <div class="col-12">
-                <div class="card shadow-sm border-0 py-5">
-                    <div class="text-center">
-                        <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-2 text-muted mb-0">Fetching profile details...</p>
-                    </div>
-                </div>
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="text-muted mt-2">Loading profile...</p>
             </div>
         }
-        else if (!string.IsNullOrEmpty(errorMessage))
+        else if (model != null)
         {
-            <div class="col-12">
-                <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center">
-                    <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
-                    <div>@errorMessage</div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <!-- Left Side: Profile Information Form Card -->
-            <div class="col-lg-8 col-md-7 order-2 order-md-1">
+            <div class="col-lg-8 order-2 order-md-1">
                 <div class="card shadow-sm border-0 p-4 h-100">
                     <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
                         <DataAnnotationsValidator />
-
-                        <!-- Section: Personal Info -->
                         <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
                             <i class="bi bi-person-workspace text-muted me-2 fs-5"></i>
                             <h5 class="mb-0 text-secondary fw-semibold">Personal Information</h5>
                         </div>
-                        
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label small fw-bold text-muted">First Name</label>
                                 <InputText @bind-Value="editModel.FirstName" class="form-control shadow-sm" disabled="@(!IsSelf)" />
-                                <ValidationMessage For="@(() => editModel.FirstName)" class="text-danger small mt-1" />
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label small fw-bold text-muted">Last Name</label>
                                 <InputText @bind-Value="editModel.LastName" class="form-control shadow-sm" disabled="@(!IsSelf)" />
-                                <ValidationMessage For="@(() => editModel.LastName)" class="text-danger small mt-1" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Yopmail</label>
+                            <div class="input-group shadow-sm">
+                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-envelope-fill"></i></span>
+                                <input type="text" class="form-control bg-light border-start-0 text-muted" value="@model.Email" disabled />
+                                
                             </div>
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label small fw-bold text-muted">Email Address</label>
-                            <div class="input-group shadow-sm">
-                                <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-envelope-fill"></i></span>
-                                <input type="text" class="form-control bg-light border-start-0 text-muted" value="@model.Email" disabled />
-                            </div>
+                            <label class="form-label small fw-bold text-muted">Date of Birth</label>
+                            <InputDate @bind-Value="editModel.DateOfBirth" class="form-control shadow-sm" disabled="@(!IsSelf)" />
                         </div>
 
-                        <!-- In /hr/profile - Add this after the Email field (around line 118-125) -->
-<div class="mb-4">
-    <label class="form-label small fw-bold text-muted">Date of Birth</label>
-    <InputDate @bind-Value="editModel.DateOfBirth" class="form-control shadow-sm" disabled="@(!IsSelf)" />
-    <ValidationMessage For="@(() => editModel.DateOfBirth)" class="text-danger small mt-1" />
-    <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">*Used for birthday wishes and age calculation</small>
-</div>
-
-                        <!-- Section: Employment Details -->
-                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom mt-2">
+                        <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
                             <i class="bi bi-briefcase-fill text-muted me-2 fs-5"></i>
                             <h5 class="mb-0 text-secondary fw-semibold">Employment Details</h5>
                         </div>
-                        
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label class="form-label small fw-bold text-muted">Department</label>
-                                <input type="text" class="form-control bg-light shadow-sm text-muted" value="@model.Department" disabled />
+                                <input type="text" class="form-control bg-light shadow-sm" value="@model.Department" disabled />
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label small fw-bold text-muted">Designation</label>
-                                <input type="text" class="form-control bg-light shadow-sm text-muted" value="@model.Designation" disabled />
+                                <input type="text" class="form-control bg-light shadow-sm" value="@model.Designation" disabled />
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label small fw-bold text-muted">Work Shift</label>
-                                <input type="text" class="form-control bg-light shadow-sm text-muted" value="@model.ShiftName" disabled />
+                                <input type="text" class="form-control bg-light shadow-sm" value="@model.ShiftName" disabled />
                             </div>
                         </div>
 
-                        <!-- Actions Bar -->
                         @if (IsSelf)
                         {
-                            <div class="mt-4 pt-3 border-top d-flex gap-2 flex-wrap">
-                                <button type="submit" class="btn btn-action-save px-4 shadow-sm" disabled="@isSaving">
-                                    @if (isSaving)
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                        <span>Saving...</span>
-                                    }
-                                    else
-                                    {
-                                        <i class="bi bi-check-circle me-1"></i> <span>SAVE CHANGES</span>
-                                    }
-                                </button>
-                                <button type="button" class="btn btn-action-password px-3 shadow-sm" @onclick="() => showPasswordModal = true">
-                                    <i class="bi bi-shield-lock me-1"></i> CHANGE PASSWORD
-                                </button>
+                            <div class="mt-4 pt-3 border-top d-flex gap-2">
+                                <button type="submit" class="btn btn-action-save px-4 shadow-sm" disabled="@isSaving">SAVE CHANGES</button>
+                                <button type="button" class="btn btn-action-password px-3 shadow-sm" @onclick="() => showPasswordModal = true">CHANGE PASSWORD</button>
                             </div>
                         }
                     </EditForm>
-
-                    @if (!string.IsNullOrEmpty(statusMessage))
-                    {
-                        <div class="alert alert-success mt-4 border-0 shadow-sm d-flex align-items-center">
-                            <i class="bi bi-check-circle-fill fs-5 me-2"></i>
-                            <div>@statusMessage</div>
-                        </div>
-                    }
                 </div>
             </div>
 
-            <!-- Right Side: Beautiful Profile Display Badge Card -->
-            <div class="col-lg-4 col-md-5 order-1 order-md-2">
-                <div class="card shadow-sm border-0 p-4 text-center justify-content-center h-100 bg-white">
-                    <div class="position-relative d-inline-block mx-auto mb-3">
-                        <div class="avatar-container shadow">
-                            @model.FirstName[0]@model.LastName[0]
-                        </div>
-                    </div>
-                    
-                    <h3 class="fw-normal text-dark mb-1">@model.Name</h3>
-                    <p class="text-muted small text-uppercase tracking-wider mb-3">@model.Role</p>
-
-                    <div class="mt-2">
-                        <span class="status-badge-compact @(model.IsActive ? "active-badge" : "inactive-badge")">
-                            <i class="bi @(model.IsActive ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
-                            @(model.IsActive ? "Active Account" : "Inactive Profile")
-                        </span>
-                    </div>
+            <div class="col-lg-4 order-1 order-md-2">
+                <div class="card shadow-sm border-0 p-4 text-center h-100 bg-white">
+                    <div class="avatar-container shadow mx-auto mb-3">@model.FirstName[0]@model.LastName[0]</div>
+                    <h4 class="fw-bold text-dark mb-1">@model.Name</h4>
+                    <p class="text-muted small text-uppercase mb-3">@model.Role</p>
+                    <span class="status-badge-compact @(model.IsActive ? "active-badge" : "inactive-badge")">
+                        @(model.IsActive ? "Active" : "Inactive")
+                    </span>
                 </div>
             </div>
         }
     </div>
 </div>
 
-@* --- Reset Password Modal --- *@
 @if (showPasswordModal)
 {
-    <div class="modal fade show d-block" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);" tabindex="-1">
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-                <div class="modal-header bg-light border-bottom-0 pt-4 px-4">
-                    <h5 class="modal-title fw-semibold text-dark d-flex align-items-center">
-                        <i class="bi bi-shield-lock-fill text-secondary me-2"></i> Change Password
-                    </h5>
-                    <button type="button" class="btn-close" @onclick="() => showPasswordModal = false"></button>
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header"><h5>Change Password</h5><button class="btn-close" @onclick="() => showPasswordModal = false"></button></div>
+                <div class="modal-body">
+                    <input type="password" class="form-control mb-2" placeholder="Current" @bind="currentPwd" />
+                    <input type="password" class="form-control mb-2" placeholder="New" @bind="newPwd" />
+                    <input type="password" class="form-control mb-2" placeholder="Confirm" @bind="confirmPwd" />
                 </div>
-                <div class="modal-body px-4 pb-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Current Password</label>
-                        <input type="password" class="form-control shadow-sm" @bind="currentPwd" placeholder="••••••••" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">New Password</label>
-                        <input type="password" class="form-control shadow-sm" @bind="newPwd" placeholder="••••••••" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">Confirm New Password</label>
-                        <input type="password" class="form-control shadow-sm" @bind="confirmPwd" placeholder="••••••••" />
-                    </div>
-                </div>
-                <div class="modal-footer bg-light border-top-0 pt-2 pb-3 px-4 d-flex gap-2">
-                    <button class="btn btn-light shadow-sm px-3 border" style="border-radius: 8px;" @onclick="() => showPasswordModal = false">Cancel</button>
-                    <button class="btn btn-action-save shadow-sm px-3" @onclick="HandlePasswordReset" disabled="@isSaving">
-                        UPDATE PASSWORD
-                    </button>
-                </div>
+                <div class="modal-footer"><button class="btn btn-primary" @onclick="HandlePasswordReset">Update</button></div>
             </div>
         </div>
     </div>
 }
 
 <style>
-    /* Global Elements Theme Uniformity Rules */
-    .card {
-        border-radius: 12px;
-    }
-
-    .form-control, .form-select, .input-group-text {
-        border-radius: 8px;
-        padding: 0.6rem 1rem;
-        border: 1px solid #e5e7eb;
-    }
-
-    .form-control:focus {
-        border-color: #5c4ac7 !important;
-        box-shadow: 0 0 0 0.2rem rgba(92, 74, 199, 0.15) !important;
-    }
-
-    /* Interactive Clean Back Button Styling Rule Block */
     .btn-interactive-back {
-        background: #ffffff !important;
-        border: 1px solid #e5e7eb !important;
-        color: #4b5563 !important;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        color: #4b5563;
         padding: 8px 16px;
         border-radius: 10px;
-        font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
-        display: inline-flex;
-        align-items: center;
-        transition: all 0.2s ease;
+        transition: 0.2s;
     }
 
-    .btn-interactive-back:hover {
-        background-color: #f8fafc !important;
-        border-color: #5c4ac7 !important;
-        color: #5c4ac7 !important;
-    }
+        .btn-interactive-back:hover {
+            background: #f8fafc;
+            border-color: #5c4ac7;
+            color: #5c4ac7;
+        }
 
-    /* Primary Interactive Buttons */
     .btn-action-save {
-        background-color: #5c4ac7 !important;
-        color: #ffffff !important;
-        border: none !important;
-        padding: 10px 20px;
-        font-size: 13px;
-        font-weight: 600;
+        background-color: #5c4ac7;
+        color: #fff;
         border-radius: 8px;
-        transition: opacity 0.2s ease;
-    }
-
-    .btn-action-save:hover {
-        opacity: 0.9;
     }
 
     .btn-action-password {
-        background-color: #ffffff !important;
-        color: #5c4ac7 !important;
-        border: 1px solid #5c4ac7 !important;
-        padding: 10px 20px;
-        font-size: 13px;
-        font-weight: 600;
+        background-color: #fff;
+        color: #5c4ac7;
+        border: 1px solid #5c4ac7;
         border-radius: 8px;
-        transition: all 0.2s ease;
     }
 
-    .btn-action-password:hover {
-        background-color: #5c4ac7 !important;
-        color: #ffffff !important;
-    }
-
-    /* Avatar Dynamic Circle Presentation */
     .avatar-container {
-        width: 110px; 
-        height: 110px; 
-        font-size: 2.2rem; 
-        color: #5c4ac7; 
-        background-color: #f1f0fb;
+        width: 110px;
+        height: 110px;
+        font-size: 2.2rem;
+        color: #5c4ac7;
+        background: #f1f0fb;
         border: 3px solid #5c4ac7;
-        border-radius: 50% !important;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 600;
     }
 
-    /* System Status Custom Badges */
     .status-badge-compact {
         padding: 6px 16px;
         border-radius: 50px;
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         font-weight: 600;
-        display: inline-flex;
-        align-items: center;
     }
 
     .active-badge {
-        background-color: #d1fae5;
+        background: #d1fae5;
         color: #047857;
-        border: 1px solid #a7f3d0;
     }
 
     .inactive-badge {
-        background-color: #fee2e2;
+        background: #fee2e2;
         color: #b91c1c;
-        border: 1px solid #fecaca;
-    }
-
-    .tracking-wider {
-        letter-spacing: 0.05em;
     }
 </style>
 
 @code {
     [Parameter] public string? UserEmail { get; set; }
-
     private EmployeeListDto? model;
     private EditEmployeeDto editModel = new();
     private bool IsSelf => string.IsNullOrEmpty(UserEmail);
-    private bool isSaving = false;
-    private bool showPasswordModal = false;
+    private bool isSaving, showPasswordModal;
+    private string? statusMessage, errorMessage;
+    private string currentPwd = "", newPwd = "", confirmPwd = "";
 
-    private string? statusMessage;
-    private string? errorMessage;
+    protected override async Task OnInitializedAsync() => await LoadData();
 
-    private string currentPwd = "";
-    private string newPwd = "";
-    private string confirmPwd = "";
-
-    protected override async Task OnInitializedAsync()
+    private async Task LoadData()
     {
-        await LoadData();
-    }
-// In /hr/profile @code section, update the LoadData method:
-private async Task LoadData()
-{
-    try
-    {
-        string? emailToFetch = IsSelf ? (await CurrentUserService.GetUserAsync())?.Email : UserEmail;
-
-        if (!string.IsNullOrEmpty(emailToFetch))
+        try
         {
-            model = await EmployeeService.GetEmployeeByEmailAsync(emailToFetch);
-
-            if (model != null)
+            string? emailToFetch = IsSelf ? (await CurrentUserService.GetUserAsync())?.Email : UserEmail;
+            if (!string.IsNullOrEmpty(emailToFetch))
             {
-                editModel = new EditEmployeeDto
-                {
-                    FirstName = model.FirstName,
-                    LastName = model.LastName,
-                    DepartmentId = model.DepartmentId,
-                    DesignationId = model.DesignationId,
-                    ShiftId = model.ShiftId,
-                    Role = model.Role,
-                    DateOfBirth = model.DateOfBirth  // ✅ ADD THIS LINE
-                };
+                model = await EmployeeService.GetEmployeeByEmailAsync(emailToFetch);
+                if (model != null) editModel = new EditEmployeeDto { FirstName = model.FirstName, LastName = model.LastName, DateOfBirth = model.DateOfBirth };
             }
-            else { errorMessage = "Profile not found."; }
         }
+        catch (Exception ex) { errorMessage = ex.Message; }
     }
-    catch (Exception ex) { errorMessage = "Error loading profile: " + ex.Message; }
 
-    StateHasChanged();
-}
+    private async Task GoDashboard()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        Nav.NavigateTo(authState.User.IsInRole("HR") ? "/hr/dashboard" : "/employee/dashboard");
+    }
+
+    private void OpenYopmail()
+    {
+        var email = model?.Email?.Split('@')[0];
+        Nav.NavigateTo($"https://yopmail.com?{email}", true);
+    }
 
     private async Task HandleUpdate()
     {
-        statusMessage = errorMessage = null;
-        try
-        {
-            isSaving = true;
-            await EmployeeService.UpdateEmployeeAsync(model!.Email, editModel);
-            statusMessage = "Profile updated successfully!";
-        }
+        isSaving = true;
+        try { await EmployeeService.UpdateEmployeeAsync(model!.Email, editModel); statusMessage = "Profile updated!"; }
         catch (Exception ex) { errorMessage = ex.Message; }
         finally { isSaving = false; }
     }
@@ -387,23 +262,9 @@ private async Task LoadData()
     private async Task HandlePasswordReset()
     {
         if (newPwd != confirmPwd) { errorMessage = "Passwords do not match."; return; }
-        statusMessage = errorMessage = null;
-
-        try
-        {
-            isSaving = true;
-            var user = await UserManager.FindByEmailAsync(model!.Email);
-            var result = await UserManager.ChangePasswordAsync(user!, currentPwd, newPwd);
-
-            if (result.Succeeded)
-            {
-                statusMessage = "Password changed successfully!";
-                showPasswordModal = false;
-                currentPwd = newPwd = confirmPwd = "";
-            }
-            else { errorMessage = string.Join(", ", result.Errors.Select(e => e.Description)); }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; }
-        finally { isSaving = false; }
+        var user = await UserManager.FindByEmailAsync(model!.Email);
+        var res = await UserManager.ChangePasswordAsync(user!, currentPwd, newPwd);
+        if (res.Succeeded) { statusMessage = "Password changed!"; showPasswordModal = false; }
+        else errorMessage = "Error changing password.";
     }
 }

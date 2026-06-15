@@ -16,13 +16,14 @@
 
 <PageTitle>WFH Approvals | Humatrix HRMS</PageTitle>
 
+@* Toast Notification Container *@
 <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
     @if (!string.IsNullOrEmpty(message))
     {
-        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: #f0fdf4; color: #166534; border-left: 4px solid #10b981 !important; border-radius: 10px;">
+        <div class="toast show align-items-center border-0 shadow-lg mb-2" role="alert" style="background-color: @(isError ? "#fef2f2" : "#f0fdf4"); color: @(isError ? "#991b1b" : "#166534"); border-left: 4px solid @(isError ? "#ef4444" : "#10b981") !important; border-radius: 10px;">
             <div class="d-flex p-3">
                 <div class="toast-body d-flex align-items-center p-0">
-                    <i class="bi bi-check-circle-fill me-2 fs-5" style="color: #10b981;"></i>
+                    <i class="bi @(isError ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2 fs-5"></i>
                     <span class="small fw-medium">@message</span>
                 </div>
                 <button type="button" class="btn-close m-auto me-0 shadow-none" @onclick="() => message = null"></button>
@@ -207,7 +208,7 @@
     private List<WorkFromHomeRequest> list = new();
     private Dictionary<Guid, (string Name, string Role)> reviewerCache = new();
     private string dashboardPath = "/", message = string.Empty, rejectReason = string.Empty, selectedStatus = string.Empty;
-    private bool loading, showRejectModal, isOrgAdmin;
+    private bool loading, showRejectModal, isOrgAdmin, isError;
     private WorkFromHomeRequest? selectedRequest;
 
     protected override async Task OnInitializedAsync()
@@ -228,22 +229,31 @@
     private async Task LoadData()
     {
         loading = true;
-        list = await WfhService.GetAllAsync(selectedStatus);
-        foreach (var r in list.Where(x => x.ApprovedBy.HasValue && !reviewerCache.ContainsKey(x.ApprovedBy.Value)))
+        try
         {
-            reviewerCache[r.ApprovedBy.Value] = await WfhService.GetReviewerInfoAsync(r.ApprovedBy);
+            list = await WfhService.GetAllAsync(selectedStatus);
+            foreach (var r in list.Where(x => x.ApprovedBy.HasValue && !reviewerCache.ContainsKey(x.ApprovedBy.Value)))
+            {
+                reviewerCache[r.ApprovedBy.Value] = await WfhService.GetReviewerInfoAsync(r.ApprovedBy);
+            }
         }
-        loading = false;
+        catch (Exception ex) { message = ex.Message; isError = true; TriggerToastAutoClose(); }
+        finally { loading = false; }
     }
 
     private async Task HandleFilterChange(ChangeEventArgs e) { selectedStatus = e.Value?.ToString() ?? string.Empty; await LoadData(); }
 
     private async Task Approve(Guid id)
     {
-        await WfhService.UpdateStatusAsync(id, "Approved");
-        message = "WFH request approved successfully.";
-        await LoadData();
-        await Task.Delay(3000); message = null;
+        try
+        {
+            await WfhService.UpdateStatusAsync(id, "Approved");
+            message = "WFH request approved successfully.";
+            isError = false;
+            await LoadData();
+        }
+        catch (Exception ex) { message = ex.Message; isError = true; }
+        TriggerToastAutoClose();
     }
 
     private void OpenRejectModal(WorkFromHomeRequest r) { selectedRequest = r; rejectReason = string.Empty; showRejectModal = true; }
@@ -252,12 +262,27 @@
     {
         if (selectedRequest != null)
         {
-            await WfhService.UpdateStatusAsync(selectedRequest.Id, "Rejected", rejectReason);
-            message = "WFH request rejected.";
-            showRejectModal = false;
-            await LoadData();
-            await Task.Delay(3000); message = null;
+            try
+            {
+                await WfhService.UpdateStatusAsync(selectedRequest.Id, "Rejected", rejectReason);
+                message = "WFH request rejected.";
+                isError = false;
+                showRejectModal = false;
+                await LoadData();
+            }
+            catch (Exception ex) { message = ex.Message; isError = true; }
+            TriggerToastAutoClose();
         }
+    }
+
+    private void TriggerToastAutoClose()
+    {
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4000);
+            message = null;
+            await InvokeAsync(StateHasChanged);
+        });
     }
 
     private string GetStatusClass(string s) => s switch { "Approved" => "bg-success-soft", "Rejected" => "bg-danger-soft", _ => "bg-warning-soft" };
