@@ -146,12 +146,12 @@ namespace Humatrix_HRMS.Services
                     }
                 }
 
-                // Notify OrgAdmin
-                await _notificationService.CreateOrgAdminNotificationsAsync(
-                    org.OrganizationId,
-                    "New Attendance Correction Request",
-                    $"{employee.FirstName} {employee.LastName} submitted a correction for {workDate:dd MMM yyyy}.",
-                    "/hr/corrections");
+                //// Notify OrgAdmin
+                //await _notificationService.CreateOrgAdminNotificationsAsync(
+                //    org.OrganizationId,
+                //    "New Attendance Correction Request",
+                //    $"{employee.FirstName} {employee.LastName} submitted a correction for {workDate:dd MMM yyyy}.",
+                //    "/hr/corrections");
             }
 
             // HR submitted → OrgAdmin only

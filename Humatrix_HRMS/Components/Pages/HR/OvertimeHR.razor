@@ -13,116 +13,126 @@
 @attribute [Authorize(Roles = "HR,OrgAdmin")]
 @inject OvertimeService OvertimeService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
 
-<PageTitle>Overtime Approvals | HR</PageTitle>
+<PageTitle>Overtime Approvals | Humatrix HRMS</PageTitle>
 
 <div class="container-fluid px-4 mt-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- HEADER with Dashboard Button -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h4 class="fw-bold mb-0">Overtime Approvals</h4>
-            <small class="text-muted">Review employee overtime requests</small>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Overtime Approvals</h2>
+            <p class="text-muted small mb-0">Review employee overtime requests</p>
         </div>
-        <button class="btn btn-outline-secondary shadow-sm" @onclick="LoadData">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            @* <button class="btn btn-refresh-custom shadow-sm d-flex align-items-center gap-2" @onclick="LoadData" disabled="@loading">
+                <i class="bi bi-arrow-clockwise"></i>REFRESH
+            </button> *@
+            <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+                <i class="bi bi-speedometer2"></i>
+                DASHBOARD
+            </button>
+        </div>
     </div>
 
+    <!-- ALERT BANNER -->
     @if (!string.IsNullOrEmpty(message))
     {
-        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show shadow-sm">
+        <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show shadow-sm border-0" role="alert">
+            <i class="bi bi-@(isError ? "exclamation-triangle-fill" : "check-circle-fill") me-2"></i>
             @message
-            <button class="btn-close" @onclick="() => message = null"></button>
+            <button type="button" class="btn-close" @onclick="() => message = null"></button>
         </div>
     }
 
     @if (loading)
     {
-        <div class="text-center mt-5">
-            <div class="spinner-border text-primary"></div>
-            <p class="text-muted mt-2 small">Loading requests...</p>
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted small mt-2">Loading requests...</p>
         </div>
     }
     else if (!requests.Any())
     {
-        <div class="alert alert-info shadow-sm border-0">
-            <i class="bi bi-info-circle me-2"></i>No overtime requests found.
+        <div class="card border-0 shadow-sm panel-container-card">
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+                <p>No overtime requests found.</p>
+            </div>
         </div>
     }
     else
     {
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center py-3">
-                <span class="text-muted small fw-bold">@requests.Count REQUEST(S)</span>
+        <div class="card border-0 shadow-sm panel-container-card">
+            <div class="card-header bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-semibold">Overtime Requests</h5>
+                <span class="badge bg-secondary text-white">@requests.Count request(s)</span>
             </div>
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                <table class="table align-middle table-hover mb-0">
+                    <thead class="bg-light border-bottom">
                         <tr>
-                            <th class="ps-4">EMPLOYEE</th>
-                            <th>DATE</th>
-                            <th>DEPT</th>
-                            <th>REQ. HOURS</th>
-                            <th>ACTUAL OUT</th>
-                            <th>REASON</th>
-                            <th>STATUS</th>
-                            <th class="text-end pe-4">ACTION</th>
+                            <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">EMPLOYEE</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">DATE</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">DEPT</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">REQ. HOURS</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">ACTUAL OUT</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">REASON</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">STATUS</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3 pe-4 text-end">ACTION</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var r in requests
                                             .OrderBy(x => x.Status != "Pending")
                                             .ThenByDescending(x => x.AppliedAt))
-{
-                            <tr>
+                        {
+                            <tr class="table-row-interactive">
                                 <td class="ps-4">
-                                    <strong>@r.Employee.FirstName @r.Employee.LastName</strong>
+                                    <div class="fw-bold text-dark">@r.Employee.FirstName @r.Employee.LastName</div>
+                                    @* <div class="small text-muted">@r.Employee.Email</div> *@
                                 </td>
-                                <td>@r.Date.ToString("dd MMM yyyy")</td>
+                                <td class="fw-semibold">@r.Date.ToString("dd MMM yyyy")</td>
                                 <td>
-                                    <span class="text-muted small">
+                                    <span class="badge bg-light text-dark fw-normal">
                                         @(r.Employee.Department?.Name ?? "—")
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-warning text-dark">
+                                    <span class="badge bg-warning text-dark px-3 py-1">
                                         @r.RequestedHours.ToString("0.##") hrs
                                     </span>
                                 </td>
-                                <td class="font-monospace small">
-                                    @* @r.ActualCheckOut?.ToLocalTime().ToString("hh:mm tt") *@
+                                <td class="font-monospace small fw-semibold">
                                     @FormatTime(r.ActualCheckOut)
-
                                 </td>
-                               <td class="text-muted small text-truncate"
-                                    style="max-width:180px;"
-                                    title="@r.Reason">
-                                    @r.Reason
+                                <td class="text-muted small" style="max-width:200px;" title="@r.Reason">
+                                    @TruncateText(r.Reason, 40)
                                 </td>
-
                                 <td>
-                                    <span class="badge @GetStatusClass(r.Status)">
+                                    <span class="badge @GetStatusClass(r.Status) px-3 py-1">
                                         @r.Status
                                     </span>
                                 </td>
-
-                                <td class="text-end pe-4">
-
+                                <td class="pe-4 text-end">
                                     @if (r.Status == "Pending")
                                     {
-                                        <button class="btn btn-sm btn-success me-1"
+                                        <button class="btn btn-sm btn-success me-1 px-3"
                                                 disabled="@actionLoading"
                                                 @onclick="() => Review(r.OvertimeRequestId, true)">
                                             <i class="bi bi-check-circle me-1"></i>Approve
                                         </button>
-
-                                        <button class="btn btn-sm btn-outline-danger"
+                                        <button class="btn btn-sm btn-outline-danger px-3"
                                                 disabled="@actionLoading"
                                                 @onclick="() => Review(r.OvertimeRequestId, false)">
                                             <i class="bi bi-x-circle me-1"></i>Reject
                                         </button>
                                     }
-
+                                    else
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -133,36 +143,100 @@
     }
 </div>
 
+<style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    .btn-refresh-custom {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-refresh-custom:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .table-row-interactive:hover {
+        background-color: #f8fafc;
+    }
+
+    .btn-success {
+        background-color: #10b981 !important;
+        border-color: #10b981 !important;
+    }
+
+        .btn-success:hover {
+            background-color: #059669 !important;
+            border-color: #059669 !important;
+        }
+</style>
+
 @code {
-    // private List<OvertimeRequest> requests = new();
-    // private bool loading = true;
-    // private bool actionLoading = false;
-    // private string? message;
-    // private bool isError;
-
-    // OrgAdmin sees all departments; HR sees only their own department
-    // private bool isOrgAdmin = false;
-
-    // protected override async Task OnInitializedAsync()
-    // {
-    //     var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-    //     isOrgAdmin = authState.User.IsInRole("OrgAdmin");
-    //     await LoadData();
-    // }
     private List<OvertimeRequest> requests = new();
     private bool loading = true;
     private bool actionLoading = false;
     private string? message;
     private bool isError;
     private bool isOrgAdmin = false;
+    private string dashboardPath = "/hr/dashboard";
 
-    // FIX: Org timezone for correct time display
     private TimeZoneInfo orgTimeZone = TimeZoneInfo.Utc;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         isOrgAdmin = authState.User.IsInRole("OrgAdmin");
+
+        // Set dashboard path based on role
+        var currentUser = await CurrentUserService.GetUserAsync();
+        if (currentUser != null)
+        {
+            var isHR = await CurrentUserService.IsInRoleAsync("HR");
+            dashboardPath = isHR ? "/hr/dashboard" : "/org/dashboard";
+        }
+
         await LoadOrgTimezone();
         await LoadData();
     }
@@ -184,9 +258,9 @@
         catch { orgTimeZone = TimeZoneInfo.Utc; }
     }
 
-    // FIX: Replace all .ToLocalTime() with this method
     private string FormatTime(DateTime? utcTime)
         => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
+
     private async Task LoadData()
     {
         loading = true;
@@ -235,9 +309,13 @@
 
     private static string GetStatusClass(string? status) => status switch
     {
-        "Approved" => "bg-success",
-        "Rejected" => "bg-danger",
-        "Cancelled" => "bg-secondary",
+        "Approved" => "bg-success text-white",
+        "Rejected" => "bg-danger text-white",
+        "Cancelled" => "bg-secondary text-white",
         _ => "bg-warning text-dark"
     };
+
+    private static string TruncateText(string? text, int max) =>
+        string.IsNullOrEmpty(text) ? "—" :
+        text.Length <= max ? text : text[..max] + "…";
 }

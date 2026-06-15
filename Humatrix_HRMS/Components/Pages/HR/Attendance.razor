@@ -27,11 +27,10 @@
             <p class="text-muted small mb-0">Track, monitor, and manage organizational clock-in rosters and shift statuses.</p>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary shadow-sm px-4 py-2 text-uppercase fw-bold btn-refresh-custom" @onclick="LoadData">
-                <i class="bi bi-arrow-clockwise me-2"></i>Refresh
-            </button>
-            <button class="btn bg-white border text-secondary fw-bold px-4 py-2 text-uppercase shadow-sm text-dashboard" @onclick="NavigateToDashboard">
-                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+            
+            <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+                <i class="bi bi-speedometer2 me-2"></i>
+                DASHBOARD
             </button>
         </div>
     </div>
@@ -205,11 +204,11 @@
                 @if (attendanceList.Any() && !isNonWorkingDay && !isLoading)
                 {
                     <div class="card-footer bg-white border-top py-3 px-4 d-flex justify-content-between align-items-center">
-                        <div class="small text-muted">
+                        @* <div class="small text-muted">
                             Showing <b>@(((currentPage - 1) * pageSize) + 1)</b> to
                             <b>@(Math.Min(currentPage * pageSize, attendanceList.Count))</b>
                             of <b>@attendanceList.Count</b> records
-                        </div>
+                        </div> *@
 
                         <div class="custom-dept-pagination border rounded d-flex align-items-center bg-light-subtle">
                             <button class="btn btn-link text-muted p-2 border-end shadow-none rounded-0 @(currentPage == 1 ? "disabled opacity-50" : "")"
@@ -308,6 +307,23 @@
         background-color: rgba(92, 74, 199, 0.06) !important;
     }
 
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
+
     .avatar-circle {
         width: 38px;
         height: 38px;
@@ -335,6 +351,8 @@
     private int currentPage = 1;
     private int pageSize = 10;
     private int TotalPages => (int)Math.Ceiling((decimal)attendanceList.Count / pageSize);
+
+    private string dashboardPath = "/org/dashboard";
 
     private void ChangePage(int newPage)
     {
@@ -367,6 +385,14 @@
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         isOrgAdmin = authState.User.IsInRole("OrgAdmin");
+
+        // Set dashboard path based on role
+        var currentUser = await CurrentUserService.GetUserAsync();
+        if (currentUser != null)
+        {
+            var isHR = await CurrentUserService.IsInRoleAsync("HR");
+            dashboardPath = isHR ? "/hr/dashboard" : "/org/dashboard";
+        }
 
         await LoadOrgTimezone();
 
@@ -420,7 +446,7 @@
         return TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
     }
 
-    private void NavigateToDashboard() => Nav.NavigateTo("/org/dashboard");
+    // private void NavigateToDashboard() => Nav.NavigateTo("/org/dashboard");
 
     private string GetStatusClass(string? status)
     {

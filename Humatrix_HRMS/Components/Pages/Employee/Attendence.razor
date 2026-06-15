@@ -21,30 +21,40 @@
 
 <div class="container-fluid px-4 mt-4">
     <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
-        <div>
-            <h2 class="fw-bold tracking-tight text-dark mb-1">
-                Attendance Dashboard
-            </h2>
-            <p class="text-muted small mb-0">
-                Monitor work logs, attendance history and overtime.
-            </p>
-        </div>
 
-        <div class="d-flex align-items-center gap-2">
-            <!-- MONTH SELECTOR -->
-            <div class="input-group dropdown-box-wrapper shadow-sm" style="max-width: 220px;">
-                <span class="input-group-text bg-white border-end-0 text-muted">
-                    <i class="bi bi-calendar-month"></i>
-                </span>
-                <input type="month" class="form-control border-start-0 ps-0 premium-dropdown-select" value="@selectedMonth" @onchange="OnMonthChanged" />
+
+    <div class="container-fluid px-4 mt-4">
+        <!-- HEADER -->
+        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+            <div>
+                <h2 class="fw-bold tracking-tight text-dark mb-1">
+                    Attendance Dashboard
+                </h2>
+                <p class="text-muted small mb-0">
+                    Monitor work logs, attendance history and overtime.
+                </p>
             </div>
 
-            <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="LoadAttendance">
-                <i class="bi bi-search"></i>LOAD
-            </button>
+            <div class="d-flex align-items-center gap-2">
+                <!-- MONTH SELECTOR -->
+                <div class="input-group dropdown-box-wrapper shadow-sm" style="max-width: 150px;">
+                    <span class="input-group-text bg-white border-end-0 text-muted">
+                        <i class="bi bi-calendar-month"></i>
+                    </span>
+                    <input type="month" class="form-control border-start-0 ps-0 premium-dropdown-select" value="@selectedMonth" @onchange="OnMonthChanged" />
+                </div>
+
+                <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="LoadAttendance">
+                    <i class="bi bi-search"></i>LOAD
+                </button>
+
+                <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+                    <i class="bi bi-speedometer2"></i>
+                    DASHBOARD
+                </button>
+            </div>
         </div>
-    </div>
+        </div>
 
     <!-- ERROR ALERT -->
     @if (!string.IsNullOrEmpty(errorMessage))
@@ -184,7 +194,7 @@
                         <th class="text-secondary small fw-bold tracking-wider py-3">CHECK-OUT</th>
                         <th class="text-secondary small fw-bold tracking-wider py-3">HOURS</th>
                         <th class="text-secondary small fw-bold tracking-wider py-3">STATUS</th>
-                        <th class="text-secondary small fw-bold tracking-wider py-3 pe-4">OT</th>
+                        <th class="text-secondary small fw-bold tracking-wider py-3 pe-4">Overtime</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -248,9 +258,9 @@
         @if (FilteredAttendance.Any())
         {
             <div class="d-flex justify-content-between align-items-center p-3 border-top bg-light">
-                <span class="small text-muted">
+                @* <span class="small text-muted">
                     Showing @PagedAttendance.Count() of @FilteredAttendance.Count() records
-                </span>
+                </span> *@
                 <div class="d-flex align-items-center gap-1 core-pagination-wrapper shadow-sm rounded-3 p-1 bg-white border">
                     <button class="btn btn-paging-arrow @(currentPage == 1 ? "disabled" : "")" @onclick="PreviousPage">
                         <i class="bi bi-chevron-left"></i>
@@ -348,6 +358,24 @@
         font-size: 12px;
         font-weight: 600;
     }
+
+    /* Updated Dashboard Button CSS - Matches My Tasks page */
+    .btn-interactive-back {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-interactive-back:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+            transform: translateY(-1px);
+        }
 
     .table thead th {
         background-color: #f8fafc;
@@ -489,10 +517,21 @@
     private int AbsentCount => displayAttendanceList.Count(x => x.Status == AttendanceStatuses.Absent);
     private double TotalHoursWorked => displayAttendanceList.Sum(x => x.TotalHours ?? 0);
 
+    private string dashboardPath = "/employee/dashboard";
+
     protected override async Task OnInitializedAsync()
     {
         await LoadOrgTimezone();
         StartClock();
+
+        // Determine dashboard path based on user role
+        var currentUser = await CurrentUserService.GetUserAsync();
+        if (currentUser != null)
+        {
+            var isHR = await CurrentUserService.IsInRoleAsync("HR");
+            dashboardPath = isHR ? "/hr/dashboard" : "/employee/dashboard";
+        }
+
         await LoadData();
     }
 

@@ -12,6 +12,7 @@
 @inject AttendanceCorrectionService CorrectionService
 @inject CurrentUserService CurrentUserService
 @using System.Globalization
+@inject NavigationManager Nav
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Attendance Corrections | Humatrix HRMS</PageTitle>
@@ -57,19 +58,25 @@
             <h2 class="fw-bold tracking-tight text-dark mb-1">Attendance Corrections</h2>
             <p class="text-muted small mb-0">Request corrections for missed or incorrect check-in / check-out</p>
         </div>
-        <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm"
-                @onclick="OpenSubmitModal"
-                disabled="@isLoading">
-            <i class="bi bi-plus-circle"></i>NEW REQUEST
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm"
+                    @onclick="OpenSubmitModal"
+                    disabled="@isLoading">
+                <i class="bi bi-plus-circle"></i>NEW REQUEST
+            </button>
+            <button class="btn btn-interactive-back shadow-sm" @onclick='() => Nav.NavigateTo(dashboardPath)'>
+                <i class="bi bi-speedometer2"></i>
+                DASHBOARD
+            </button>
+        </div>
     </div>
 
     <div class="card border-0 shadow-sm panel-container-card">
         <div class="card-body border-bottom py-3 d-flex justify-content-between align-items-center">
             <h6 class="mb-0 fw-bold text-dark">My Correction Requests</h6>
-            <button class="btn btn-dashboard d-flex align-items-center gap-2 shadow-sm" @onclick="LoadRequests">
+            @* <button class="btn btn-dashboard d-flex align-items-center gap-2 shadow-sm" @onclick="LoadRequests">
                 <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
+            </button> *@
         </div>
         <div class="table-responsive">
             @if (isLoading)
@@ -124,23 +131,35 @@
                                     @if (!string.IsNullOrWhiteSpace(req.ReviewLevel))
                                     {
                                         <div class="small text-muted mt-1">
-                                            → @req.ReviewLevel
+                                            @* → @req.ReviewLevel *@
                                         </div>
                                     }
                                 </td>
                                 <td class="small text-muted">
                                     @{
-                                        var localSubmittedAt = TimeZoneInfo.ConvertTimeFromUtc(req.SubmittedAt, orgTimeZone);
+                                        string submittedDisplay = "—";
+                                        try
+                                        {
+                                            if (orgTimeZone != null)
+                                            {
+                                                var localSubmittedAt = TimeZoneInfo.ConvertTimeFromUtc(req.SubmittedAt, orgTimeZone);
+                                                submittedDisplay = localSubmittedAt.ToString("dd MMM yyyy, hh:mm tt");
+                                            }
+                                            else
+                                            {
+                                                submittedDisplay = req.SubmittedAt.ToString("dd MMM yyyy, HH:mm") + " UTC";
+                                            }
+                                        }
+                                        catch
+                                        {
+                                            submittedDisplay = req.SubmittedAt.ToString("dd MMM yyyy, HH:mm") + " UTC";
+                                        }
                                     }
-
-                                    @localSubmittedAt.ToString("dd MMM yyyy, hh:mm tt")
+                                    @submittedDisplay
 
                                     @if (req.IsOverdue)
                                     {
-                                        <span class="badge bg-danger ms-1"
-                                              title="Pending for more than 2 days">
-                                            !
-                                        </span>
+                                        <span class="badge bg-danger ms-1" title="Pending for more than 2 days">!</span>
                                     }
                                 </td>
 
@@ -424,7 +443,7 @@
         font-weight: 600;
     }
 
-    .btn-dashboard {
+    .btn-interactive-back {
         background: #ffffff !important;
         border: 1px solid #e5e7eb !important;
         color: #4b5563 !important;
@@ -432,11 +451,13 @@
         border-radius: 10px;
         font-size: 12px;
         font-weight: 600;
+        transition: all 0.2s ease;
     }
 
-        .btn-dashboard:hover {
+        .btn-interactive-back:hover {
             border-color: #5c4ac7 !important;
             color: #5c4ac7 !important;
+            transform: translateY(-1px);
         }
 
     .btn-action-cancel {
@@ -550,6 +571,9 @@
     private string? modalError;
     private Guid? cancelRequestId;
 
+    private string dashboardPath = "/employee/dashboard";
+
+
     private SubmitCorrectionRequestDto submitDto = new();
 
     // FIX: TimeOnly? is the correct type for <input type="time"> in .NET 8 Blazor.
@@ -571,12 +595,17 @@
             await RunPreValidation();
         }
     }
-
     protected override async Task OnInitializedAsync()
     {
         await LoadOrgTimezone();
         submitDto.WorkDate = TimeHelper.GetOrgDate(orgTimeZone);
         await LoadRequests();
+        var currentUser = await CurrentUserService.GetUserAsync();
+        if (currentUser != null)
+        {
+            var isHR = await CurrentUserService.IsInRoleAsync("HR");
+            dashboardPath = isHR ? "/hr/dashboard" : "/employee/dashboard";
+        }
     }
 
     private async Task LoadOrgTimezone()
@@ -586,7 +615,6 @@
             var user = await CurrentUserService.GetUserAsync();
             if (user?.OrganizationId == null) return;
 
-            // FIX: create a short-lived context for this query only.
             await using var db = await DbFactory.CreateDbContextAsync();
             var tzId = await db.Organizations
                 .AsNoTracking()
@@ -594,10 +622,10 @@
                 .Select(o => o.TimeZoneId)
                 .FirstOrDefaultAsync();
             orgTimeZone = TimeHelper.GetOrgTimeZone(tzId);
+            StateHasChanged(); // ✅ ADD THIS LINE - forces UI refresh
         }
         catch { /* fallback to UTC */ }
     }
-
     private async Task LoadRequests()
     {
         isLoading = true;
@@ -784,8 +812,18 @@
         return TimeOnly.TryParse(value, out var t) ? t : null;
     }
 
-    private string FormatTime(DateTime? utcTime) => TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
-
+    private string FormatTime(DateTime? utcTime)
+    {
+        if (!utcTime.HasValue) return "—";
+        try
+        {
+            return TimeHelper.FormatOrgTime(utcTime, orgTimeZone);
+        }
+        catch
+        {
+            return utcTime.Value.ToString("hh:mm tt");
+        }
+    }
     private static string FormatCorrectionType(string? type) => type switch
     {
         CorrectionTypes.ForgotCheckIn => "Forgot Check-In",
