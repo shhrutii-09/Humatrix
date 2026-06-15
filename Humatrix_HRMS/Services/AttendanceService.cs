@@ -387,9 +387,9 @@ namespace Humatrix_HRMS.Services
         }
 
         public async Task<List<AttendanceListDto>> GetAttendanceForDateAsync(
-     DateTime date,
-     Guid? departmentId = null,
-     string? role = null)
+      DateTime date,
+      Guid? departmentId = null,
+      string? role = null)
         {
             var currentUser = await _currentUser.GetUserAsync()
                 ?? throw new Exception("Unauthorized");
@@ -404,29 +404,68 @@ namespace Humatrix_HRMS.Services
             var tz = TimeHelper.GetOrgTimeZone(org.TimeZoneId);
             var targetDate = date.Date;
 
-            var employees = await _context.Employees
+            // Get current user's roles
+            var userRoles = await _userManager.GetRolesAsync(currentUser);
+            bool isOrgAdmin = userRoles.Contains("OrgAdmin");
+            bool isHR = userRoles.Contains("HR");
+
+            // Start with base query - include Department
+            var employeesQuery = _context.Employees
+                .Include(e => e.Department)  // IMPORTANT: Include Department
                 .AsNoTracking()
-                .Where(e => e.OrganizationId == orgId && e.Status == "Active")
-                .ToListAsync();
+                .Where(e => e.OrganizationId == orgId && e.Status == "Active");
+
+            // If HR (not OrgAdmin), filter by their own department
+            if (isHR && !isOrgAdmin)
+            {
+                var hrEmployee = await _context.Employees
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.UserId == currentUser.Id);
+
+                if (hrEmployee != null && hrEmployee.DepartmentId != Guid.Empty)
+                {
+                    employeesQuery = employeesQuery.Where(e => e.DepartmentId == hrEmployee.DepartmentId);
+                }
+                else
+                {
+                    return new List<AttendanceListDto>();
+                }
+            }
+
+            var employees = await employeesQuery.ToListAsync();
 
             var attendances = await _context.Attendances
                 .AsNoTracking()
-                .Where(a =>
-                    a.OrganizationId == orgId &&
-                    a.WorkDate == targetDate)
+                .Where(a => a.OrganizationId == orgId && a.WorkDate == targetDate)
                 .ToDictionaryAsync(a => a.EmployeeId);
 
             var list = new List<AttendanceListDto>();
 
             foreach (var emp in employees)
             {
+                // Skip if HR is trying to see themselves
+                if (isHR && !isOrgAdmin && emp.UserId == currentUser.Id)
+                    continue;
+
+                // Get user and roles for this employee
+                var empUser = await _userManager.FindByIdAsync(emp.UserId);
+                var empRoles = empUser != null ? await _userManager.GetRolesAsync(empUser) : new List<string>();
+                var primaryRole = empRoles.FirstOrDefault(r => r == "Employee" || r == "HR") ?? "Employee";
+
+                // Skip other HR users if current user is HR (non-OrgAdmin)
+                if (isHR && !isOrgAdmin && primaryRole == "HR")
+                    continue;
+
                 if (attendances.TryGetValue(emp.EmployeeId, out var att))
                 {
-                    // FIX: Convert UTC to Organization's local time, NOT server local time
                     list.Add(new AttendanceListDto
                     {
                         AttendanceId = att.AttendanceId,
                         EmployeeName = $"{emp.FirstName} {emp.LastName}",
+                        Email = empUser?.Email ?? "",
+                        Role = primaryRole,
+                        Department = emp.Department?.Name ?? "N/A",
+                        DepartmentId = emp.DepartmentId,
                         Date = targetDate,
                         CheckIn = att.CheckIn,
                         CheckOut = att.CheckOut,
@@ -441,15 +480,29 @@ namespace Humatrix_HRMS.Services
                     list.Add(new AttendanceListDto
                     {
                         EmployeeName = $"{emp.FirstName} {emp.LastName}",
+                        Email = empUser?.Email ?? "",
+                        Role = primaryRole,
+                        Department = emp.Department?.Name ?? "N/A",
+                        DepartmentId = emp.DepartmentId,
                         Date = targetDate,
                         Status = AttendanceStatuses.Absent
                     });
                 }
             }
 
+            // Apply additional filters
+            if (departmentId.HasValue && departmentId != Guid.Empty)
+            {
+                list = list.Where(x => x.DepartmentId == departmentId).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(role))
+            {
+                list = list.Where(x => x.Role == role).ToList();
+            }
+
             return list.OrderBy(x => x.EmployeeName).ToList();
         }
-
         public async Task<string> ResolveDailyStatusAsync(Guid employeeId, DateTime date)
         {
             var att = await _context.Attendances
