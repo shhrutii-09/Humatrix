@@ -7,9 +7,12 @@
 @using Humatrix_HRMS.Services.Assets
 @using Humatrix_HRMS.Infrastructure.Constants
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 
 @inject AssetService AssetService
 @inject CurrentUserService CurrentUserService
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>My Workspace Assets | Humatrix HRMS</PageTitle>
 
@@ -57,7 +60,10 @@
                         }
                     </div>
                     <div class="modal-footer bg-light border-top p-3 d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-dashboard px-3" @onclick="CloseRequestModal">Cancel</button>
+                        <button type="button" class="btn btn-dashboard px-3"
+                                @onclick="CloseRequestModal">
+                            Cancel
+                        </button>
                         <button type="submit" class="btn btn-primary-action px-4" disabled="@submitting">
                             @if (submitting)
                             {
@@ -79,6 +85,10 @@
             <h2 class="fw-bold tracking-tight text-dark mb-1">My Workplace Assets</h2>
             <p class="text-muted small mb-0">Track hardware, inventory configurations, and active technical requests assigned to you.</p>
         </div>
+        <button class="btn btn-dashboard d-flex align-items-center gap-2 shadow-sm" @onclick="GoDashboard">
+            <i class="bi bi-speedometer2"></i>
+            DASHBOARD
+        </button>
     </div>
 
     @* Tab Navigation *@
@@ -222,7 +232,7 @@
                                 <tr>
                                     <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">ASSET / CODE</th>
                                     <th class="text-secondary small fw-bold tracking-wider py-3">REQUEST TYPE</th>
-                                    <th class="text-secondary small fw-bold tracking-wider py-3">SUBMITTED DATE</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">SUBMITTED DATE / TIME</th>
                                     <th class="text-secondary small fw-bold tracking-wider py-3">STATUS</th>
                                     <th class="text-secondary small fw-bold tracking-wider py-3">REASON</th>
                                     <th class="pe-4 text-secondary small fw-bold tracking-wider py-3 text-end">REVIEW FEED</th>
@@ -235,9 +245,7 @@
                                         <td class="ps-4 py-3">
                                             <div class="fw-bold text-dark text-heading-field">@req.AssetName</div>
                                             <div class="text-muted font-monospace small">@req.AssetCode</div>
-                                            @if (req.RequestType == AssetRequestType.Replacement &&
-                                                                        req.Status == AssetRequestStatus.Completed &&
-                                                                        !string.IsNullOrEmpty(req.ReplacementAssetCode))
+                                            @if (req.RequestType == AssetRequestType.Replacement && req.Status == AssetRequestStatus.Completed && !string.IsNullOrEmpty(req.ReplacementAssetCode))
                                             {
                                                 <div class="mt-1">
                                                     <span class="badge premium-soft-dept-badge" style="font-size: 11px;">
@@ -332,13 +340,11 @@
                                             else if (h.IsReplacementAction == true && !string.IsNullOrWhiteSpace(h.ActionedByName))
                                             {
                                                 <span class="text-dark fw-semibold small">@h.ActionedByName</span>
-                            
                                                 <br />
                                                 <small class="text-muted font-monospace" style="font-size: 11px;">via Replacement</small>
                                             }
                                             else
                                             {
-
                                                 <span class="text-muted">—</span>
                                             }
                                         </td>
@@ -347,7 +353,6 @@
                                             @if (!string.IsNullOrWhiteSpace(h.ReturnedByRole))
                                             {
                                                 <br />
-                            
                                                 <small class="text-muted" style="font-size: 11px;">@h.ReturnedByRole</small>
                                             }
                                         </td>
@@ -432,7 +437,6 @@
         background-color: #5c4ac7 !important;
     }
 
-    /* Tab Navigation */
     .tab-nav-wrapper {
         border-bottom: 1px solid #e2e8f0;
         padding-bottom: 0;
@@ -598,21 +602,6 @@
         color: #065f46;
     }
 
-    .pill-inactive {
-        background-color: #fef2f2;
-        color: #991b1b;
-    }
-
-    .pill-warning {
-        background-color: #fffbeb;
-        color: #92400e;
-    }
-
-    .pill-info {
-        background-color: #eff6ff;
-        color: #1e40af;
-    }
-
     .pill-secondary {
         background-color: #f1f5f9;
         color: #475569;
@@ -638,18 +627,14 @@
         color: #1e40af;
     }
 
-    .animate-pulse {
-        animation: pulseOpacity 2s infinite;
+    .pill-warning {
+        background-color: #fffbeb;
+        color: #92400e;
     }
 
-    @@keyframes pulseOpacity {
-        0%, 100% {
-            opacity: 0.6;
-        }
-
-        50% {
-            opacity: 1;
-        }
+    .pill-info {
+        background-color: #eff6ff;
+        color: #1e40af;
     }
 </style>
 
@@ -673,10 +658,7 @@
     private string targetRequestType = "";
     private CreateAssetRequestDto createRequestModel = new();
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadContextAndDataAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadContextAndDataAsync();
 
     private async Task LoadContextAndDataAsync()
     {
@@ -710,6 +692,12 @@
     }
 
     private void ChangeTab(string tabKey) => activeTab = tabKey;
+
+    private async Task GoDashboard()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        Nav.NavigateTo(authState.User.IsInRole("HR") ? "/hr/dashboard" : "/employee/dashboard");
+    }
 
     private void OpenRequestModal(AssetDto asset, string requestType)
     {
