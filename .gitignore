@@ -1,4 +1,4 @@
-# Ignore Visual Studio temporary files
+n# Ignore Visual Studio temporary files
 .vs/
 bin/
 obj/
