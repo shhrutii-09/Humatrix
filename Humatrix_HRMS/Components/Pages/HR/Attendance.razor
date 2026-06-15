@@ -4,6 +4,7 @@
 @using Humatrix_HRMS.Data
 @using Microsoft.EntityFrameworkCore
 @using Humatrix_HRMS.Helpers
+@using Humatrix_HRMS.Models
 @inject ApplicationDbContext DbContext
 @inject CurrentUserService CurrentUserService
 @using Humatrix_HRMS.DTOs
@@ -109,7 +110,16 @@
                 <div class="alert alert-info text-center p-5 my-4 mx-4">
                     <i class="bi bi-calendar-event fs-1"></i>
                     <h4 class="mt-3">@dayStatusMessage</h4>
-                    <p class="text-muted">Attendance records are not available for non-working days.</p>
+                    <p class="text-muted">
+                        @if (isHoliday)
+                        {
+                            <text>This is a public holiday.</text>
+                        }
+                        else
+                        {
+                            <text>This is a @dayStatusMessage.</text>
+                        }
+                    </p>
                 </div>
             }
             else
@@ -348,6 +358,8 @@
     private bool isOrgAdmin;
     private bool isLoading;
 
+    private bool isHoliday;
+
     private int currentPage = 1;
     private int pageSize = 10;
     private int TotalPages => (int)Math.Ceiling((decimal)attendanceList.Count / pageSize);
@@ -411,24 +423,64 @@
     {
         isLoading = true;
         isNonWorkingDay = false;
+        isHoliday = false;  // Add this line
         currentPage = 1;
+        dayStatusMessage = "";
         StateHasChanged();
+
         try
         {
+            var user = await CurrentUserService.GetUserAsync();
+            if (user?.OrganizationId != null)
+            {
+                // Check for holiday and get holiday name
+                var holiday = await DbContext.Holidays
+                    .FirstOrDefaultAsync(h => h.OrganizationId == user.OrganizationId &&
+                                              h.Date.Date == selectedDate.Date);
+
+                if (holiday != null)
+                {
+                    isNonWorkingDay = true;
+                    isHoliday = true;  // Add this line
+                    dayStatusMessage = holiday.Name;
+                    attendanceList = new List<AttendanceListDto>();
+                    return;
+                }
+
+                // Check if it's a non-working day based on WorkWeek
+                var workWeek = await DbContext.WorkWeeks
+                    .FirstOrDefaultAsync(w => w.OrganizationId == user.OrganizationId);
+
+                if (workWeek != null)
+                {
+                    var dayOfWeek = selectedDate.DayOfWeek;
+                    bool isWorkingDay = dayOfWeek switch
+                    {
+                        DayOfWeek.Monday => workWeek.IsMondayWorking,
+                        DayOfWeek.Tuesday => workWeek.IsTuesdayWorking,
+                        DayOfWeek.Wednesday => workWeek.IsWednesdayWorking,
+                        DayOfWeek.Thursday => workWeek.IsThursdayWorking,
+                        DayOfWeek.Friday => workWeek.IsFridayWorking,
+                        DayOfWeek.Saturday => workWeek.IsSaturdayWorking,
+                        DayOfWeek.Sunday => workWeek.IsSundayWorking,
+                        _ => false
+                    };
+
+                    if (!isWorkingDay)
+                    {
+                        isNonWorkingDay = true;
+                        isHoliday = false;  // Add this line
+                        dayStatusMessage = dayOfWeek.ToString();
+                        attendanceList = new List<AttendanceListDto>();
+                        return;
+                    }
+                }
+            }
+
             attendanceList = await AttendanceService.GetAttendanceForDateAsync(
                 selectedDate,
                 selectedDepartmentId == Guid.Empty ? null : selectedDepartmentId,
                 selectedRole);
-
-            if (attendanceList.Any())
-            {
-                var firstStatus = attendanceList.First().Status ?? "";
-                if (firstStatus.Contains("Holiday") || firstStatus.Contains("Weekend"))
-                {
-                    isNonWorkingDay = true;
-                    dayStatusMessage = firstStatus;
-                }
-            }
         }
         catch (Exception ex)
         {
