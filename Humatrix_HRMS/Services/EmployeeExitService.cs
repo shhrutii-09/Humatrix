@@ -145,12 +145,16 @@ namespace Humatrix_HRMS.Services
                 x.Status == ExitStatus.Pending)
                 ?? throw new InvalidOperationException("No pending exit request found.");
 
-            _db.EmployeeExits.Remove(exit);
+            // MARK AS CANCELLED INSTEAD OF DELETING
+            exit.Status = ExitStatus.Cancelled;
+            exit.CancelledAt = DateTime.UtcNow;
+            exit.CancelledByEmployeeId = employee.EmployeeId;
+            exit.CancellationReason = "Cancelled by employee";
+
             await _db.SaveChangesAsync();
 
             return true;
         }
-
         // ─────────────────────────────────────────────
         // QUERY — HR / OrgAdmin
         // ─────────────────────────────────────────────
@@ -593,23 +597,8 @@ namespace Humatrix_HRMS.Services
                 // 5. SEND NOTIFICATION (NOT INVITATION)
                 // ============================================================
                 var notificationMessage = $"✅ WELCOME BACK!\n\n" +
-                                          $"You have been rehired effective {rehireDate:dd MMM yyyy}.\n\n" +
-                                          $"📋 Rehire Details:\n" +
-                                          $"• Previous Employment: {employee.JoiningDate:dd MMM yyyy} to {lastExit.LastWorkingDay:dd MMM yyyy}\n" +
-                                          $"• New Start Date: {rehireDate:dd MMM yyyy}\n" +
-                                          $"• Department: {employee.Department?.Name ?? "N/A"}\n" +
-                                          $"• Designation: {employee.Designation?.Name ?? "N/A"}\n\n" +
-                                          $"🔐 Account Access:\n" +
-                                          $"• Your existing login credentials are active\n" +
-                                          $"• Login here: {_config["AppBaseUrl"]}/login\n" +
-                                          $"• If you forgot your password, use 'Forgot Password'\n\n" +
-                                          $"📝 Next Steps:\n" +
-                                          $"1. Login to your account\n" +
-                                          $"2. Review/Update your profile information\n" +
-                                          $"3. Check your assigned assets\n" +
-                                          $"4. Review your leave balance\n\n" +
-                                          $"Remarks: {remarks ?? "N/A"}\n\n" +
-                                          $"Welcome back to the team!";
+                                          $"You have been rehired effective {rehireDate:dd MMM yyyy}";
+                                    
 
                 await _notificationService.CreateNotificationAsync(
                     employee.UserId,
@@ -851,42 +840,26 @@ namespace Humatrix_HRMS.Services
                 // ============================================================
                 // 4. UPDATE EXIT REQUEST STATUS (FIXED)
                 // ============================================================
-                if (exit.Status == ExitStatus.Pending)
-                {
-                    _db.EmployeeExits.Remove(exit);
+                // ALWAYS mark as Cancelled - NEVER delete
+                // originalStatus is already declared above, don't redeclare
+                exit.Status = ExitStatus.Cancelled;
+                exit.CancelledAt = DateTime.UtcNow;
+                exit.CancelledByEmployeeId = employee.EmployeeId;
+                exit.CancellationReason = $"Cancelled by {cancelledBy} on {DateTime.UtcNow:dd MMM yyyy}";
+                await _db.SaveChangesAsync();
 
-                    await AutoRevokeExitDocumentsAsync(
-                        exit.EmployeeId,
-                        exit.OrganizationId);
+                await AutoRevokeExitDocumentsAsync(
+                    exit.EmployeeId,
+                    exit.OrganizationId);
 
-                    revertedItems.Add("Removed pending exit request.");
-                }
-                else
-                {
-                    exit.Status = ExitStatus.Cancelled;
-
-                    exit.CancelledAt = DateTime.UtcNow;
-                    exit.CancelledByEmployeeId = employee.EmployeeId;
-                    exit.CancellationReason = $"Cancelled by {cancelledBy} on {DateTime.UtcNow:dd MMM yyyy}";
-
-                    await _db.SaveChangesAsync();
-
-                    await AutoRevokeExitDocumentsAsync(
-                        exit.EmployeeId,
-                        exit.OrganizationId);
-
-                    revertedItems.Add($"Marked exit request as cancelled (was {originalStatus}).");
-                }
+                revertedItems.Add($"Marked exit request as cancelled (was {originalStatus}).");
 
                 await transaction.CommitAsync();
 
                 // ============================================================
                 // 5. SEND NOTIFICATIONS
                 // ============================================================
-                var notificationMessage = $"Your resignation has been CANCELLED successfully.\n\n" +
-                                          $"📋 Summary of changes:\n" +
-                                          string.Join("\n", revertedItems.Select((item, i) => $"   {i + 1}. {item}")) +
-                                          $"\n\nYou will continue as an active employee. Please contact HR if you have any questions.";
+                var notificationMessage = $"Your resignation has been CANCELLED successfully.\n\n";
 
                 await _notificationService.CreateNotificationAsync(
                     exitEmployee.UserId,
@@ -895,11 +868,7 @@ namespace Humatrix_HRMS.Services
                     "/employee/dashboard");
 
                 var adminMessage = $"⚠️ RESIGNATION CANCELLED\n\n" +
-                                  $"Employee: {exitEmployee.FirstName} {exitEmployee.LastName} (ID: {exitEmployee.EmployeeCode})\n" +
-                                  $"Original Last Working Day: {exit.LastWorkingDay:dd MMM yyyy}\n" +
-                                  $"Status at cancellation: {originalStatus}\n" +
-                                  $"Cancelled by: {cancelledBy}\n\n" +
-                                  $"Changes reverted:\n{string.Join("\n", revertedItems.Select((item, i) => $"   {i + 1}. {item}"))}";
+                                  $"Employee: {exitEmployee.FirstName} {exitEmployee.LastName} (ID: {exitEmployee.EmployeeCode})\n" ;
 
                 await _notificationService.CreateOrgAdminNotificationsAsync(
                     exit.OrganizationId,

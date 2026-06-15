@@ -1,27 +1,28 @@
 ﻿@* Pages/Employee/MyTickets.razor *@
 @page "/employee/tickets"
 @page "/employee/tickets/{TicketId:guid}"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Employee,HR")]
 @using Humatrix_HRMS.Models
 @using Humatrix_HRMS.Services
 @using Humatrix_HRMS.Services.AI
 @using Microsoft.AspNetCore.Authorization
+@using static Humatrix_HRMS.Services.AI.TicketService
 @inject TicketService TicketService
 @inject CurrentUserService CurrentUserService
 @rendermode InteractiveServer
 
 <PageTitle>My Support Tickets</PageTitle>
 
-<div class="container-fluid py-4" style="max-width: 960px;">
+<div class="container-fluid px-4 mt-4" style="max-width: 1100px;">
 
     <!-- ── Header + New Ticket button ──────────────────────────────────── -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h4 class="mb-0">🎫 My Support Tickets</h4>
-            <small class="text-muted">Issues you've raised — HR will respond here</small>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">My Support Tickets</h2>
+            <p class="text-muted small mb-0">Issues you've raised — HR will respond here</p>
         </div>
-        <button class="btn btn-primary btn-sm" @onclick="OpenNewTicketModal">
-            + New Ticket
+        <button class="btn btn-add-dept d-flex align-items-center gap-2 shadow-sm" @onclick="OpenNewTicketModal">
+            <i class="bi bi-plus-circle"></i>NEW TICKET
         </button>
     </div>
 
@@ -30,17 +31,20 @@
     {
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted small mb-0">Loading your tickets...</p>
         </div>
     }
     else if (!_tickets.Any())
     {
-        <div class="text-center text-muted py-5">
-            <div style="font-size:48px;">📭</div>
-            <p class="mt-2">You haven't raised any tickets yet.</p>
-            <p class="small">
-                Use the <strong>New Ticket</strong> button above, or the AI Assistant will
-                offer to create one automatically when it cannot solve your issue.
-            </p>
+        <div class="card border-0 shadow-sm panel-container-card">
+            <div class="text-center text-muted py-5">
+                <div class="fs-2 text-light mb-2"><i class="bi bi-inbox"></i></div>
+                <p class="mt-2 fw-medium mb-1">You haven't raised any tickets yet.</p>
+                <p class="small mb-0">
+                    Use the <strong>New Ticket</strong> button above, or the AI Assistant will
+                    offer to create one automatically when it cannot solve your issue.
+                </p>
+            </div>
         </div>
     }
     else
@@ -49,23 +53,25 @@
 
             <!-- Ticket list -->
             <div class="col-md-5">
-                <div class="list-group">
-                    @foreach (var t in _tickets)
-                    {
-                        <button class="list-group-item list-group-item-action @(_selectedTicket?.TicketId == t.TicketId ? "active" : "")"
-                                @onclick="@(() => SelectTicket(t.TicketId))">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="me-2 overflow-hidden">
-                                    <div class="fw-semibold text-truncate">#@t.TicketNumber — @t.Category</div>
-                                    <div class="small text-truncate" style="max-width:200px;">@t.Description</div>
-                                    <div class="small text-muted mt-1">
-                                        @t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="list-group list-group-flush">
+                        @foreach (var t in _tickets)
+                        {
+                            <button class="list-group-item list-group-item-action ticket-list-item @(_selectedTicket?.TicketId == t.TicketId ? "active" : "")"
+                                    @onclick="@(() => SelectTicket(t.TicketId))">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="me-2 overflow-hidden">
+                                        <div class="fw-bold text-dark text-heading-field text-truncate">#@t.TicketNumber — @t.Category</div>
+                                        <div class="small text-muted text-truncate" style="max-width:200px;">@t.Description</div>
+                                        <div class="small text-muted mt-1">
+                                            @t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                                        </div>
                                     </div>
+                                    <span class="status-indicator-pill @StatusPill(t.Status) flex-shrink-0">@t.Status</span>
                                 </div>
-                                <span class="badge @StatusBadge(t.Status) flex-shrink-0">@t.Status</span>
-                            </div>
-                        </button>
-                    }
+                            </button>
+                        }
+                    </div>
                 </div>
             </div>
 
@@ -73,23 +79,23 @@
             <div class="col-md-7">
                 @if (_selectedTicket == null)
                 {
-                    <div class="text-center text-muted py-5">
-                        <p>Select a ticket to view the conversation.</p>
+                    <div class="card border-0 shadow-sm panel-container-card text-center text-muted py-5">
+                        <p class="mb-0">Select a ticket to view the conversation.</p>
                     </div>
                 }
                 else
                 {
-                    <div class="card shadow-sm h-100 d-flex flex-column">
+                    <div class="card border-0 shadow-sm panel-container-card h-100 d-flex flex-column">
 
                         <!-- Card header -->
-                        <div class="card-header bg-white d-flex justify-content-between align-items-start">
+                        <div class="card-body border-bottom d-flex justify-content-between align-items-start py-3">
                             <div>
-                                <strong>#@_selectedTicket.TicketNumber — @_selectedTicket.Category</strong>
+                                <strong class="text-dark text-heading-field">#@_selectedTicket.TicketNumber — @_selectedTicket.Category</strong>
                                 <div class="small text-muted">
                                     @_selectedTicket.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
                                 </div>
                             </div>
-                            <span class="badge @StatusBadge(_selectedTicket.Status) fs-6">
+                            <span class="status-indicator-pill @StatusPill(_selectedTicket.Status)">
                                 @_selectedTicket.Status
                             </span>
                         </div>
@@ -112,6 +118,7 @@
                             }
 
                             <!-- Conversation thread -->
+                            <!-- Conversation thread -->
                             <div class="small text-muted fw-semibold mb-2">CONVERSATION</div>
                             <div class="ticket-thread mb-3" id="employeeThread">
                                 @if (!_replies.Any())
@@ -124,9 +131,31 @@
                                 {
                                     @foreach (var r in _replies)
                                     {
+                                        var isCurrentUser = r.UserId == _currentUserId;
                                         <div class="thread-msg @(r.IsStaff ? "staff" : "employee")">
                                             <div class="thread-meta">
-                                                <strong>@(r.IsStaff ? "HR Team" : "You")</strong>
+                                                <strong>
+                                                    @if (isCurrentUser)
+                                                    {
+                                                        <span>You</span>
+                                                    }
+                                                    else if (r.IsStaff)
+                                                    {
+                                                        @("HR Team")
+                                                    }
+                                                    else
+                                                    {
+                                                        @r.AuthorName
+                                                    }
+                                                    @if (!isCurrentUser && r.IsOrgAdmin)
+                                                    {
+                                                        <span class="badge bg-danger ms-1" style="font-size: 9px;">OrgAdmin</span>
+                                                    }
+                                                    else if (!isCurrentUser && r.IsHR)
+                                                    {
+                                                        <span class="badge bg-info ms-1" style="font-size: 9px;">HR</span>
+                                                    }
+                                                </strong>
                                                 <span>@r.CreatedAt.ToLocalTime().ToString("dd MMM, hh:mm tt")</span>
                                             </div>
                                             <div class="thread-body">@r.Message</div>
@@ -182,8 +211,8 @@
 {
     <div class="modal-backdrop-custom" @onclick="CloseNewTicketModal"></div>
     <div class="new-ticket-modal shadow-lg">
-        <div class="modal-header">
-            <h5 class="modal-title">Raise a Support Ticket</h5>
+        <div class="modal-header border-bottom">
+            <h5 class="modal-title fw-bold text-dark">Raise a Support Ticket</h5>
             <button class="btn-close" @onclick="CloseNewTicketModal"></button>
         </div>
         <div class="modal-body">
@@ -221,9 +250,9 @@
                           @bind="_newDescription"></textarea>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" @onclick="CloseNewTicketModal">Cancel</button>
-            <button class="btn btn-primary"
+        <div class="modal-footer border-top">
+            <button class="btn btn-action-cancel px-3" @onclick="CloseNewTicketModal">Cancel</button>
+            <button class="btn btn-add-dept"
                     @onclick="SubmitNewTicketAsync"
                     disabled="@(string.IsNullOrWhiteSpace(_newCategory) || string.IsNullOrWhiteSpace(_newDescription))">
                 Submit Ticket
@@ -234,6 +263,90 @@
 
 <!-- ═══ Styles ═══════════════════════════════════════════════════════════ -->
 <style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .btn-add-dept {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .pill-active {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .pill-pending {
+        background-color: #fffbeb;
+        color: #92400e;
+    }
+
+    .pill-cancelled {
+        background-color: #f1f5f9;
+        color: #475569;
+    }
+
+    .pill-open {
+        background-color: rgba(92, 74, 199, 0.08);
+        color: #5c4ac7;
+    }
+
+    .btn-action-cancel {
+        background-color: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 5px 14px;
+        font-size: 12.5px;
+    }
+
+    .ticket-list-item {
+        border: none;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+        .ticket-list-item:hover {
+            background-color: #f8fafc;
+        }
+
+        .ticket-list-item.active {
+            background-color: rgba(92, 74, 199, 0.08);
+            border-color: #e2e8f0;
+            color: inherit;
+        }
+
     .ticket-thread {
         max-height: 320px;
         overflow-y: auto;
@@ -307,11 +420,14 @@
     private string _newPriority = "Medium";
     private string _newDescription = "";
     private string? _createError;
+    private string _currentUserId = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        _tickets = await TicketService.GetMyTicketsAsync();
+        var currentUser = await CurrentUserService.GetUserAsync();
+        _currentUserId = currentUser?.Id ?? string.Empty;
 
+        _tickets = await TicketService.GetMyTicketsAsync();
         var target = TicketId.HasValue && _tickets.Any(t => t.TicketId == TicketId.Value)
             ? TicketId.Value
             : _tickets.FirstOrDefault()?.TicketId;
@@ -333,6 +449,8 @@
             ? await TicketService.GetRepliesAsync(ticketId, includeInternalNotes: false)
             : new List<TicketReplyViewDto>();
     }
+
+
 
     private async Task SendReplyAsync()
     {
@@ -397,12 +515,12 @@
         }
     }
 
-    private static string StatusBadge(string s) => s switch
+    private static string StatusPill(string s) => s switch
     {
-        "Open" => "bg-primary",
-        "InProgress" => "bg-warning text-dark",
-        "Resolved" => "bg-success",
-        "Closed" => "bg-secondary",
-        _ => "bg-light text-dark"
+        "Open" => "pill-open",
+        "InProgress" => "pill-pending",
+        "Resolved" => "pill-active",
+        "Closed" => "pill-cancelled",
+        _ => "pill-cancelled"
     };
 }

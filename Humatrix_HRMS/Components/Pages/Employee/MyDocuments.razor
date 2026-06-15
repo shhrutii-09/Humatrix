@@ -23,21 +23,21 @@
 <div class="container-fluid px-4 mt-4">
 
     @* Header Section *@
-    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold">📄 My Documents</h2>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">📄 My Documents</h2>
             <p class="text-muted small mb-0">View, upload, and acknowledge your documents</p>
         </div>
-        <button class="btn btn-secondary btn-sm" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
+        <button class="btn btn-dashboard px-4" @onclick='() => Nav.NavigateTo("/employee/dashboard")'>
             ← Dashboard
         </button>
     </div>
 
     @if (isLoading)
     {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary"></div>
-            <p class="mt-2 text-muted">Loading documents...</p>
+        <div class="text-center py-5 my-5">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="mt-3 text-muted fw-medium">Loading document registry...</p>
         </div>
     }
     else
@@ -45,8 +45,8 @@
         @* Profile completion banner *@
         @if (employeeDashboard != null)
         {
-            <div class="card shadow-sm border-0 mb-4" style="background: linear-gradient(135deg, #667eea, #764ba2)">
-                <div class="card-body text-white">
+            <div class="card border-0 shadow-sm panel-container-card mb-4" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+                <div class="card-body text-white p-4">
                     <div class="row align-items-center">
                         <div class="col-md-8">
                             <h5 class="fw-bold mb-2">Profile Completion</h5>
@@ -63,13 +63,11 @@
                         <div class="col-md-4 text-md-end mt-3 mt-md-0">
                             @if (employeeDashboard.MissingMandatoryCount > 0)
                             {
-                                <div class="badge bg-warning text-dark px-3 py-2 fs-6">
-                                    ⚠️ @employeeDashboard.MissingMandatoryCount required doc(s) missing
-                                </div>
+                                <span class="badge bg-warning text-dark px-3 py-2 fs-6">⚠️ @employeeDashboard.MissingMandatoryCount required doc(s) missing</span>
                             }
                             else
                             {
-                                <div class="badge bg-white text-success px-3 py-2 fs-6">✓ All required documents uploaded</div>
+                                <span class="badge bg-white text-success px-3 py-2 fs-6">✓ All required documents uploaded</span>
                             }
                         </div>
                     </div>
@@ -80,47 +78,45 @@
         @* Alert Messages *@
         @if (!string.IsNullOrEmpty(message))
         {
-            <div class="alert alert-@(messageIsError ? "danger" : "success") alert-dismissible fade show mb-3">
+            <div class="alert alert-@(messageIsError ? "danger" : "success") alert-dismissible fade show mb-3" style="border-radius: 12px;">
                 @message
                 <button type="button" class="btn-close" @onclick="() => message = null"></button>
             </div>
         }
 
         @* Navigation Tabs *@
-        <ul class="nav nav-tabs mb-4">
-            <li class="nav-item">
-                <button class="nav-link @(activeTab == "mine" ? "active fw-bold" : "")" @onclick='() => SetTab("mine")'>
-                    My Uploads
-                    <span class="badge bg-secondary ms-1">@employeeDocuments.Count</span>
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link @(activeTab == "org" ? "active fw-bold" : "") position-relative" @onclick='() => SetTab("org")'>
-                    Company Documents
-                    <span class="badge bg-secondary ms-1">@orgDocuments.Count</span>
-                    @if (pendingAckCount > 0)
-                    {
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">
-                            @pendingAckCount
-                        </span>
-                    }
-                </button>
-            </li>
-        </ul>
+        <div class="d-flex gap-1 mb-4 tab-nav-wrapper">
+            <button class="btn tab-btn @(activeTab == "mine" ? "tab-btn-active" : "")"
+                    @onclick='() => SetTab("mine")'>
+                <i class="bi bi-cloud-upload me-2"></i>My Uploads
+                <span class="tab-count-badge ms-2">@employeeDocuments.Count</span>
+            </button>
+            <button class="btn tab-btn @(activeTab == "org" ? "tab-btn-active" : "") position-relative"
+                    @onclick='() => SetTab("org")'>
+                <i class="bi bi-building me-2"></i>Company Documents
+                <span class="tab-count-badge ms-2">@orgDocuments.Count</span>
+                @if (pendingAckCount > 0)
+                {
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">
+                        @pendingAckCount
+                    </span>
+                }
+            </button>
+        </div>
 
         @* TAB 1 — MY UPLOADS *@
         @if (activeTab == "mine")
         {
             @* Upload Form *@
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white border-bottom py-3">
-                    <h6 class="mb-0 fw-semibold">📤 Upload a Document</h6>
+            <div class="card border-0 shadow-sm panel-container-card mb-4">
+                <div class="card-header bg-white border-bottom p-3">
+                    <h6 class="mb-0 fw-semibold text-dark">📤 Upload a Document</h6>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-5">
-                            <label class="form-label small fw-bold">Document Type <span class="text-danger">*</span></label>
-                            <select class="form-select" @bind="selectedDocumentTypeId">
+                            <label class="form-label fw-semibold small text-secondary tracking-wider">Document Type <span class="text-danger">*</span></label>
+                            <select class="form-select premium-edit-input" @bind="selectedDocumentTypeId">
                                 <option value="">— Select Document Type —</option>
                                 @foreach (var t in uploadableDocumentTypes)
                                 {
@@ -129,22 +125,25 @@
                                     </option>
                                 }
                             </select>
-
                             @if (!uploadableDocumentTypes.Any())
                             {
-                                <div class="form-text text-warning">
+                                <div class="form-text text-warning mt-1 small">
                                     No uploadable document types configured. Contact HR.
                                 </div>
                             }
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold">File <span class="text-danger">*</span></label>
-                            <InputFile OnChange="@OnFileSelected" class="form-control" />
-                            <div class="form-text">PDF, JPG, PNG — max 5 MB</div>
+                            <label class="form-label fw-semibold small text-secondary tracking-wider">File <span class="text-danger">*</span></label>
+                            <InputFile OnChange="@OnFileSelected" class="form-control premium-edit-input" />
+                            <div class="form-text text-muted small mt-1">PDF, JPG, PNG — max 5 MB</div>
                         </div>
                         <div class="col-md-3">
-                            <button class="btn btn-primary w-100" @onclick="UploadDocument" disabled="@isUploading">
-                                @(isUploading ? "Uploading…" : "Upload")
+                            <button class="btn btn-primary-action w-100" @onclick="UploadDocument" disabled="@isUploading">
+                                @if (isUploading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                }
+                                <i class="bi bi-upload me-1"></i> Upload
                             </button>
                         </div>
                     </div>
@@ -154,73 +153,74 @@
             @* My Documents Table *@
             @if (!employeeDocuments.Any())
             {
-                <div class="alert alert-info">
-                    No documents uploaded yet. Use the form above to get started.
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="text-center py-5">
+                        <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-2 mx-auto mb-3" style="width: 64px; height: 64px;">
+                            <i class="bi bi-file-earmark-x"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1">No Documents Uploaded</h5>
+                        <p class="text-muted small mx-auto" style="max-width: 400px;">
+                            Use the form above to upload your documents. HR will review them shortly.
+                        </p>
+                    </div>
                 </div>
             }
             else
             {
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white border-bottom py-3">
-                        <h6 class="mb-0 fw-semibold">My Uploaded Documents</h6>
-                    </div>
+                <div class="card border-0 shadow-sm panel-container-card">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
+                            <thead>
                                 <tr>
-                                    <th class="ps-4">Document Type</th>
-                                    <th>Category</th>
-                                    <th>Status</th>
-                                    <th>Uploaded</th>
-                                    <th class="pe-4">File</th>
+                                    <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">DOCUMENT TYPE</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">CATEGORY</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">STATUS</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">UPLOADED</th>
+                                    <th class="pe-4 text-secondary small fw-bold tracking-wider py-3 text-end">ACTION</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var doc in employeeDocuments)
                                 {
-                                    <tr>
-                                        <td class="ps-4">
-                                            <div class="fw-bold">@doc.DocumentTypeName</div>
+                                    <tr class="table-row-interactive">
+                                        <td class="ps-4 py-3">
+                                            <div class="fw-bold text-dark text-heading-field">@doc.DocumentTypeName</div>
                                             @if (doc.IsMandatory)
                                             {
-                                                <span class="badge bg-danger" style="font-size: 0.7rem;">Required</span>
+                                                <span class="badge premium-soft-dept-badge mt-1" style="font-size: 10px;">Required</span>
                                             }
                                         </td>
-                                        <td><span class="badge bg-light text-dark border">@doc.Category</span></td>
-                                        <td>
-                                            <span class="badge @GetStatusBadge(doc.Status)">
+                                        <td class="py-3">
+                                            <span class="badge premium-soft-dept-badge">@doc.Category</span>
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="status-indicator-pill @GetStatusPillClass(doc.Status)">
                                                 @GetStatusIcon(doc.Status) @doc.Status
                                             </span>
                                             @if (doc.Status == "Rejected" && !string.IsNullOrEmpty(doc.RejectionRemarks))
                                             {
-                                                <div class="text-danger small mt-1">
-                                                    <i>Reason: @doc.RejectionRemarks</i>
+                                                <div class="text-danger small mt-1" style="font-size: 11px;">
+                                                    <i class="bi bi-info-circle me-1"></i>@doc.RejectionRemarks
                                                 </div>
                                             }
                                         </td>
-                                        <td class="small text-muted">@doc.UploadedAt?.ToString("dd MMM yyyy")</td>
-                                        @* <td class="pe-4">
-                                            <a href="api/documents/download/@doc.DocumentId" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                📄 View
-                                            </a>
-                                        </td> *@
-                                        <td class="pe-4 text-end">
+                                        <td class="py-3 text-muted small">@doc.UploadedAt?.ToString("dd MMM yyyy")</td>
+                                        <td class="pe-4 py-3 text-end">
                                             @if (doc.DocumentId != Guid.Empty && !string.IsNullOrWhiteSpace(doc.FilePath))
                                             {
-                                                <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-primary">
-                                                    📄 View File
+                                                <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-outline-primary-action">
+                                                    <i class="bi bi-eye me-1"></i> View
                                                 </a>
                                             }
                                             else if (doc.DocumentId != Guid.Empty)
                                             {
-                                                @* Fallback to API route if FilePath string isn't populated on the DTO yet *@
-                                                <a href="api/documents/download/@doc.DocumentId" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                    📄 Download
+                                                <a href="api/documents/download/@doc.DocumentId" target="_blank" class="btn btn-sm btn-outline-primary-action">
+                                                    <i class="bi bi-download me-1"></i> Download
                                                 </a>
                                             }
                                             else
                                             {
-                                                <span class="text-muted small">No file attached</span>
+                                                <span class="text-muted small">No file</span>
                                             }
                                         </td>
                                     </tr>
@@ -232,12 +232,22 @@
             }
         }
 
-        @* TAB 2 — COMPANY DOCUMENTS (org-issued) *@
+        @* TAB 2 — COMPANY DOCUMENTS *@
         @if (activeTab == "org")
         {
             @if (!orgDocuments.Any())
             {
-                <div class="alert alert-info">No company documents have been issued to you yet.</div>
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="text-center py-5">
+                        <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-2 mx-auto mb-3" style="width: 64px; height: 64px;">
+                            <i class="bi bi-building"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1">No Company Documents</h5>
+                        <p class="text-muted small mx-auto" style="max-width: 400px;">
+                            No company documents have been issued to you yet.
+                        </p>
+                    </div>
+                </div>
             }
             else
             {
@@ -247,7 +257,11 @@
 
                 @if (pendingAck.Any())
                 {
-                    <h6 class="fw-bold text-warning mb-3">⏳ Awaiting Your Acknowledgment (@pendingAck.Count)</h6>
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <i class="bi bi-clock-history text-warning fs-5"></i>
+                        <h6 class="fw-bold text-dark mb-0">Awaiting Your Acknowledgment</h6>
+                        <span class="badge bg-warning text-dark ms-2">@pendingAck.Count</span>
+                    </div>
                     <div class="row g-3 mb-4">
                         @foreach (var doc in pendingAck)
                         {
@@ -260,7 +274,11 @@
 
                 @if (acknowledged.Any())
                 {
-                    <h6 class="fw-bold text-success mb-3">✓ Acknowledged (@acknowledged.Count)</h6>
+                    <div class="d-flex align-items-center gap-2 mb-3 mt-4">
+                        <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                        <h6 class="fw-bold text-dark mb-0">Acknowledged</h6>
+                        <span class="badge bg-success ms-2">@acknowledged.Count</span>
+                    </div>
                     <div class="row g-3 mb-4">
                         @foreach (var doc in acknowledged)
                         {
@@ -273,9 +291,14 @@
 
                 @if (revoked.Any())
                 {
-                    <h6 class="fw-bold text-danger mb-3">🚫 Revoked Documents (@revoked.Count)</h6>
-                    <div class="alert alert-danger py-2 small mb-3">
-                        These documents have been <strong>revoked</strong> by your organisation. They are no longer valid. If you have questions, contact HR.
+                    <div class="d-flex align-items-center gap-2 mb-3 mt-4">
+                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                        <h6 class="fw-bold text-dark mb-0">Revoked Documents</h6>
+                        <span class="badge bg-danger ms-2">@revoked.Count</span>
+                    </div>
+                    <div class="alert alert-danger py-2 small mb-3" style="border-radius: 10px;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        These documents have been revoked by your organisation. They are no longer valid.
                     </div>
                     <div class="row g-3 mb-4">
                         @foreach (var doc in revoked)
@@ -290,6 +313,221 @@
         }
     }
 </div>
+
+<style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .icon-shape {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .bg-primary-subtle {
+        background-color: rgba(92, 74, 199, 0.1);
+    }
+
+    .text-primary {
+        color: #5c4ac7 !important;
+    }
+
+    /* Tab Navigation */
+    .tab-nav-wrapper {
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 0;
+    }
+
+    .tab-btn {
+        border: none;
+        background: transparent;
+        color: #64748b;
+        font-size: 13.5px;
+        font-weight: 500;
+        padding: 8px 16px;
+        border-radius: 0;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -1px;
+        transition: all 0.2s ease;
+    }
+
+        .tab-btn:hover {
+            color: #5c4ac7;
+        }
+
+    .tab-btn-active {
+        color: #5c4ac7 !important;
+        font-weight: 700;
+        border-bottom-color: #5c4ac7 !important;
+    }
+
+    .tab-count-badge {
+        background-color: #f1f5f9;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 20px;
+    }
+
+    .tab-btn-active .tab-count-badge {
+        background-color: rgba(92, 74, 199, 0.1);
+        color: #5c4ac7;
+    }
+
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .table-row-interactive:hover {
+        background-color: #f8fafc;
+    }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .btn-primary-action {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .btn-primary-action:hover {
+            background-color: #4c3ca3 !important;
+            transform: translateY(-1px);
+        }
+
+    .btn-outline-primary-action {
+        background: transparent !important;
+        color: #5c4ac7 !important;
+        border: 1px solid rgba(92, 74, 199, 0.3) !important;
+        padding: 5px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+        .btn-outline-primary-action:hover {
+            background: rgba(92, 74, 199, 0.08) !important;
+            border-color: #5c4ac7 !important;
+        }
+
+    .btn-dashboard {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 20px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-dashboard:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
+
+    .premium-edit-input {
+        font-size: 13.5px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        transition: all 0.2s ease;
+    }
+
+        .premium-edit-input:focus {
+            border-color: #5c4ac7;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12);
+            outline: none;
+        }
+
+    .premium-soft-dept-badge {
+        background-color: rgba(92, 74, 199, 0.08) !important;
+        color: #5c4ac7 !important;
+        font-size: 11.5px;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 70px;
+        text-align: center;
+    }
+
+    .pill-verified {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-pending {
+        background-color: #fffbeb;
+        color: #92400e;
+    }
+
+    .pill-rejected {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .pill-default {
+        background-color: #f1f5f9;
+        color: #475569;
+    }
+
+    /* Document Cards */
+    .doc-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0 !important;
+        transition: all 0.2s ease;
+    }
+
+        .doc-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border-color: rgba(92, 74, 199, 0.2) !important;
+        }
+
+    .border-warning-card {
+        border-left: 4px solid #f59e0b !important;
+    }
+
+    .border-success-card {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .border-danger-card {
+        border-left: 4px solid #ef4444 !important;
+    }
+</style>
 
 @code {
     // ── State ─────────────────────────────────────────────────────────────────
@@ -422,7 +660,7 @@
         {
             await OrgDocumentService.AcknowledgeDocumentAsync(
                 documentId, currentEmployee!.EmployeeId, "Acknowledged via employee portal");
-            message = "Document acknowledged.";
+            message = "Document acknowledged successfully.";
             messageIsError = false;
             await LoadData();
         }
@@ -435,80 +673,56 @@
 
     // ── Render helper for org doc cards ──────────────────────────────────────
     private RenderFragment OrgDocCard(OrgGeneratedDocument doc, bool canAcknowledge) =>
-        @<div class="card h-100 shadow-sm @(doc.Status == "Revoked" ? "border-danger" : doc.Status == "Acknowledged" ? "border-success" : "border-warning")">
-    <div class="card-body">
+        @<div class="card h-100 doc-card @(doc.Status == "Revoked" ? "border-danger-card" : doc.Status == "Acknowledged" ? "border-success-card" : "border-warning-card")">
+    <div class="card-body p-3 d-flex flex-column">
         <div class="d-flex justify-content-between align-items-start mb-2">
             <span class="badge bg-light text-muted border small">@doc.GeneratedAt.ToString("dd MMM yyyy")</span>
-            <span class="badge @GetIssuedBadge(doc.Status)">
-                @GetIssuedIcon(doc.Status) @doc.Status
+            <span class="status-indicator-pill @(doc.Status == "Acknowledged" ? "pill-verified" : doc.Status == "Issued" ? "pill-pending" : "pill-rejected")">
+                @(doc.Status == "Acknowledged" ? "✓ Acknowledged" : doc.Status == "Issued" ? "⏳ Pending" : "🚫 Revoked")
             </span>
         </div>
-        <h6 class="fw-bold">@doc.DocumentName</h6>
-        <small class="text-muted d-block">Ref: @doc.DocumentNumber</small>
+        <h6 class="fw-bold text-dark mb-1 text-heading-field">@doc.DocumentName</h6>
+        <small class="text-muted font-monospace d-block mb-2">Ref: @doc.DocumentNumber</small>
         @if (!string.IsNullOrEmpty(doc.Description))
                 {
-        <p class="small text-muted mt-1 mb-0">@doc.Description</p>
-                }
-        @if (doc.Status == "Revoked")
-                {
-        <div class="alert alert-danger py-1 small mt-2 mb-0">
-            🚫 This document has been revoked by your organisation.
-        </div>
+        <p class="small text-muted mt-1 mb-2">@doc.Description</p>
                 }
         @if (doc.AcknowledgedAt.HasValue)
                 {
-        <small class="text-success d-block mt-2">
-            ✓ You acknowledged this on @doc.AcknowledgedAt.Value.ToString("dd MMM yyyy")
+        <small class="text-success d-block mt-1" style="font-size: 11px;">
+            <i class="bi bi-check-circle-fill me-1"></i> Acknowledged on @doc.AcknowledgedAt.Value.ToString("dd MMM yyyy")
         </small>
                 }
     </div>
-    <div class="card-footer bg-transparent d-flex gap-2">
+    <div class="card-footer bg-transparent border-top-0 pb-3 pt-0 d-flex gap-2">
         @if (doc.Status != "Revoked")
         {
-            <a href="@doc.FilePath" target="_blank" class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => MarkAsViewed(doc.DocumentId)">
-                📄 View / Download
+            <a href="@doc.FilePath" target="_blank" class="btn btn-outline-primary-action flex-fill" @onclick="() => MarkAsViewed(doc.DocumentId)">
+                <i class="bi bi-eye me-1"></i> View
             </a>
         }
         @if (canAcknowledge)
         {
-            <button class="btn btn-sm btn-success flex-fill" @onclick="() => AcknowledgeOrgDocument(doc.DocumentId)">
-                ✓ Acknowledge
+            <button class="btn btn-primary-action flex-fill" @onclick="() => AcknowledgeOrgDocument(doc.DocumentId)">
+                <i class="bi bi-check2 me-1"></i> Acknowledge
             </button>
         }
     </div>
 </div>;
 
-// ── Badge helpers ─────────────────────────────────────────────────────────
-private static string GetStatusBadge(string s) => s switch
+private static string GetStatusPillClass(string status) => status switch
 {
-    "Verified" => "bg-success",
-    "Pending" => "bg-warning text-dark",
-    "PageTitle" => "bg-danger",
-    "Rejected" => "bg-danger",
-    _ => "bg-secondary"
+    "Verified" => "pill-verified",
+    "Pending" => "pill-pending",
+    "Rejected" => "pill-rejected",
+    _ => "pill-default"
 };
 
-private static string GetStatusIcon(string s) => s switch
+private static string GetStatusIcon(string status) => status switch
 {
     "Verified" => "✓",
     "Pending" => "⏳",
     "Rejected" => "✗",
-    _ => "📄"
-};
-
-private static string GetIssuedBadge(string s) => s switch
-{
-    "Acknowledged" => "bg-success",
-    "Issued" => "bg-warning text-dark",
-    "Revoked" => "bg-danger",
-    _ => "bg-secondary"
-};
-
-private static string GetIssuedIcon(string s) => s switch
-{
-    "Acknowledged" => "✓",
-    "Issued" => "⏳",
-    "Revoked" => "🚫",
     _ => "📄"
 };
 }

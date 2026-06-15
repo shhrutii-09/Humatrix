@@ -1,4 +1,5 @@
 ﻿// Models/SupportTicket.cs
+using Humatrix_HRMS.Data;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -55,10 +56,18 @@ namespace Humatrix_HRMS.Models
         public string Source { get; set; } = "Manual";
 
         // ── Resolution ────────────────────────────────────────────────────────
-        [MaxLength(4000)]
-        public string? Resolution { get; set; }
-
+        //[MaxLength(4000)]
         public DateTime? ResolvedAt { get; set; }
+        public string? Resolution { get; set; }
+        public string? ResolvedByUserId { get; set; }
+        public string? ClosedByUserId { get; set; }
+        public DateTime? ClosedAt { get; set; }
+
+        [ForeignKey("ResolvedByUserId")]
+        public virtual ApplicationUser? ResolvedBy { get; set; }
+
+        [ForeignKey("ClosedByUserId")]
+        public virtual ApplicationUser? ClosedBy { get; set; }
 
         /// <summary>Internal note visible only to HR/OrgAdmin — not shown to the employee.</summary>
         [MaxLength(4000)]

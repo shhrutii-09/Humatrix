@@ -167,5 +167,34 @@ namespace Humatrix_HRMS.Services
         }
 
 
+        public async Task<ApplicationUser?> GetUserAsync(string userId)
+        {
+            try
+            {
+                using var context = _contextFactory.CreateDbContext();
+                return await context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == userId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting user with ID: {UserId}", userId);
+                return null;
+            }
+        }
+
+        public async Task<bool> IsInRoleAsync(ApplicationUser user, string role)
+        {
+            if (user == null) return false;
+
+            using var context = _contextFactory.CreateDbContext();
+            var userRoles = await context.UserRoles
+                .Where(ur => ur.UserId == user.Id)
+                .Join(context.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name)
+                .ToListAsync();
+
+            return userRoles.Contains(role);
+        }
+
     }
 }

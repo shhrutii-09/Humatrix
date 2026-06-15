@@ -13,226 +13,11 @@
 
 <PageTitle>My Workspace Assets | Humatrix HRMS</PageTitle>
 
-<div class="am-wrapper" style="padding: 1.5rem; max-width: 1400px; margin: 0 auto;">
-
-    <div class="am-header mb-4 d-flex align-items-center justify-content-between" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 1rem;">
-        <div>
-            <div class="d-flex align-items-center gap-2">
-                <div class="bg-primary text-white d-flex align-items-center justify-content-center rounded" style="width: 40px; height: 40px; font-size: 1.3rem;">
-                    <i class="bi bi-laptop"></i>
-                </div>
-                <h1 class="m-0" style="font-size: 1.75rem; font-weight: 700; color: #0f172a;">My Workplace Assets</h1>
-            </div>
-            <p class="text-muted m-0 mt-1" style="font-size: 0.95rem;">Track physical hardware, inventory configurations, and active technical requests assigned to you.</p>
-        </div>
-    </div>
-
-    <div class="d-flex border-bottom mb-4 gap-2" style="border-color: #e2e8f0 !important;">
-        <button class="btn pb-2 px-3 m-0 rounded-0 @(activeTab == "my-items" ? "border-bottom border-3 border-primary fw-bold text-primary" : "text-secondary")"
-                style="background: transparent; box-shadow: none;" @onclick='() => ChangeTab("my-items")'>
-            <i class="bi bi-box-seam me-2"></i>My Possessed Items (@myAssets.Count)
-        </button>
-        <button class="btn pb-2 px-3 m-0 rounded-0 @(activeTab == "my-requests" ? "border-bottom border-3 border-primary fw-bold text-primary" : "text-secondary")"
-                style="background: transparent; box-shadow: none;" @onclick='() => ChangeTab("my-requests")'>
-            <i class="bi bi-chat-square-text me-2"></i>Request Tracking Logs (@myRequests.Count)
-        </button>
-        <button class="btn pb-2 px-3 m-0 rounded-0
-@(activeTab == "history"
-                    ? "border-bottom border-3 border-primary fw-bold text-primary"
-                    : "text-secondary")"
-                @onclick='() => ChangeTab("history")'>
-
-            <i class="bi bi-clock-history me-2"></i>
-            Asset History (@assetHistory.Count)
-        </button>
-    </div>
-
-    @if (loading)
-    {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="text-muted mt-2 small">Synchronizing inventory registries...</p>
-        </div>
-    }
-    else
-    {
-        @if (activeTab == "my-items")
-        {
-            @if (!myAssets.Any())
-            {
-                <div class="text-center py-5 bg-white rounded border dotted" style="border-style: dashed !important; border-color: #cbd5e1 !important;">
-                    <i class="bi bi-patch-check text-muted display-4 mb-2 d-block"></i>
-                    <h5 class="fw-bold text-dark">No Assets Assigned</h5>
-                    <p class="text-muted small mx-auto" style="max-width: 400px;">There are currently no physical organizational items mapped under your custody account profile.</p>
-                </div>
-            }
-            else
-            {
-                <div class="row g-3">
-                    @foreach (var item in myAssets)
-                    {
-                        <div class="col-md-6 col-lg-4">
-                            <div class="card h-100 shadow-sm border" style="border-radius: 12px; background: #fff; border-color: #e2e8f0;">
-                                <div class="card-body p-4 d-flex flex-column justify-content-between">
-                                    <div>
-                                        <div class="d-flex align-items-start justify-content-between mb-2">
-                                            <span class="badge bg-secondary-subtle text-secondary small">@item.Category</span>
-                                            @* <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.75rem;">In Custody</span> *@
-                                            <span class="@GetAssetStatusBadge(item.Status)">
-                                                @item.Status
-                                            </span>
-                                        </div>
-                                        <h5 class="card-title fw-bold text-dark mb-1" style="font-size: 1.15rem;">@item.Name</h5>
-                                        <div class="text-muted small font-monospace mb-3 bg-light p-1 px-2 rounded d-inline-block">@item.AssetCode</div>
-
-                                        <div class="border-top pt-2 mt-2" style="font-size: 0.85rem;">
-                                            <div class="d-flex justify-content-between mb-1">
-                                                <span class="text-muted">Brand / Model:</span>
-                                                <span class="text-dark fw-semibold">@(string.IsNullOrEmpty(item.Brand) ? "—" : $"{item.Brand} {item.Model}".Trim())</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between">
-                                                <span class="text-muted">Serial No:</span>
-                                                <span class="text-dark font-monospace text-truncate ms-2" style="max-width: 180px;">@(string.IsNullOrEmpty(item.SerialNumber) ? "—" : item.SerialNumber)</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    @{
-                                        var activeRequest = GetActiveRequest(item.AssetId);
-                                    }
-                                    @if (activeRequest != null)
-                                    {
-                                        <div class="alert alert-info small mb-0">
-                                            Active Request:
-                                            <strong>@activeRequest.RequestType</strong>
-                                            (@activeRequest.Status)
-                                        </div>
-                                    }
-                                    else if (item.Status == AssetStatus.InRepair)
-                                    {
-                                        <div class="alert alert-warning small mb-0">
-                                            This asset is currently under repair.
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                    <div class="mt-4 pt-3 border-top d-flex gap-2">
-                                        <button class="btn btn-outline-warning btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
-                                                @onclick='() => OpenRequestModal(item, AssetRequestType.Repair)'>
-                                            <i class="bi bi-tools"></i> Report Issue
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
-                                                @onclick='() => OpenRequestModal(item, AssetRequestType.Replacement)'>
-                                            <i class="bi bi-arrow-repeat"></i> Request Replacement
-                                        </button>
-                                        <button class="btn btn-outline-primary btn-sm w-100 py-2 rounded-3 d-flex align-items-center justify-content-center gap-1"
-                                                @onclick='() => OpenRequestModal(item, AssetRequestType.Return)'>
-                                            <i class="bi bi-arrow-left-right"></i> Return Item
-                                        </button>
-                                    </div>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        }
-
-        @if (activeTab == "my-requests")
-        {
-            @if (!myRequests.Any())
-            {
-                <div class="text-center py-5 bg-white rounded border dotted" style="border-style: dashed !important; border-color: #cbd5e1 !important;">
-                    <i class="bi bi-chat-square-text text-muted display-4 mb-2 d-block"></i>
-                    <h5 class="fw-bold text-dark">No History Found</h5>
-                    <p class="text-muted small" style="max-width: 400px; margin: 0 auto;">You have not initiated or logged any technical asset requests yet.</p>
-                </div>
-            }
-            else
-            {
-                <div class="card shadow-sm border-0" style="border-radius: 12px; overflow: hidden; background: #fff;">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
-                            <thead class="table-light" style="background: #f8fafc; font-weight: 600;">
-                                <tr>
-                                    <th class="ps-4 py-3" style="color: #64748b;">Asset / Code</th>
-                                    <th class="py-3" style="color: #64748b;">Request Category</th>
-                                    <th class="py-3" style="color: #64748b;">Submitted Date</th>
-                                    <th class="py-3" style="color: #64748b;">Status</th>
-                                    <th class="py-3" style="color: #64748b;">Reason Notes</th>
-                                    <th class="pe-4 py-3 text-end" style="color: #64748b;">Review Feed</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var req in myRequests)
-                                {
-                                    <tr>
-                                        @* <td class="ps-4 py-3">
-                                            <div class="fw-bold text-dark">@req.AssetName</div>
-                                            <div class="text-muted font-monospace small">@req.AssetCode</div>
-                                        </td> *@
-                                        <td class="ps-4 py-3">
-                                            <div class="d-flex flex-column gap-1">
-                                                <div>
-                                                    <div class="fw-bold text-dark">@req.AssetName</div>
-                                                    <div class="text-muted font-monospace small">@req.AssetCode</div>
-                                                </div>
-
-                                                @* Check if this is a replacement request that has been successfully fulfilled/completed *@
-                                                @if (req.RequestType == AssetRequestType.Replacement &&
-                                                                                req.Status == AssetRequestStatus.Completed &&
-                                                                                !string.IsNullOrEmpty(req.ReplacementAssetCode))
-                                                {
-                                                    <div class="mt-1">
-                                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.75rem;">
-                                                            <i class="bi bi-arrow-right-circle-fill me-1"></i>Replaced by:
-                                                            <strong class="font-monospace ms-1">@req.ReplacementAssetCode</strong>
-                                                        </span>
-                                                        @if (!string.IsNullOrEmpty(req.ReplacementAssetName))
-                                                        {
-                                                            <div class="text-muted text-truncate ms-1" style="font-size: 0.75rem; max-width: 200px;" title="@req.ReplacementAssetName">
-                                                                @req.ReplacementAssetName
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
-                                        </td>
-                                        <td class="py-3">
-                                            <span class="@GetRequestTypeClass(req.RequestType)" style="font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 6px; font-weight: 600;">
-                                                @req.RequestType
-                                            </span>
-                                        </td>
-                                        <td class="py-3 text-secondary" style="font-size: 0.85rem;">
-                                            @req.RequestedAt.ToLocalTime().ToString("g")
-                                        </td>
-                                        <td class="py-3">
-                                            <span class="@GetStatusClass(req.Status)" style="font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 50px; font-weight: 600;">
-                                                @req.Status
-                                            </span>
-                                        </td>
-                                        <td class="py-3 text-secondary text-truncate" style="max-width: 240px;" title="@req.Reason">
-                                            @req.Reason
-                                        </td>
-                                        <td class="pe-4 py-3 text-end text-muted small user-select-none">
-                                            @(string.IsNullOrEmpty(req.ReviewNotes) ? "Pending corporate response." : $"\"{req.ReviewNotes}\"")
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            }
-        }
-    }
-</div>
-
 @if (showRequestModal && selectedAsset != null)
 {
-    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px);">
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(3px);">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+            <div class="modal-content border-0 shadow-lg panel-container-card">
                 <div class="modal-header bg-light border-bottom p-3">
                     <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
                         <i class="bi bi-file-earmark-plus text-primary"></i>
@@ -245,36 +30,35 @@
                     <div class="modal-body p-4">
                         @if (!string.IsNullOrEmpty(errorMessage))
                         {
-                            <div class="alert alert-danger p-2 small mb-3">@errorMessage</div>
+                            <div class="alert alert-danger p-2 small mb-3" style="border-radius: 10px;">@errorMessage</div>
                         }
 
-                        <div class="mb-3 p-3 bg-light rounded border">
-                            <span class="text-muted small d-block uppercase fw-semibold" style="letter-spacing: 0.5px; font-size: 0.75rem;">TARGET INVENTORY ITEM</span>
-                            <div class="fw-bold text-dark mt-1">@selectedAsset.Name</div>
+                        <div class="bg-light rounded-3 p-3 mb-3" style="border: 1px solid #e2e8f0;">
+                            <span class="text-muted small fw-bold tracking-wider d-block mb-1">TARGET INVENTORY ITEM</span>
+                            <div class="fw-bold text-dark text-heading-field">@selectedAsset.Name</div>
                             <div class="text-muted font-monospace small">@selectedAsset.AssetCode</div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold text-secondary small">Reason / Justification Notes *</label>
+                            <label class="form-label fw-semibold small text-secondary tracking-wider">REASON / JUSTIFICATION <span class="text-danger">*</span></label>
                             <InputTextArea @bind-Value="createRequestModel.Reason"
-                                           class="form-control small"
+                                           class="form-control premium-edit-input"
                                            rows="4"
-                                           placeholder="@GetPlaceholderText()"
-                                           style="border-radius: 8px; font-size: 0.9rem;" />
+                                           placeholder="@GetPlaceholderText()" />
                             <ValidationMessage For="() => createRequestModel.Reason" class="text-danger small mt-1" />
                         </div>
 
                         @if (targetRequestType == AssetRequestType.Replacement)
                         {
-                            <div class="alert alert-info small mt-2">
+                            <div class="alert alert-info small mt-2" style="border-radius: 10px;">
                                 <i class="bi bi-info-circle me-1"></i>
                                 Replacement requests will be reviewed by HR/OrgAdmin. Upon approval, you'll receive a different asset of the same category.
                             </div>
                         }
                     </div>
                     <div class="modal-footer bg-light border-top p-3 d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-secondary px-3 py-2 small" style="border-radius: 8px;" @onclick="CloseRequestModal">Cancel</button>
-                        <button type="submit" class="btn btn-primary px-4 py-2 small" style="border-radius: 8px;" disabled="@submitting">
+                        <button type="button" class="btn btn-dashboard px-3" @onclick="CloseRequestModal">Cancel</button>
+                        <button type="submit" class="btn btn-primary-action px-4" disabled="@submitting">
                             @if (submitting)
                             {
                                 <span class="spinner-border spinner-border-sm me-1" role="status"></span>
@@ -288,125 +72,584 @@
     </div>
 }
 
-@if (activeTab == "history")
-{
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-light">
-            <h5 class="mb-0">
-                Asset Assignment History
-            </h5>
+<div class="container-fluid px-4 mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">My Workplace Assets</h2>
+            <p class="text-muted small mb-0">Track hardware, inventory configurations, and active technical requests assigned to you.</p>
         </div>
+    </div>
 
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+    @* Tab Navigation *@
+    <div class="d-flex gap-1 mb-4 tab-nav-wrapper">
+        <button class="btn tab-btn @(activeTab == "my-items" ? "tab-btn-active" : "")"
+                @onclick='() => ChangeTab("my-items")'>
+            <i class="bi bi-box-seam me-2"></i>My Possessed Items
+            <span class="tab-count-badge ms-2">@myAssets.Count</span>
+        </button>
+        <button class="btn tab-btn @(activeTab == "my-requests" ? "tab-btn-active" : "")"
+                @onclick='() => ChangeTab("my-requests")'>
+            <i class="bi bi-chat-square-text me-2"></i>Request Tracking Logs
+            <span class="tab-count-badge ms-2">@myRequests.Count</span>
+        </button>
+        <button class="btn tab-btn @(activeTab == "history" ? "tab-btn-active" : "")"
+                @onclick='() => ChangeTab("history")'>
+            <i class="bi bi-clock-history me-2"></i>Asset History
+            <span class="tab-count-badge ms-2">@assetHistory.Count</span>
+        </button>
+    </div>
 
-                <thead>
-                    <tr>
-                        <th>Asset</th>
-                        <th>Code</th>
-                        <th>Assigned On</th>
-                        <th>Returned On</th>
-                        <th>Assigned By</th>
-                        <th>Returned By</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @foreach (var h in assetHistory)
+    @if (loading)
+    {
+        <div class="text-center py-5 my-5">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="mt-3 text-muted fw-medium">Synchronizing inventory registries...</p>
+        </div>
+    }
+    else
+    {
+        @* ── TAB: My Items ── *@
+        @if (activeTab == "my-items")
+        {
+            @if (!myAssets.Any())
+            {
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="text-center py-5">
+                        <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-2 mx-auto mb-3" style="width: 64px; height: 64px;">
+                            <i class="bi bi-patch-check"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1">No Assets Assigned</h5>
+                        <p class="text-muted small mx-auto" style="max-width: 400px;">
+                            There are currently no physical organisational items mapped under your custody account profile.
+                        </p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var item in myAssets)
                     {
-                        <tr>
-                            <td>
-                                <div class="fw-bold text-dark">@h.AssetName</div>
-                                @if (h.IsReplacementAction == true)
-                                {
-                                    <div class="mt-1">
-                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.75rem;">
-                                            <i class="bi bi-arrow-repeat me-1"></i>
-                                            @(h.ReturnedAt.HasValue ? "Replaced By New Asset" : "Acquired via Replacement")
-                                        </span>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card h-100 border-0 shadow-sm asset-card">
+                                <div class="card-body p-4 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex align-items-start justify-content-between mb-2">
+                                            <span class="badge premium-soft-dept-badge">@item.Category</span>
+                                            <span class="status-indicator-pill @GetAssetStatusPillClass(item.Status)">
+                                                @item.Status
+                                            </span>
+                                        </div>
+                                        <h5 class="card-title fw-bold text-dark mb-1 text-heading-field" style="font-size: 1.05rem;">@item.Name</h5>
+                                        <div class="text-muted small font-monospace mb-3 bg-light px-2 py-1 rounded d-inline-block">@item.AssetCode</div>
+
+                                        <div class="border-top pt-2 mt-2" style="font-size: 0.85rem;">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span class="text-muted">Brand / Model</span>
+                                                <span class="text-dark fw-semibold">@(string.IsNullOrEmpty(item.Brand) ? "—" : $"{item.Brand} {item.Model}".Trim())</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="text-muted">Serial No</span>
+                                                <span class="text-dark font-monospace text-truncate ms-2" style="max-width: 180px;">@(string.IsNullOrEmpty(item.SerialNumber) ? "—" : item.SerialNumber)</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                }
-                            </td>
 
-                            <td class="font-monospace small">
-                                @h.AssetCode
-                            </td>
-
-                            <td class="text-secondary small">
-                                @h.AssignedAt.ToLocalTime().ToString("g")
-                            </td>
-
-                            <td class="text-secondary small">
-                                @(h.ReturnedAt?.ToLocalTime().ToString("g") ?? "—")
-                            </td>
-
-                            <td>
-                                @if (!string.IsNullOrWhiteSpace(h.AssignedByName))
-                                {
-                                    <span>@h.AssignedByName</span>
-                                }
-                                else if (h.IsReplacementAction == true && !string.IsNullOrWhiteSpace(h.ActionedByName))
-                                {
-                                    <span class="text-dark fw-semibold">@h.ActionedByName</span>
-                                    <br />
-                                    <small class="text-muted font-monospace" style="font-size: 0.75rem;">via Replacement Approval</small>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">—</span>
-                                }
-                            </td>
-
-                            <td>
-                                @(string.IsNullOrWhiteSpace(h.ReturnedByName) ? "—" : h.ReturnedByName)
-                                @if (!string.IsNullOrWhiteSpace(h.ReturnedByRole))
-                                {
-                                    <br />
-                                    <small class="text-muted" style="font-size: 0.75rem;">@h.ReturnedByRole</small>
-                                }
-                            </td>
-
-                            <td>
-                                <div class="d-flex flex-column gap-1">
-                                    @if (h.ReturnedAt.HasValue)
+                                    @{
+                                        var activeRequest = GetActiveRequest(item.AssetId);
+                                    }
+                                    @if (activeRequest != null)
                                     {
-                                        <span class="badge bg-secondary" style="width: fit-content;">Returned</span>
-                                        @if (!string.IsNullOrEmpty(h.RelatedAssetCode))
-                                        {
-                                            <small class="text-muted" style="font-size: 0.75rem;">
-                                                Next: <strong class="font-monospace text-primary">@h.RelatedAssetCode</strong>
-                                            </small>
-                                        }
+                                        <div class="alert alert-info small mb-0 mt-3" style="border-radius: 10px;">
+                                            Active Request: <strong>@activeRequest.RequestType</strong> (@activeRequest.Status)
+                                        </div>
+                                    }
+                                    else if (item.Status == AssetStatus.InRepair)
+                                    {
+                                        <div class="alert alert-warning small mb-0 mt-3" style="border-radius: 10px;">
+                                            This asset is currently under repair.
+                                        </div>
                                     }
                                     else
                                     {
-                                        <span class="badge bg-success" style="width: fit-content;">Active</span>
-                                        @if (!string.IsNullOrEmpty(h.RelatedAssetCode))
-                                        {
-                                            <small class="text-muted" style="font-size: 0.75rem;">
-                                                Prev: <strong class="font-monospace text-secondary">@h.RelatedAssetCode</strong>
-                                            </small>
-                                        }
+                                        <div class="mt-4 pt-3 border-top d-flex gap-2">
+                                            <button class="btn btn-sm btn-action-warn w-100 py-2 d-flex align-items-center justify-content-center gap-1"
+                                                    @onclick='() => OpenRequestModal(item, AssetRequestType.Repair)'>
+                                                <i class="bi bi-tools"></i> Report
+                                            </button>
+                                            <button class="btn btn-sm btn-action-info w-100 py-2 d-flex align-items-center justify-content-center gap-1"
+                                                    @onclick='() => OpenRequestModal(item, AssetRequestType.Replacement)'>
+                                                <i class="bi bi-arrow-repeat"></i> Replace
+                                            </button>
+                                            <button class="btn btn-sm btn-action-primary w-100 py-2 d-flex align-items-center justify-content-center gap-1"
+                                                    @onclick='() => OpenRequestModal(item, AssetRequestType.Return)'>
+                                                <i class="bi bi-arrow-left-right"></i> Return
+                                            </button>
+                                        </div>
                                     }
                                 </div>
-                            </td>
-                        </tr>
+                            </div>
+                        </div>
                     }
-                </tbody>
+                </div>
+            }
+        }
 
-            </table>
-        </div>
-    </div>
-}
+        @* ── TAB: My Requests ── *@
+        @if (activeTab == "my-requests")
+        {
+            @if (!myRequests.Any())
+            {
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="text-center py-5">
+                        <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-2 mx-auto mb-3" style="width: 64px; height: 64px;">
+                            <i class="bi bi-chat-square-text"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1">No Requests Found</h5>
+                        <p class="text-muted small" style="max-width: 400px; margin: 0 auto;">
+                            You have not initiated or logged any technical asset requests yet.
+                        </p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">ASSET / CODE</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">REQUEST TYPE</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">SUBMITTED DATE</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">STATUS</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">REASON</th>
+                                    <th class="pe-4 text-secondary small fw-bold tracking-wider py-3 text-end">REVIEW FEED</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var req in myRequests)
+                                {
+                                    <tr class="table-row-interactive">
+                                        <td class="ps-4 py-3">
+                                            <div class="fw-bold text-dark text-heading-field">@req.AssetName</div>
+                                            <div class="text-muted font-monospace small">@req.AssetCode</div>
+                                            @if (req.RequestType == AssetRequestType.Replacement &&
+                                                                        req.Status == AssetRequestStatus.Completed &&
+                                                                        !string.IsNullOrEmpty(req.ReplacementAssetCode))
+                                            {
+                                                <div class="mt-1">
+                                                    <span class="badge premium-soft-dept-badge" style="font-size: 11px;">
+                                                        <i class="bi bi-arrow-right-circle-fill me-1"></i>Replaced by: <strong class="font-monospace ms-1">@req.ReplacementAssetCode</strong>
+                                                    </span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="badge @GetRequestTypeClass(req.RequestType)" style="font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                                                @req.RequestType
+                                            </span>
+                                        </td>
+                                        <td class="py-3 text-muted small">
+                                            @req.RequestedAt.ToLocalTime().ToString("g")
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="status-indicator-pill @GetStatusPillClass(req.Status)">
+                                                @req.Status
+                                            </span>
+                                        </td>
+                                        <td class="py-3 row-description-text text-secondary" style="max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@req.Reason">
+                                            @req.Reason
+                                        </td>
+                                        <td class="pe-4 py-3 text-end text-muted small">
+                                            @(string.IsNullOrEmpty(req.ReviewNotes) ? "Pending corporate response." : $"\"{req.ReviewNotes}\"")
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+
+        @* ── TAB: History ── *@
+        @if (activeTab == "history")
+        {
+            @if (!assetHistory.Any())
+            {
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="text-center py-5">
+                        <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-2 mx-auto mb-3" style="width: 64px; height: 64px;">
+                            <i class="bi bi-clock-history"></i>
+                        </div>
+                        <h5 class="fw-bold text-dark mb-1">No History Found</h5>
+                        <p class="text-muted small">No asset assignment history available.</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">ASSET</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">CODE</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">ASSIGNED ON</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">RETURNED ON</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">ASSIGNED BY</th>
+                                    <th class="text-secondary small fw-bold tracking-wider py-3">RETURNED BY</th>
+                                    <th class="pe-4 text-secondary small fw-bold tracking-wider py-3">STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var h in assetHistory)
+                                {
+                                    <tr class="table-row-interactive">
+                                        <td class="ps-4 py-3">
+                                            <div class="fw-bold text-dark text-heading-field">@h.AssetName</div>
+                                            @if (h.IsReplacementAction == true)
+                                            {
+                                                <div class="mt-1">
+                                                    <span class="badge premium-soft-dept-badge" style="font-size: 11px;">
+                                                        <i class="bi bi-arrow-repeat me-1"></i>
+                                                        @(h.ReturnedAt.HasValue ? "Replaced By New Asset" : "Acquired via Replacement")
+                                                    </span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td class="py-3 text-muted font-monospace small">@h.AssetCode</td>
+                                        <td class="py-3 text-muted small">@h.AssignedAt.ToLocalTime().ToString("g")</td>
+                                        <td class="py-3 text-muted small">@(h.ReturnedAt?.ToLocalTime().ToString("g") ?? "—")</td>
+                                        <td class="py-3">
+                                            @if (!string.IsNullOrWhiteSpace(h.AssignedByName))
+                                            {
+                                                <span class="text-dark fw-semibold small">@h.AssignedByName</span>
+                                            }
+                                            else if (h.IsReplacementAction == true && !string.IsNullOrWhiteSpace(h.ActionedByName))
+                                            {
+                                                <span class="text-dark fw-semibold small">@h.ActionedByName</span>
+                            
+                                                <br />
+                                                <small class="text-muted font-monospace" style="font-size: 11px;">via Replacement</small>
+                                            }
+                                            else
+                                            {
+
+                                                <span class="text-muted">—</span>
+                                            }
+                                        </td>
+                                        <td class="py-3 text-dark small">
+                                            @(string.IsNullOrWhiteSpace(h.ReturnedByName) ? "—" : h.ReturnedByName)
+                                            @if (!string.IsNullOrWhiteSpace(h.ReturnedByRole))
+                                            {
+                                                <br />
+                            
+                                                <small class="text-muted" style="font-size: 11px;">@h.ReturnedByRole</small>
+                                            }
+                                        </td>
+                                        <td class="pe-4 py-3">
+                                            @if (h.ReturnedAt.HasValue)
+                                            {
+                                                <span class="status-indicator-pill pill-secondary">Returned</span>
+                                                @if (!string.IsNullOrEmpty(h.RelatedAssetCode))
+                                                {
+                                                    <div class="text-muted mt-1" style="font-size: 11px;">
+                                                        Next: <strong class="font-monospace" style="color: #5c4ac7;">@h.RelatedAssetCode</strong>
+                                                    </div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="status-indicator-pill pill-active">Active</span>
+                                                @if (!string.IsNullOrEmpty(h.RelatedAssetCode))
+                                                {
+                                                    <div class="text-muted mt-1" style="font-size: 11px;">
+                                                        Prev: <strong class="font-monospace text-secondary">@h.RelatedAssetCode</strong>
+                                                    </div>
+                                                }
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        }
+    }
+</div>
 
 <style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .asset-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        border: 1px solid transparent !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .asset-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.08) !important;
+            border-color: rgba(92, 74, 199, 0.15) !important;
+        }
+
+    .icon-shape {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .bg-primary-subtle {
+        background-color: rgba(92, 74, 199, 0.1);
+    }
+
+    .text-primary {
+        color: #5c4ac7 !important;
+    }
+
+    .bg-primary {
+        background-color: #5c4ac7 !important;
+    }
+
+    /* Tab Navigation */
+    .tab-nav-wrapper {
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 0;
+    }
+
+    .tab-btn {
+        border: none;
+        background: transparent;
+        color: #64748b;
+        font-size: 13.5px;
+        font-weight: 500;
+        padding: 8px 14px;
+        border-radius: 0;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -1px;
+        transition: all 0.2s ease;
+    }
+
+        .tab-btn:hover {
+            color: #5c4ac7;
+        }
+
+    .tab-btn-active {
+        color: #5c4ac7 !important;
+        font-weight: 700;
+        border-bottom-color: #5c4ac7 !important;
+    }
+
+    .tab-count-badge {
+        background-color: #f1f5f9;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 20px;
+    }
+
+    .tab-btn-active .tab-count-badge {
+        background-color: rgba(92,74,199,0.1);
+        color: #5c4ac7;
+    }
+
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .table-row-interactive:hover {
+        background-color: #f8fafc;
+    }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .row-description-text {
+        font-size: 13.5px;
+    }
+
+    .btn-primary-action {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-primary-action:hover {
+            background-color: #4c3ca3 !important;
+        }
+
+    .btn-dashboard {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-dashboard:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
+
+    .btn-action-warn {
+        background: #fffbeb;
+        color: #92400e;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-action-warn:hover {
+            background: #fef3c7;
+        }
+
+    .btn-action-info {
+        background: #eff6ff;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-action-info:hover {
+            background: #dbeafe;
+        }
+
+    .btn-action-primary {
+        background: rgba(92,74,199,0.08);
+        color: #5c4ac7;
+        border: 1px solid rgba(92,74,199,0.2);
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-action-primary:hover {
+            background: rgba(92,74,199,0.15);
+        }
+
+    .premium-edit-input {
+        font-size: 13.5px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        transition: all 0.2s ease;
+    }
+
+        .premium-edit-input:focus {
+            border-color: #5c4ac7;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12);
+        }
+
+    .premium-soft-dept-badge {
+        background-color: rgba(92, 74, 199, 0.08) !important;
+        color: #5c4ac7 !important;
+        font-size: 11.5px;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 6px;
+    }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .pill-active {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .pill-warning {
+        background-color: #fffbeb;
+        color: #92400e;
+    }
+
+    .pill-info {
+        background-color: #eff6ff;
+        color: #1e40af;
+    }
+
+    .pill-secondary {
+        background-color: #f1f5f9;
+        color: #475569;
+    }
+
+    .pill-pending {
+        background-color: #fffbeb;
+        color: #92400e;
+    }
+
+    .pill-approved {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-rejected {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .pill-completed {
+        background-color: #eff6ff;
+        color: #1e40af;
+    }
+
     .animate-pulse {
         animation: pulseOpacity 2s infinite;
     }
+
     @@keyframes pulseOpacity {
-        0%, 100% { opacity: 0.6; }
-        50% { opacity: 1; }
+        0%, 100% {
+            opacity: 0.6;
+        }
+
+        50% {
+            opacity: 1;
+        }
     }
 </style>
 
@@ -420,7 +663,7 @@
     private Guid currentEmployeeId;
     private Guid currentOrganizationId;
     private string currentUserId = "";
-    private string currentUserRole = "Employee"; // Dynamically hydrated now
+    private string currentUserRole = "Employee";
 
     private List<AssetDto> myAssets = new();
     private List<AssetRequestDto> myRequests = new();
@@ -441,56 +684,38 @@
         {
             loading = true;
             errorMessage = "";
-
             var empContext = await CurrentUserService.GetEmployeeDashboardContextAsync();
             if (empContext != null)
             {
                 currentEmployeeId = empContext.EmployeeId;
                 currentOrganizationId = empContext.OrganizationId;
                 currentUserId = empContext.UserId;
-
-                // CRITICAL FIX: Extract true contextual security role instead of hardcoding
                 currentUserRole = !string.IsNullOrWhiteSpace(empContext.Role) ? empContext.Role : "Employee";
-
-                // Load all structural data profiles simultaneously
                 await RefreshInventoryDataAsync();
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error mapping context values: {ex.Message}");
-            errorMessage = "Failed to synchronize security workspace context context data.";
+            errorMessage = "Failed to synchronize workspace context data.";
         }
-        finally
-        {
-            loading = false;
-        }
+        finally { loading = false; }
     }
 
     private async Task RefreshInventoryDataAsync()
     {
         myAssets = await AssetService.GetCurrentEmployeeAssetsAsync(currentEmployeeId, currentOrganizationId);
-
         myRequests = await AssetService.GetAssetRequestsByEmployeeIdAsync(currentEmployeeId, currentOrganizationId);
-
         assetHistory = await AssetService.GetEmployeeAssetHistoryAsync(currentEmployeeId, currentOrganizationId);
     }
 
-    private void ChangeTab(string tabKey)
-    {
-        activeTab = tabKey;
-    }
+    private void ChangeTab(string tabKey) => activeTab = tabKey;
 
     private void OpenRequestModal(AssetDto asset, string requestType)
     {
         selectedAsset = asset;
         targetRequestType = requestType;
-        createRequestModel = new CreateAssetRequestDto
-        {
-            AssetId = asset.AssetId,
-            RequestType = requestType,
-            Reason = ""
-        };
+        createRequestModel = new CreateAssetRequestDto { AssetId = asset.AssetId, RequestType = requestType, Reason = "" };
         errorMessage = "";
         showRequestModal = true;
     }
@@ -499,67 +724,52 @@
     {
         showRequestModal = false;
         selectedAsset = null;
-        createRequestModel = new CreateAssetRequestDto(); // Explicit cleanup
+        createRequestModel = new CreateAssetRequestDto();
         errorMessage = "";
     }
 
     private async Task HandleSubmitRequest()
     {
         if (submitting || selectedAsset == null) return;
-
         try
         {
             submitting = true;
             errorMessage = "";
-
             await AssetService.CreateAssetRequestAsync(
                 organizationId: currentOrganizationId,
                 requestedByEmployeeId: currentEmployeeId,
-                requestorRole: currentUserRole, // Correct dynamic scope matching
+                requestorRole: currentUserRole,
                 dto: createRequestModel,
                 callerDepartmentId: null
             );
-
             showRequestModal = false;
-
-            // CRITICAL FIX: Refresh absolute state arrays to toggle action buttons immediately
             await RefreshInventoryDataAsync();
-
             activeTab = "my-requests";
         }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-            Console.WriteLine($"Error submitting request: {ex.Message}");
-        }
-        finally
-        {
-            submitting = false;
-        }
+        catch (Exception ex) { errorMessage = ex.Message; }
+        finally { submitting = false; }
     }
 
-    private string GetAssetStatusBadge(string status) => status switch
+    private string GetAssetStatusPillClass(string status) => status switch
     {
-        AssetStatus.Assigned => "badge bg-success-subtle text-success border border-success-subtle",
-        AssetStatus.InRepair => "badge bg-warning-subtle text-warning border border-warning-subtle",
-        AssetStatus.Available => "badge bg-info-subtle text-info border border-info-subtle",
-        AssetStatus.Retired => "badge bg-secondary-subtle text-secondary border border-secondary-subtle",
-        _ => "badge bg-light text-dark border"
+        AssetStatus.Assigned => "pill-approved",
+        AssetStatus.InRepair => "pill-warning",
+        AssetStatus.Available => "pill-info",
+        AssetStatus.Retired => "pill-secondary",
+        _ => "pill-secondary"
     };
 
-    private AssetRequestDto? GetActiveRequest(Guid assetId)
-    {
-        return myRequests.FirstOrDefault(r =>
+    private AssetRequestDto? GetActiveRequest(Guid assetId) =>
+        myRequests.FirstOrDefault(r =>
             r.AssetId == assetId &&
             (r.Status == AssetRequestStatus.Pending || r.Status == AssetRequestStatus.Approved));
-    }
 
     private string GetPlaceholderText() => targetRequestType switch
     {
-        AssetRequestType.Repair => "Please describe the issue with this asset (e.g., screen cracked, battery not charging, keyboard malfunction)...",
-        AssetRequestType.Replacement => "Please explain why you need a replacement (e.g., asset is too slow, physically damaged beyond repair, outdated specifications)...",
-        AssetRequestType.Return => "Please provide the reason for returning this asset (e.g., leaving company, no longer needed, received new asset)...",
-        _ => "Please detail your request justification notes cleanly here..."
+        AssetRequestType.Repair => "Please describe the issue with this asset (e.g., screen cracked, battery not charging)...",
+        AssetRequestType.Replacement => "Please explain why you need a replacement (e.g., physically damaged beyond repair, outdated)...",
+        AssetRequestType.Return => "Please provide the reason for returning this asset (e.g., no longer needed, received new asset)...",
+        _ => "Please detail your request justification notes here..."
     };
 
     private string GetRequestTypeClass(string type) => type switch
@@ -570,12 +780,12 @@
         _ => "bg-light text-dark border"
     };
 
-    private string GetStatusClass(string status) => status switch
+    private string GetStatusPillClass(string status) => status switch
     {
-        AssetRequestStatus.Pending => "bg-warning-subtle text-warning border border-warning",
-        AssetRequestStatus.Approved => "bg-success-subtle text-success border border-success",
-        AssetRequestStatus.Rejected => "bg-danger-subtle text-danger border border-danger",
-        AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
-        _ => "bg-light text-dark border"
+        AssetRequestStatus.Pending => "pill-pending",
+        AssetRequestStatus.Approved => "pill-approved",
+        AssetRequestStatus.Rejected => "pill-rejected",
+        AssetRequestStatus.Completed => "pill-completed",
+        _ => "pill-secondary"
     };
 }

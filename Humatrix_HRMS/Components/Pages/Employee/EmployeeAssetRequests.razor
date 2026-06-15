@@ -14,101 +14,100 @@
 
 <PageTitle>My Asset Requests | Humatrix HRMS</PageTitle>
 
-<div class="emp-wrapper" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
+<div class="container-fluid px-4 mt-4">
 
-    <div class="d-flex align-items-center justify-content-between mb-4 pb-3" style="border-bottom: 1px solid #e2e8f0;">
-        <div class="d-flex align-items-center gap-3">
-            <div class="bg-primary text-white d-flex align-items-center justify-content-center rounded" style="width: 44px; height: 44px; font-size: 1.4rem; background-color: #4f46e5 !important;">
-                <i class="bi bi-clock-history"></i>
-            </div>
-            <div>
-                <h1 class="m-0" style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">My Asset Requests</h1>
-                <p class="text-muted small m-0">Track lifecycle ticket states, repairs, and return submissions</p>
-            </div>
-        </div>
-
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <button class="btn btn-outline-secondary btn-sm px-3 shadow-sm d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; height: 38px;" @onclick="NavigateToInventory">
-                <i class="bi bi-laptop"></i> View My Handover Assets
+            <h2 class="fw-bold tracking-tight text-dark mb-1">My Asset Requests</h2>
+            <p class="text-muted small mb-0">Track lifecycle ticket states, repairs, and return submissions</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary-action d-flex align-items-center gap-2 shadow-sm" @onclick="NavigateToInventory">
+                <i class="bi bi-laptop"></i>
+                VIEW MY ASSETS
             </button>
         </div>
     </div>
 
     @if (loading)
     {
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status" style="color: #4f46e5 !important;"></div>
-            <p class="text-muted small mt-2 fw-medium">Loading request history timeline...</p>
+        <div class="text-center py-5 my-5">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="mt-3 text-muted fw-medium">Loading request history...</p>
         </div>
     }
     else if (!myRequests.Any())
     {
-        <div class="text-center py-5 bg-white rounded border" style="border-style: dashed !important; border-color: #cbd5e1 !important; border-width: 2px !important;">
-            <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
-                <i class="bi bi-journal-x text-muted" style="font-size: 1.8rem;"></i>
+        <div class="card border-0 shadow-sm panel-container-card">
+            <div class="text-center py-5">
+                <div class="icon-shape bg-primary-subtle text-primary rounded-circle fs-2 mx-auto mb-3" style="width: 64px; height: 64px;">
+                    <i class="bi bi-journal-x"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-1">No Requests Filed Yet</h5>
+                <p class="text-muted small mx-auto mb-4" style="max-width: 400px;">
+                    You haven't requested any actions or filed issue updates for physical hardware components yet.
+                </p>
+                <button class="btn btn-primary-action px-4" @onclick="NavigateToInventory">
+                    <i class="bi bi-plus-circle me-2"></i> File New Request
+                </button>
             </div>
-            <h5 class="fw-bold text-dark mb-1">No Operational Requests Filed</h5>
-            <p class="text-muted small max-w-md mx-auto mb-3" style="max-width: 400px;">You haven't requested any actions or filed structural issue updates for physical hardware components yet.</p>
-            <button class="btn btn-primary btn-sm px-3" style="background-color: #4f46e5; border: none; border-radius: 6px;" @onclick="NavigateToInventory">
-                <i class="bi bi-plus-lg me-1"></i> File New Request
-            </button>
         </div>
     }
     else
     {
-        <div class="card shadow-sm border" style="border-radius: 12px; overflow: hidden; background: #fff; border-color: #e2e8f0;">
+        <div class="card border-0 shadow-sm panel-container-card">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
-                    <thead class="table-light text-secondary" style="background: #f8fafc; font-weight: 600;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
                         <tr>
-                            <th class="ps-4 py-3">Asset Item</th>
-                            <th class="py-3">Request Category</th>
-                            <th class="py-3">Date Submitted</th>
-                            <th class="py-3">My Reasoning</th>
-                            <th class="py-3">Current Status</th>
-                            <th class="pe-4 py-3">Review Notes / Logs</th>
+                            <th class="ps-4 text-secondary small fw-bold tracking-wider py-3">ASSET ITEM</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">REQUEST TYPE</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">DATE SUBMITTED</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">MY REASONING</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3">STATUS</th>
+                            <th class="text-secondary small fw-bold tracking-wider py-3 pe-4">REVIEW NOTES</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var request in myRequests)
                         {
-                            <tr>
+                            <tr class="table-row-interactive">
                                 <td class="ps-4 py-3">
-                                    <div class="fw-bold text-dark">@request.AssetName</div>
-                                    <div class="text-muted font-monospace small" style="font-size: 0.75rem; letter-spacing: 0.5px;">@request.AssetCode</div>
+                                    <div class="fw-bold text-dark text-heading-field">@request.AssetName</div>
+                                    <div class="text-muted font-monospace small">@request.AssetCode</div>
                                 </td>
                                 <td class="py-3">
-                                    <span class="@GetRequestTypeClass(request.RequestType)" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 6px; font-weight: 600; display: inline-block;">
+                                    <span class="badge @GetRequestTypeClass(request.RequestType)" style="font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
                                         <i class="@GetRequestTypeIcon(request.RequestType) me-1"></i> @request.RequestType
                                     </span>
                                 </td>
                                 <td class="py-3 text-muted small">
                                     @request.RequestedAt.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
                                 </td>
-                                <td class="py-3 text-secondary text-truncate" style="max-width: 240px;" title="@request.Reason">
+                                <td class="py-3 text-secondary row-description-text" style="max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@request.Reason">
                                     @request.Reason
                                 </td>
                                 <td class="py-3">
-                                    <span class="@GetStatusClass(request.Status)" style="font-size: 0.75rem; padding: 0.3rem 0.65rem; border-radius: 50px; font-weight: 600; display: inline-block;">
+                                    <span class="status-indicator-pill @GetStatusPillClass(request.Status)">
                                         @request.Status
                                     </span>
                                 </td>
                                 <td class="pe-4 py-3">
                                     @if (!string.IsNullOrWhiteSpace(request.ReviewNotes))
                                     {
-                                        <div class="text-dark small fw-medium" style="max-width: 300px; line-height: 1.3;">
+                                        <div class="text-dark small fw-medium" style="max-width: 280px; line-height: 1.3;">
                                             <i class="bi bi-chat-left-quote text-muted me-1"></i> @request.ReviewNotes
                                         </div>
                                         @if (request.ReviewedAt.HasValue)
                                         {
-                                            <div class="text-muted" style="font-size: 0.7rem; margin-top: 2px;">
+                                            <div class="text-muted" style="font-size: 11px; margin-top: 2px;">
                                                 Processed on @request.ReviewedAt.Value.ToLocalTime().ToString("d")
                                             </div>
                                         }
                                     }
                                     else if (request.Status == AssetRequestStatus.Pending)
                                     {
-                                        <span class="text-muted small fst-italic text-opacity-75">
+                                        <span class="text-muted small fst-italic">
                                             <i class="bi bi-hourglass-split me-1 animate-pulse"></i> Awaiting review
                                         </span>
                                     }
@@ -127,6 +126,104 @@
 </div>
 
 <style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .icon-shape {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .bg-primary-subtle {
+        background-color: rgba(92, 74, 199, 0.1);
+    }
+
+    .text-primary {
+        color: #5c4ac7 !important;
+    }
+
+    .table thead th {
+        background-color: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .table-row-interactive:hover {
+        background-color: #f8fafc;
+    }
+
+    .text-heading-field {
+        font-size: 14px;
+        color: #1e293b !important;
+    }
+
+    .row-description-text {
+        font-size: 13.5px;
+    }
+
+    .btn-primary-action {
+        background-color: #5c4ac7 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-primary-action:hover {
+            background-color: #4c3ca3 !important;
+            transform: translateY(-1px);
+        }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .pill-pending {
+        background-color: #fffbeb;
+        color: #92400e;
+    }
+
+    .pill-approved {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-rejected {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .pill-completed {
+        background-color: #eff6ff;
+        color: #1e40af;
+    }
+
+    .pill-default {
+        background-color: #f1f5f9;
+        color: #475569;
+    }
+
     .animate-pulse {
         animation: pulseOpacity 2s infinite ease-in-out;
     }
@@ -159,13 +256,11 @@
             var context = await CurrentUserService.GetEmployeeDashboardContextAsync();
             if (context != null)
             {
-                // Use GetAssetRequestsAsync instead of GetAllAssetRequestsAsync
-                // For Employee view, we don't need callerRole since we're filtering by employeeId
                 var allOrgRequests = await AssetService.GetAssetRequestsAsync(
                     organizationId: context.OrganizationId,
                     status: null,
                     employeeId: null,
-                    callerRole: null,  // No role filtering needed
+                    callerRole: null,
                     callerDepartmentId: null
                 );
 
@@ -177,7 +272,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error mapping asset requests timeline array: {ex.Message}");
+            Console.WriteLine($"Error loading asset requests: {ex.Message}");
         }
         finally
         {
@@ -185,10 +280,7 @@
         }
     }
 
-    private void NavigateToInventory()
-    {
-        Nav.NavigateTo("/employee/assets");
-    }
+    private void NavigateToInventory() => Nav.NavigateTo("/employee/assets");
 
     private string GetRequestTypeClass(string type) => type switch
     {
@@ -206,12 +298,12 @@
         _ => "bi bi-question-circle"
     };
 
-    private string GetStatusClass(string status) => status switch
+    private string GetStatusPillClass(string status) => status switch
     {
-        AssetRequestStatus.Pending => "bg-warning-subtle text-warning border border-warning",
-        AssetRequestStatus.Approved => "bg-success-subtle text-success border border-success",
-        AssetRequestStatus.Rejected => "bg-danger-subtle text-danger border border-danger",
-        AssetRequestStatus.Completed => "bg-info-subtle text-info border border-info",
-        _ => "bg-light text-dark border"
+        AssetRequestStatus.Pending => "pill-pending",
+        AssetRequestStatus.Approved => "pill-approved",
+        AssetRequestStatus.Rejected => "pill-rejected",
+        AssetRequestStatus.Completed => "pill-completed",
+        _ => "pill-default"
     };
 }

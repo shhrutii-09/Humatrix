@@ -18,48 +18,46 @@
 
 <PageTitle>My Exit | Humatrix HRMS</PageTitle>
 
-<div class="container-fluid px-4 mt-4">
-    @* Toast Messages *@
+@* Premium Toast Notifications *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
     @if (!string.IsNullOrEmpty(_toastMessage))
     {
-        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1090;">
-            <div class="toast show align-items-center border-0 shadow-lg"
-                 style="background: #d1e7dd; color: #0f5132; border-left: 4px solid #198754!important; border-radius: 10px; min-width: 300px;">
-                <div class="d-flex p-3">
-                    <div class="toast-body d-flex align-items-center p-0">
-                        <i class="bi bi-check-circle-fill me-2 fs-5"></i>
-                        <span class="small fw-medium">@_toastMessage</span>
-                    </div>
-                    <button type="button" class="btn-close m-auto me-0 shadow-none"
-                            @onclick='() => _toastMessage = null'></button>
+        <div class="toast show premium-side-toast toast-success-border animate-slide-in" role="alert">
+            <div class="toast-body d-flex align-items-center gap-3 p-3">
+                <div class="toast-icon-circle bg-light-success text-success">
+                    <i class="bi bi-check-circle-fill fs-5"></i>
                 </div>
+                <div class="flex-grow-1">
+                    <h6 class="mb-0 fw-bold text-success" style="font-size: 13.5px;">Action Completed</h6>
+                    <small class="text-secondary d-block" style="font-size: 12px; line-height: 1.3;">@_toastMessage</small>
+                </div>
+                <button type="button" class="btn-close shadow-none ms-auto" @onclick='() => _toastMessage = null'></button>
             </div>
         </div>
     }
-
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1090;">
-            <div class="toast show align-items-center border-0 shadow-lg mt-2"
-                 style="background: #f8d7da; color: #842029; border-left: 4px solid #dc3545!important; border-radius: 10px; min-width: 300px;">
-                <div class="d-flex p-3">
-                    <div class="toast-body d-flex align-items-center p-0">
-                        <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-                        <span class="small fw-medium">@_errorMessage</span>
-                    </div>
-                    <button type="button" class="btn-close m-auto me-0 shadow-none"
-                            @onclick='() => _errorMessage = null'></button>
+        <div class="toast show premium-side-toast toast-danger-border animate-slide-in" role="alert">
+            <div class="toast-body d-flex align-items-center gap-3 p-3">
+                <div class="toast-icon-circle bg-light-danger text-danger">
+                    <i class="bi bi-shield-fill-x fs-5"></i>
                 </div>
+                <div class="flex-grow-1">
+                    <h6 class="mb-0 fw-bold text-danger" style="font-size: 13.5px;">Execution Failure</h6>
+                    <small class="text-secondary d-block" style="font-size: 12px; line-height: 1.3;">@_errorMessage</small>
+                </div>
+                <button type="button" class="btn-close shadow-none ms-auto" @onclick='() => _errorMessage = null'></button>
             </div>
         </div>
     }
+</div>
+
+<div class="container-fluid px-4 mt-4">
 
     @* ── Page Header ── *@
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom row-gap-3 flex-wrap">
         <div>
-            <h2 class="fw-bold mb-1">
-                <i class="bi bi-box-arrow-right me-2"></i> Exit Management
-            </h2>
+            <h2 class="fw-bold tracking-tight text-dark mb-1">Exit Management</h2>
             <p class="text-muted small mb-0">
                 @if (_isHr)
                 {
@@ -71,16 +69,19 @@
                 }
             </p>
         </div>
-        <button class="btn btn-secondary px-4"
-                @onclick='() => Nav.NavigateTo(_isHr ? "/hr/dashboard" : "/employee/dashboard")'>
-            ← Back to Dashboard
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-dashboard d-flex align-items-center gap-2 shadow-sm"
+                    @onclick='() => Nav.NavigateTo(_isHr ? "/hr/dashboard" : "/employee/dashboard")'>
+                <i class="bi bi-speedometer2"></i>
+                DASHBOARD
+            </button>
+        </div>
     </div>
 
     @* ── Info banner for HR ── *@
     @if (_isHr && _activeExit == null)
     {
-        <div class="alert alert-info d-flex gap-2 align-items-start mb-4" role="alert">
+        <div class="alert alert-info d-flex gap-2 align-items-start mb-4 border-0 shadow-sm" role="alert" style="border-radius: 12px;">
             <i class="bi bi-info-circle-fill fs-5 flex-shrink-0 mt-1"></i>
             <div>
                 <strong>HR Resignation Policy</strong><br />
@@ -90,22 +91,23 @@
         </div>
     }
 
-    @* ── Show Active Exit Status Card (if exists) ── *@
+    @* ── Active Exit Status Card ── *@
     @if (_activeExit != null)
     {
         <div class="row mb-4">
             <div class="col-lg-8 mx-auto">
-                <div class="card shadow-sm border-0 rounded-4">
-                    <div class="card-header bg-white border-0 pt-4 d-flex justify-content-between align-items-center">
-                        <h5 class="fw-bold mb-0">Current Exit Request Status</h5>
-                        <span class="badge @GetStatusBadgeClass(_activeExit.Status) fs-6 px-3 py-2">
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="card-header bg-white border-0 pt-4 pb-3 px-4 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0 text-dark">Current Exit Request Status</h5>
+                        <span class="status-indicator-pill @GetStatusPillClass(_activeExit.Status)">
                             @GetStatusLabel(_activeExit.Status)
                         </span>
                     </div>
                     <div class="card-body px-4 pb-4">
+
                         @* Progress timeline *@
                         <div class="mb-4">
-                            <div class="d-flex justify-content-between mb-2">
+                            <div class="d-flex justify-content-between mb-3">
                                 @foreach (var (step, label) in _steps)
                                 {
                                     var done = StepDone(step);
@@ -115,38 +117,38 @@
                                     </span>
                                 }
                             </div>
-                            <div class="progress" style="height:6px;">
-                                <div class="progress-bar bg-success" style="width:@GetProgressPct()%"></div>
+                            <div class="progress" style="height: 6px; border-radius: 10px;">
+                                <div class="progress-bar bg-success" style="width:@GetProgressPct()%; border-radius: 10px;"></div>
                             </div>
                         </div>
 
                         @* Details grid *@
-                        <div class="bg-light rounded-3 p-3 mb-4">
+                        <div class="bg-light rounded-3 p-3 mb-4" style="border: 1px solid #e2e8f0;">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <div class="text-muted small">Resignation Date</div>
-                                    <div class="fw-semibold">@_activeExit.ResignationDate.ToString("dd MMM yyyy")</div>
+                                    <div class="text-muted small fw-bold tracking-wider mb-1">RESIGNATION DATE</div>
+                                    <div class="fw-semibold text-dark">@_activeExit.ResignationDate.ToString("dd MMM yyyy")</div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="text-muted small">Last Working Day</div>
-                                    <div class="fw-semibold">@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")</div>
+                                    <div class="text-muted small fw-bold tracking-wider mb-1">LAST WORKING DAY</div>
+                                    <div class="fw-semibold text-dark">@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")</div>
                                 </div>
                                 <div class="col-12">
-                                    <div class="text-muted small">Reason</div>
-                                    <div>@_activeExit.Reason</div>
+                                    <div class="text-muted small fw-bold tracking-wider mb-1">REASON</div>
+                                    <div class="text-dark">@_activeExit.Reason</div>
                                 </div>
                                 @if (!string.IsNullOrEmpty(_activeExit.Remarks))
                                 {
                                     <div class="col-12">
-                                        <div class="text-muted small">Your Remarks</div>
-                                        <div>@_activeExit.Remarks</div>
+                                        <div class="text-muted small fw-bold tracking-wider mb-1">YOUR REMARKS</div>
+                                        <div class="text-dark">@_activeExit.Remarks</div>
                                     </div>
                                 }
                                 @if (!string.IsNullOrEmpty(_activeExit.ApprovalRemarks))
                                 {
                                     <div class="col-12">
-                                        <div class="text-muted small">
-                                            @(_activeExit.Status == ExitStatus.Rejected ? "Rejection Reason" : "Approval Remarks")
+                                        <div class="text-muted small fw-bold tracking-wider mb-1">
+                                            @(_activeExit.Status == ExitStatus.Rejected ? "REJECTION REASON" : "APPROVAL REMARKS")
                                         </div>
                                         <div class="@(_activeExit.Status == ExitStatus.Rejected ? "text-danger" : "text-info")">
                                             @_activeExit.ApprovalRemarks
@@ -156,11 +158,11 @@
                             </div>
                         </div>
 
-                        @* Clearance Checklist (post-approval) *@
+                        @* Clearance Checklist *@
                         @if (_activeExit.Status is ExitStatus.Approved or ExitStatus.ClearanceInProgress or ExitStatus.Completed)
                         {
-                            <h6 class="fw-bold mb-3">📋 Clearance Checklist</h6>
-                            <div class="list-group mb-4">
+                            <h6 class="fw-bold mb-3 text-dark">Clearance Checklist</h6>
+                            <div class="list-group mb-4" style="border-radius: 10px; overflow: hidden;">
                                 @ChecklistRow("bi-laptop", "Assets Returned", _activeExit.AssetsReturned)
                                 @ChecklistRow("bi-shield-lock", "Access Revoked", _activeExit.AccessRevoked)
                                 @ChecklistRow("bi-people", "Knowledge Transfer", _activeExit.KnowledgeTransferred)
@@ -174,8 +176,8 @@
                                             <span class="badge bg-danger rounded-pill ms-2">@_pendingTasksCount pending</span>
                                         }
                                     </span>
-                                    <span class="badge @(_tasksCompleted ? "bg-success-subtle text-success border border-success-subtle" : "bg-warning-subtle text-warning border border-warning-subtle") px-2 py-1">
-                                        @(_tasksCompleted ? "✓ Done" : $"Pending ({_pendingTasksCount} tasks)")
+                                    <span class="status-indicator-pill @(_tasksCompleted ? "pill-active" : "pill-warning")">
+                                        @(_tasksCompleted ? "✓ Done" : $"Pending ({_pendingTasksCount})")
                                     </span>
                                 </div>
                             </div>
@@ -184,27 +186,26 @@
                         @* Documents *@
                         @if (_activeExit.ExperienceLetterIssued || _activeExit.RelievingLetterIssued)
                         {
-                            <h6 class="fw-bold mb-2">📄 Documents Issued</h6>
+                            <h6 class="fw-bold mb-2 text-dark">Documents Issued</h6>
                             <div class="d-flex gap-2 mb-4 flex-wrap">
                                 @if (_activeExit.ExperienceLetterIssued)
                                 {
-                                    <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2">Experience Letter</span>
+                                    <span class="badge premium-soft-dept-badge px-3 py-2">Experience Letter</span>
                                 }
                                 @if (_activeExit.RelievingLetterIssued)
                                 {
-                                    <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2">Relieving Letter</span>
+                                    <span class="badge premium-soft-dept-badge px-3 py-2">Relieving Letter</span>
                                 }
                             </div>
                         }
 
-                        @* ── CANCEL BUTTON (MOVED HERE - INSIDE THE ACTIVE EXIT CARD) ── *@
+                        @* Cancel section *@
                         @if (_activeExit.Status != ExitStatus.Completed && _activeExit.Status != ExitStatus.Rejected)
                         {
                             var isAfterLwd = _activeExit.LastWorkingDay.Date <= DateTime.Today;
-
-                            if (isAfterLwd)
+                            @if (isAfterLwd)
                             {
-                                <div class="alert alert-danger py-2 small mb-3">
+                                <div class="alert alert-danger py-2 small mb-3" style="border-radius: 10px;">
                                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                                     <strong>Warning:</strong> Your last working day (@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")) has passed.
                                     Cancelling now may require HR approval.
@@ -212,14 +213,14 @@
                             }
                             else
                             {
-                                <div class="alert alert-warning py-2 small mb-3">
+                                <div class="alert alert-warning py-2 small mb-3" style="border-radius: 10px;">
                                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                                     <strong>You can cancel your resignation anytime before your last working day</strong>
                                     (@_activeExit.LastWorkingDay.ToString("dd MMM yyyy")).
                                 </div>
                             }
 
-                            <button class="btn btn-outline-danger w-100" @onclick="ConfirmCancel" disabled="@_isProcessing">
+                            <button class="btn btn-outline-danger w-100" style="border-radius: 10px;" @onclick="ConfirmCancel" disabled="@_isProcessing">
                                 @if (_isProcessing)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2"></span>
@@ -230,7 +231,7 @@
 
                         @if (_activeExit.Status == ExitStatus.Completed)
                         {
-                            <div class="alert alert-success py-2">
+                            <div class="alert alert-success py-2" style="border-radius: 10px;">
                                 <i class="bi bi-check-circle-fill me-2"></i>
                                 Your exit process is complete. Thank you for your contribution to the organisation.
                             </div>
@@ -241,37 +242,33 @@
         </div>
     }
 
-    @* ── Show Cancelled/Rejected History ── *@
+    @* ── Exit History ── *@
     @if (_exitHistory.Any())
     {
         <div class="row mb-4">
             <div class="col-lg-8 mx-auto">
-                <div class="card shadow-sm border-0 rounded-4">
-                    <div class="card-header bg-white border-0 pt-4">
-                        <h5 class="fw-bold mb-0 text-muted">
-                            <i class="bi bi-clock-history me-2"></i> Previous Exit Requests
-                        </h5>
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="card-header bg-white border-0 pt-4 pb-3 px-4">
+                        <h5 class="fw-bold mb-0 text-dark">Previous Exit Requests</h5>
                     </div>
                     <div class="card-body px-4 pb-4">
                         @foreach (var exit in _exitHistory)
                         {
-                            <div class="border-bottom pb-3 mb-3" style="border-bottom: 1px solid #dee2e6 !important;">
+                            <div class="bg-light rounded-3 p-3 mb-3" style="border: 1px solid #e2e8f0;">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
-                                        <span class="badge @GetStatusBadgeClass(exit.Status) me-2">
+                                        <span class="status-indicator-pill @GetStatusPillClass(exit.Status) me-2">
                                             @GetStatusLabel(exit.Status)
                                         </span>
-                                        <span class="text-muted small">
-                                            @exit.CreatedAt.ToString("dd MMM yyyy")
-                                        </span>
+                                        <span class="text-muted small">@exit.CreatedAt.ToString("dd MMM yyyy")</span>
                                     </div>
                                 </div>
                                 <div class="small text-muted">
-                                    <div>Last Working Day: @exit.LastWorkingDay.ToString("dd MMM yyyy")</div>
+                                    <div>Last Working Day: <span class="text-dark fw-semibold">@exit.LastWorkingDay.ToString("dd MMM yyyy")</span></div>
                                     <div>Reason: @exit.Reason</div>
                                     @if (!string.IsNullOrEmpty(exit.ApprovalRemarks))
                                     {
-                                        <div class="text-danger">Remarks: @exit.ApprovalRemarks</div>
+                                        <div class="text-danger mt-1">Remarks: @exit.ApprovalRemarks</div>
                                     }
                                 </div>
                             </div>
@@ -282,37 +279,26 @@
         </div>
     }
 
-    @* ── New Resignation Form (shown when no active exit) ── *@
+    @* ── New Resignation Form ── *@
     @if (_activeExit == null)
     {
         <div class="row">
             <div class="col-lg-7 mx-auto">
-                <div class="card shadow-sm border-0 rounded-4">
-                    <div class="card-header bg-white border-0 pt-4 pb-0">
-                        <h5 class="fw-bold text-danger">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i> Submit New Resignation
-                        </h5>
-                        <p class="text-muted small">
+                <div class="card border-0 shadow-sm panel-container-card">
+                    <div class="card-header bg-white border-0 pt-4 pb-0 px-4">
+                        <h5 class="fw-bold text-dark mb-1">Submit New Resignation</h5>
+                        <p class="text-muted small mb-3">
                             Please review the terms carefully. Minimum notice period is
                             <strong>@MinNoticeDays days</strong>.
                         </p>
                     </div>
 
                     <div class="card-body px-4 pb-4">
-                        @if (!string.IsNullOrEmpty(_errorMessage))
-                        {
-                            <div class="alert alert-danger alert-dismissible fade show py-2" role="alert">
-                                <i class="bi bi-exclamation-triangle-fill me-2"></i>@_errorMessage
-                                <button type="button" class="btn-close" @onclick="ClearErrors"></button>
-                            </div>
-                        }
 
                         <div class="mb-4">
-                            <label class="form-label fw-semibold">
-                                Last Working Day <span class="text-danger">*</span>
-                            </label>
+                            <label class="form-label fw-semibold small text-secondary tracking-wider">LAST WORKING DAY <span class="text-danger">*</span></label>
                             <input type="date"
-                                   class="form-control @(string.IsNullOrEmpty(_lwdError) ? "" : "is-invalid")"
+                                   class="form-control premium-edit-input @(string.IsNullOrEmpty(_lwdError) ? "" : "is-invalid")"
                                    @bind="_model.LastWorkingDay"
                                    @bind:format="yyyy-MM-dd"
                                    min="@DateTime.Today.AddDays(MinNoticeDays).ToString("yyyy-MM-dd")" />
@@ -326,10 +312,8 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-semibold">
-                                Reason for Leaving <span class="text-danger">*</span>
-                            </label>
-                            <select class="form-select @(string.IsNullOrEmpty(_reasonError) ? "" : "is-invalid")"
+                            <label class="form-label fw-semibold small text-secondary tracking-wider">REASON FOR LEAVING <span class="text-danger">*</span></label>
+                            <select class="form-select premium-edit-input @(string.IsNullOrEmpty(_reasonError) ? "" : "is-invalid")"
                                     @bind="_model.Reason">
                                 <option value="">Select a reason…</option>
                                 <option>Better Career Opportunity</option>
@@ -348,10 +332,8 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-semibold">
-                                Additional Remarks <span class="text-danger">*</span>
-                            </label>
-                            <textarea class="form-control @(string.IsNullOrEmpty(_remarksError) ? "" : "is-invalid")"
+                            <label class="form-label fw-semibold small text-secondary tracking-wider">ADDITIONAL REMARKS <span class="text-danger">*</span></label>
+                            <textarea class="form-control premium-edit-input @(string.IsNullOrEmpty(_remarksError) ? "" : "is-invalid")"
                                       rows="4"
                                       placeholder="Provide any additional information about your departure…"
                                       @bind="_model.Remarks"></textarea>
@@ -361,13 +343,13 @@
                             }
                         </div>
 
-                        <div class="alert alert-warning py-3 mb-4">
+                        <div class="bg-light rounded-3 p-3 mb-4" style="border: 1px solid #e2e8f0;">
                             <div class="form-check">
                                 <input type="checkbox"
                                        id="chkTerms"
                                        class="form-check-input"
                                        @bind="_confirmed" />
-                                <label class="form-check-label small" for="chkTerms">
+                                <label class="form-check-label small text-secondary" for="chkTerms">
                                     I understand that this resignation is final and I agree to complete all
                                     exit formalities, including:
                                     <ul class="mt-2 mb-0 ps-3">
@@ -382,6 +364,7 @@
 
                         <div class="d-flex gap-2">
                             <button class="btn btn-danger px-4"
+                                    style="border-radius: 10px; font-size: 13px; font-weight: 600;"
                                     disabled="@(!_confirmed || _isSubmitting)"
                                     @onclick="SubmitResignation">
                                 @if (_isSubmitting)
@@ -390,7 +373,7 @@
                                 }
                                 Submit Resignation
                             </button>
-                            <button class="btn btn-outline-secondary px-4"
+                            <button class="btn btn-dashboard px-4"
                                     @onclick='() => Nav.NavigateTo(_isHr ? "/hr/dashboard" : "/employee/dashboard")'>
                                 Cancel
                             </button>
@@ -402,6 +385,150 @@
     }
 </div>
 
+<style>
+    .tracking-tight {
+        letter-spacing: -0.025em;
+    }
+
+    .tracking-wider {
+        letter-spacing: 0.04em;
+        font-size: 11px;
+        text-transform: uppercase;
+    }
+
+    .panel-container-card {
+        border-radius: 14px;
+        background-color: #ffffff;
+        overflow: hidden;
+    }
+
+    .btn-dashboard {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        color: #4b5563 !important;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .btn-dashboard:hover {
+            border-color: #5c4ac7 !important;
+            color: #5c4ac7 !important;
+        }
+
+    .premium-edit-input {
+        font-size: 13.5px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        transition: all 0.2s ease;
+    }
+
+        .premium-edit-input:focus {
+            border-color: #5c4ac7;
+            box-shadow: 0 0 0 4px rgba(92, 74, 199, 0.12);
+        }
+
+    .status-indicator-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 6px;
+        display: inline-block;
+    }
+
+    .pill-active {
+        background-color: #ecfdf5;
+        color: #065f46;
+    }
+
+    .pill-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .pill-warning {
+        background-color: #fffbeb;
+        color: #92400e;
+    }
+
+    .pill-info {
+        background-color: #eff6ff;
+        color: #1e40af;
+    }
+
+    .pill-primary {
+        background-color: rgba(92,74,199,0.08);
+        color: #5c4ac7;
+    }
+
+    .pill-secondary {
+        background-color: #f1f5f9;
+        color: #475569;
+    }
+
+    .premium-soft-dept-badge {
+        background-color: rgba(92, 74, 199, 0.08) !important;
+        color: #5c4ac7 !important;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 6px;
+    }
+
+    /* Toast styles */
+    .premium-side-toast {
+        background: #ffffff !important;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important;
+        min-width: 320px;
+        max-width: 380px;
+        overflow: hidden;
+    }
+
+    .toast-success-border {
+        border-left: 4px solid #10b981 !important;
+    }
+
+    .toast-danger-border {
+        border-left: 4px solid #ef4444 !important;
+    }
+
+    .toast-icon-circle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .bg-light-success {
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    .bg-light-danger {
+        background-color: rgba(239, 68, 68, 0.1);
+    }
+
+    .animate-slide-in {
+        animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @@keyframes toastSlideIn {
+        from {
+            transform: translateX(100%) translateY(-10px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0) translateY(0);
+            opacity: 1;
+        }
+    }
+</style>
 @code {
 
     private const int MinNoticeDays = 15;
@@ -447,12 +574,23 @@
 
     private async Task LoadAsync()
     {
-        _activeExit = await ExitService.GetMyActiveExitRequestAsync();
-        _exitHistory = await ExitService.GetAllMyExitsAsync();
+        // Get ALL exits including cancelled ones
+        var allExits = await ExitService.GetAllMyExitsAsync();
+
+        // Find active exit (not cancelled or rejected)
+        _activeExit = allExits
+            .Where(x => x.Status != ExitStatus.Cancelled && x.Status != ExitStatus.Rejected)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
+
+        // History = everything except the active one
+        _exitHistory = allExits
+            .Where(x => _activeExit == null || x.ExitId != _activeExit.ExitId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
 
         if (_activeExit != null)
         {
-            _exitHistory = _exitHistory.Where(x => x.ExitId != _activeExit.ExitId).ToList();
             _pendingTasksCount = await ExitService.GetPendingTasksCountAsync(_activeExit.EmployeeId);
         }
 
@@ -522,22 +660,9 @@
     {
         if (_activeExit == null) return;
 
-        var daysRemaining = (_activeExit.LastWorkingDay.Date - DateTime.Today).Days;
-        var message = daysRemaining > 0
-            ? $"⚠️ WARNING: You are about to cancel your resignation.\n\n" +
-              $"• Days remaining until last working day: {daysRemaining}\n" +
-              $"• Last working day: {_activeExit.LastWorkingDay:dd MMM yyyy}\n\n" +
-              $"This will:\n" +
-              $"✓ Reassign all assets back to you\n" +
-              $"✓ Restore your system access\n" +
-              $"✓ Reactivate your employee status\n" +
-              $"✓ Keep your tasks as they were\n\n" +
-              $"Are you sure you want to cancel your resignation?"
-            : $"⚠️ WARNING: Your last working day ({_activeExit.LastWorkingDay:dd MMM yyyy}) has already passed.\n\n" +
-              $"Are you sure you want to cancel your resignation?\n\n" +
-              $"This action cannot be undone.";
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+            "Are you sure you want to cancel your resignation? This action cannot be undone.");
 
-        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", message);
         if (!confirmed) return;
 
         _isProcessing = true;
@@ -550,7 +675,7 @@
             if (result.Success)
             {
                 await LoadAsync();
-                ShowToast("✅ Your resignation has been cancelled successfully.");
+                ShowToast("Resignation cancelled successfully");
             }
             else
             {
@@ -616,15 +741,15 @@
         _ => 0
     };
 
-    private static string GetStatusBadgeClass(string status) => status switch
+    private string GetStatusPillClass(string status) => status switch
     {
-        ExitStatus.Pending => "bg-warning-subtle text-warning border border-warning-subtle",
-        ExitStatus.Approved => "bg-info-subtle text-info border border-info-subtle",
-        ExitStatus.ClearanceInProgress => "bg-primary-subtle text-primary border border-primary-subtle",
-        ExitStatus.Completed => "bg-success-subtle text-success border border-success-subtle",
-        ExitStatus.Rejected => "bg-danger-subtle text-danger border border-danger-subtle",
-        ExitStatus.Cancelled => "bg-secondary-subtle text-secondary border border-secondary-subtle",
-        _ => "bg-secondary-subtle text-secondary"
+        ExitStatus.Pending => "pill-warning",
+        ExitStatus.Approved => "pill-info",
+        ExitStatus.ClearanceInProgress => "pill-primary",
+        ExitStatus.Completed => "pill-active",
+        ExitStatus.Rejected => "pill-inactive",
+        ExitStatus.Cancelled => "pill-secondary",
+        _ => "pill-secondary"
     };
 
     private static string GetStatusLabel(string status) => status switch
@@ -641,7 +766,7 @@
     private RenderFragment ChecklistRow(string icon, string label, bool done) =>
         @<div class="list-group-item d-flex justify-content-between align-items-center py-2">
         <span><i class="bi @icon me-2 text-secondary"></i>@label</span>
-        <span class="badge @(done ? "bg-success-subtle text-success border border-success-subtle" : "bg-warning-subtle text-warning border border-warning-subtle") px-2 py-1">
+        <span class="status-indicator-pill @(done ? "pill-active" : "pill-warning")">
             @(done ? "✓ Done" : "Pending")
         </span>
     </div>;
